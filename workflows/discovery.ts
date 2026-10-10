@@ -32,7 +32,9 @@ interface RunRow {
  */
 export async function runDiscovery(pool: Pool, runId: string, attempts: number, deps: DiscoveryDeps): Promise<JobOutcome> {
   const setup = await withTx(pool, async (c) => {
-    const { rows } = await c.query<RunRow>("select id, organisation_id, provinces, methods, status from public.discovery_runs where id = $1 for update", [runId]);
+    const { rows } = await c.query<RunRow>("select id, organisation_id, provinces, methods, status from public.discovery_runs where id = $1 for update", [
+      runId,
+    ]);
     const run = rows[0];
     if (!run || (run.status !== "QUEUED" && run.status !== "RUNNING")) return null;
     const scout = await db.getAgentBySlug(c, run.organisation_id, "tender_discovery");

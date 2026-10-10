@@ -3,6 +3,8 @@ import { PageHeader } from "@/components/command-centre/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { KillSwitch } from "@/features/settings/kill-switch";
+import { MailboxSettings } from "@/features/email/mailbox-settings";
+import { googleConfig } from "@/lib/email/gmail";
 import { canAdminister, requireContext } from "@/lib/data/context";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { formatDateTime, formatUsd, humanize } from "@/lib/format";
@@ -10,8 +12,9 @@ import { configuredModels } from "@/agents/runtime/model-routing";
 
 export const metadata: Metadata = { title: "Settings" };
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ email?: string }> }) {
   const ctx = await requireContext();
+  const sp = await searchParams;
   const s = ctx.settings;
   const supabase = await getServerSupabase();
   const { data: members } = await supabase
@@ -27,12 +30,42 @@ export default async function SettingsPage() {
       (members ?? []).map((m) => m.user_id),
     );
   const names = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.full_name]));
+  const { data: mailboxes } = await supabase
+    .from("email_accounts")
+    .select("id,user_id,provider,from_address,smtp_host,status,last_error")
+    .eq("organisation_id", ctx.organisation.id)
+    .is("revoked_at", null)
+    .order("created_at");
   const models = configuredModels();
 
   return (
     <>
       <PageHeader title="Settings" description={ctx.organisation.name} />
+      {sp.email === "connected" && <p className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">Gmail connected.</p>}
+      {sp.email === "failed" && (
+        <p className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+          Gmail was not connected. Try again and allow TenderOS to send email.
+        </p>
+      )}
       <div className="grid gap-4 lg:grid-cols-2">
+        <Card id="email" className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Email for sending bids</CardTitle>
+            <CardDescription>
+              Each member connects their own mailbox. When a tender asks for bids by email, an owner or admin sends the approved bid from their mailbox with the
+              documents attached.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <MailboxSettings
+              mailboxes={mailboxes ?? []}
+              currentUserId={ctx.userId}
+              isAdmin={canAdminister(ctx.role)}
+              canConnect={canAdminister(ctx.role)}
+              gmailAvailable={googleConfig() !== null}
+            />
+          </CardContent>
+        </Card>
         <Card className={s.kill_switch ? "border-red-500/40" : undefined}>
           <CardHeader>
             <CardTitle>Kill switch</CardTitle>

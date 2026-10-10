@@ -25,7 +25,9 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
 
   let tendersQuery = supabase
     .from("tenders")
-    .select("id,title,reference_number,issuing_organisation,province,closing_at,status,sector,source_url,created_at,submission_method,submission_destination", { count: "exact" })
+    .select("id,title,reference_number,issuing_organisation,province,closing_at,status,sector,source_url,created_at,submission_method,submission_destination", {
+      count: "exact",
+    })
     .eq("organisation_id", ctx.organisation.id)
     .not("source_ref", "is", null)
     .gt("closing_at", new Date().toISOString())
@@ -140,7 +142,10 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
             Open tenders found ({count ?? 0})
           </h2>
           <nav aria-label="Filter by delivery method" className="flex flex-wrap gap-1 text-xs">
-            <Link href={filterHref({ method: null })} className={!method ? "rounded bg-accent px-2 py-1" : "rounded px-2 py-1 text-muted-foreground hover:bg-accent"}>
+            <Link
+              href={filterHref({ method: null })}
+              className={!method ? "rounded bg-accent px-2 py-1" : "rounded px-2 py-1 text-muted-foreground hover:bg-accent"}
+            >
               Any method
             </Link>
             {s.watched_methods.map((m) => (
@@ -154,7 +159,10 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
             ))}
           </nav>
           <nav aria-label="Filter by province" className="flex flex-wrap gap-1 text-xs">
-            <Link href={filterHref({ province: null })} className={!sp.province ? "rounded bg-accent px-2 py-1" : "rounded px-2 py-1 text-muted-foreground hover:bg-accent"}>
+            <Link
+              href={filterHref({ province: null })}
+              className={!sp.province ? "rounded bg-accent px-2 py-1" : "rounded px-2 py-1 text-muted-foreground hover:bg-accent"}
+            >
               All
             </Link>
             {s.watched_provinces.map((p) => (

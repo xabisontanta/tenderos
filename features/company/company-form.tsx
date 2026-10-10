@@ -83,6 +83,35 @@ export function CompanyForm({ profile, canEdit }: { profile: Profile | null; can
         </div>
       </fieldset>
       <fieldset disabled={!canEdit || pending} className="grid gap-4 rounded-xl border bg-card p-4">
+        <legend className="px-1 text-sm font-semibold">Contact details for bid forms</legend>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field id="trading_name" label="Trading name (if different)" error={e.trading_name}>
+            <Input id="trading_name" name="trading_name" defaultValue={p?.trading_name ?? ""} maxLength={254} {...inv("trading_name")} />
+          </Field>
+          <Field id="vat_number" label="VAT number" error={e.vat_number} hint="10 digits starting with 4">
+            <Input id="vat_number" name="vat_number" defaultValue={p?.vat_number ?? ""} maxLength={254} {...inv("vat_number")} />
+          </Field>
+          <Field id="contact_person" label="Contact person" error={e.contact_person} hint="Named on bid forms and emails">
+            <Input id="contact_person" name="contact_person" defaultValue={p?.contact_person ?? ""} maxLength={254} {...inv("contact_person")} />
+          </Field>
+          <Field id="contact_email" label="Contact email" error={e.contact_email}>
+            <Input id="contact_email" name="contact_email" type="email" defaultValue={p?.contact_email ?? ""} maxLength={254} {...inv("contact_email")} />
+          </Field>
+          <Field id="contact_phone" label="Contact phone" error={e.contact_phone}>
+            <Input id="contact_phone" name="contact_phone" type="tel" defaultValue={p?.contact_phone ?? ""} maxLength={254} {...inv("contact_phone")} />
+          </Field>
+          <Field id="website" label="Website" error={e.website}>
+            <Input id="website" name="website" type="url" defaultValue={p?.website ?? ""} maxLength={254} {...inv("website")} />
+          </Field>
+          <Field id="physical_address" label="Physical address" error={e.physical_address}>
+            <Input id="physical_address" name="physical_address" defaultValue={p?.physical_address ?? ""} maxLength={500} {...inv("physical_address")} />
+          </Field>
+          <Field id="postal_address" label="Postal address" error={e.postal_address}>
+            <Input id="postal_address" name="postal_address" defaultValue={p?.postal_address ?? ""} maxLength={500} {...inv("postal_address")} />
+          </Field>
+        </div>
+      </fieldset>
+      <fieldset disabled={!canEdit || pending} className="grid gap-4 rounded-xl border bg-card p-4">
         <legend className="px-1 text-sm font-semibold">What you can deliver</legend>
         <Field
           id="sectors"

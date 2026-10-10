@@ -79,6 +79,14 @@ describe("compliance from the company profile", () => {
     provinces: [],
     max_contract_value_zar: null,
     authorised_signatory: "A. Director",
+    trading_name: null,
+    vat_number: null,
+    contact_person: null,
+    contact_email: null,
+    contact_phone: null,
+    physical_address: null,
+    postal_address: null,
+    website: null,
   };
 
   it("passes when every mandatory item is in the profile", () => {

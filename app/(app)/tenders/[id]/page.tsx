@@ -21,7 +21,8 @@ import {
   RequirementsPanel,
   SubmissionPanel,
 } from "@/features/tenders/output-panels";
-import { canOperate, requireContext } from "@/lib/data/context";
+import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
+import { BidDelivery, type DeliveryDocument } from "@/features/email/bid-delivery";
 import { getRecentEvents, type TaskSummary } from "@/lib/data/queries";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { formatDateTime, formatZar, humanize, provinceLabel, relativeTime } from "@/lib/format";
@@ -61,6 +62,8 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   const totalCost = (costs.data ?? []).reduce((s, c) => s + Number(c.cost_usd), 0);
   const submission = submissions.data?.[0] ?? null;
   const documentLinks = await bidPackLinks(supabase, output("compliance"));
+  const awaitingDelivery = submission?.status === "ACTION_REQUIRED" && !submission.is_simulation && canAdminister(ctx.role);
+  const delivery = awaitingDelivery ? await deliveryData(supabase, ctx.organisation.id, ctx.userId, tender, output("submission")) : null;
 
   return (
     <>
@@ -186,6 +189,11 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
                   <QaPanel output={output("qa")} />
                 </TabsContent>
                 <TabsContent value="submission" className="mt-0">
+                  {delivery && submission && (
+                    <div className="mb-4">
+                      <BidDelivery submissionId={submission.id} method={tender.submission_method} destination={tender.submission_destination} {...delivery} />
+                    </div>
+                  )}
                   <SubmissionPanel output={output("submission")} record={submission} links={documentLinks} />
                 </TabsContent>
                 <TabsContent value="tasks" className="mt-0">
@@ -317,8 +325,71 @@ async function bidPackLinks(supabase: Awaited<ReturnType<typeof getServerSupabas
   const { data: docs } = await supabase.from("company_documents").select("id,title,storage_path,archived_at").in("id", ids);
   const live = (docs ?? []).filter((d) => !d.archived_at);
   const { data: signed } = live.length
-    ? await supabase.storage.from(DOCUMENT_BUCKET).createSignedUrls(live.map((d) => d.storage_path), 3600)
+    ? await supabase.storage.from(DOCUMENT_BUCKET).createSignedUrls(
+        live.map((d) => d.storage_path),
+        3600,
+      )
     : { data: [] };
   const urlByPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
   return Object.fromEntries((docs ?? []).map((d) => [d.id, { title: d.title, url: d.archived_at ? null : (urlByPath.get(d.storage_path) ?? null) }]));
+}
+
+type Tender = { title: string; reference_number: string | null; issuing_organisation: string; closing_at: string; id: string };
+
+/** Everything the delivery panel needs; the covering message uses only facts on file and leaves out what is missing. */
+async function deliveryData(supabase: Awaited<ReturnType<typeof getServerSupabase>>, orgId: string, userId: string, tender: Tender, submissionOutput: unknown) {
+  const attachments = (submissionOutput as { attachments?: Array<{ label: string; document_id: string }> } | null)?.attachments ?? [];
+  const ids = attachments.map((a) => a.document_id);
+  const [{ data: mailboxes }, { data: docs }, { data: profile }, { data: sent }] = await Promise.all([
+    supabase.from("email_accounts").select("id,from_address").eq("organisation_id", orgId).eq("user_id", userId).is("revoked_at", null).order("created_at"),
+    ids.length
+      ? supabase.from("company_documents").select("id,file_name,size_bytes").in("id", ids).is("archived_at", null)
+      : Promise.resolve({ data: [] as Array<{ id: string; file_name: string; size_bytes: number | null }> }),
+    supabase
+      .from("company_profiles")
+      .select("legal_name,trading_name,registration_number,csd_number,contact_person,contact_phone,contact_email,authorised_signatory")
+      .eq("organisation_id", orgId)
+      .maybeSingle(),
+    supabase
+      .from("email_messages")
+      .select("id,to_address,from_address,status,error,created_at")
+      .eq("tender_id", tender.id)
+      .order("created_at", { ascending: false }),
+  ]);
+  const documents: DeliveryDocument[] = (docs ?? []).map((d) => ({
+    id: d.id,
+    file_name: d.file_name,
+    size_bytes: d.size_bytes,
+    label: attachments.find((a) => a.document_id === d.id)?.label ?? d.file_name,
+  }));
+  const p = profile;
+  const ref = tender.reference_number ? `${tender.reference_number}: ` : "";
+  const lines = [
+    "Dear Sir or Madam,",
+    "",
+    `Please find attached our bid for ${ref}${tender.title}, issued by ${tender.issuing_organisation}, closing ${formatDateTime(tender.closing_at)} (SAST).`,
+    "",
+    p?.legal_name ? `Bidder: ${p.legal_name}${p.trading_name ? ` (trading as ${p.trading_name})` : ""}` : null,
+    p?.registration_number ? `CIPC registration: ${p.registration_number}` : null,
+    p?.csd_number ? `CSD supplier number: ${p.csd_number}` : null,
+    p?.contact_person || p?.contact_phone || p?.contact_email
+      ? `Contact: ${[p?.contact_person, p?.contact_phone, p?.contact_email].filter(Boolean).join(", ")}`
+      : null,
+    "",
+    documents.length ? "Attached:" : null,
+    ...documents.map((d) => `- ${d.label} (${d.file_name})`),
+    documents.length ? "" : null,
+    "Please confirm receipt.",
+    "",
+    "Kind regards,",
+    p?.authorised_signatory ?? null,
+    p?.legal_name ?? null,
+  ].filter((l): l is string => l !== null);
+  return {
+    defaultSubject: `Bid submission: ${ref}${tender.title}`.slice(0, 300),
+    defaultBody: lines.join("\n"),
+    mailboxes: mailboxes ?? [],
+    documents,
+    sent: sent ?? [],
+  };
 }

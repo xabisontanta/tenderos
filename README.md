@@ -75,6 +75,27 @@ download links. Verifying or adding a document re-checks bids stopped at
 compliance. Bank letters, director IDs and proof of address are only visible to
 the Document Manager agent.
 
+## Sending bids by email
+
+Owners and admins connect the mailbox they send from on **Settings**: a Gmail
+account (Google sign-in, send-only permission) or a mailbox on the company's
+own domain (SMTP on port 465, 587 or 2525). TenderOS signs in once to check
+the details, then keeps the password or Google token encrypted in Supabase
+Vault; browsers never receive it and each mailbox can only be used by the
+person who connected it. SMTP hosts must resolve to public addresses.
+
+When an approved bid has to be emailed, the tender's submission tab shows a
+pre-filled message to the address in the tender notice, with your verified
+documents ready to attach (18 MB in total at most). Nothing is sent until you
+press Send and confirm. The email is logged and the bid is recorded as
+delivered. For hand or portal delivery, **Record as delivered** closes the
+bid with your reference number.
+
+Gmail needs `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` from a
+Google Cloud OAuth client with the redirect URI
+`<APP_URL>/api/email/google/callback`. Until Google verifies the app for the
+`gmail.send` scope, only test users you add in Google Cloud can connect.
+
 ## Hosted worker (Supabase Edge Function)
 
 Supabase does not run long-lived processes, so on a hosted project the worker

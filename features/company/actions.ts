@@ -37,6 +37,23 @@ const schema = z.object({
   provinces: z.array(z.enum(WATCHABLE_PROVINCES.map((p) => p.value) as [string, ...string[]])),
   max_contract_value_zar: z.coerce.number().positive("Must be more than zero").nullable(),
   authorised_signatory: z.string().min(2).max(120).nullable(),
+  trading_name: z.string().min(2).max(200).nullable(),
+  vat_number: z
+    .string()
+    .regex(/^4\d{9}$/, "SA VAT numbers are 10 digits starting with 4")
+    .nullable(),
+  contact_person: z.string().min(2).max(120).nullable(),
+  contact_email: z.string().email("Enter a valid email address").max(254).nullable(),
+  contact_phone: z
+    .string()
+    .regex(/^\+?[0-9 ()-]{9,20}$/, "Enter a phone number, e.g. 011 555 0100")
+    .nullable(),
+  physical_address: z.string().min(5).max(500).nullable(),
+  postal_address: z.string().min(5).max(500).nullable(),
+  website: z
+    .string()
+    .regex(/^https?:\/\/\S{3,200}$/, "Start with https://")
+    .nullable(),
 });
 
 export async function saveCompanyProfile(_prev: CompanyFormState, formData: FormData): Promise<CompanyFormState> {
@@ -58,14 +75,20 @@ export async function saveCompanyProfile(_prev: CompanyFormState, formData: Form
     provinces: formData.getAll("provinces").map(String),
     max_contract_value_zar: blank(formData.get("max_contract_value_zar"))?.replace(/[\s,R]/g, "") ?? null,
     authorised_signatory: blank(formData.get("authorised_signatory")),
+    trading_name: blank(formData.get("trading_name")),
+    vat_number: blank(formData.get("vat_number"))?.replace(/\s/g, "") ?? null,
+    contact_person: blank(formData.get("contact_person")),
+    contact_email: blank(formData.get("contact_email"))?.toLowerCase() ?? null,
+    contact_phone: blank(formData.get("contact_phone")),
+    physical_address: blank(formData.get("physical_address")),
+    postal_address: blank(formData.get("postal_address")),
+    website: blank(formData.get("website")),
   });
   if (!parsed.success) {
     return { fieldErrors: Object.fromEntries(parsed.error.issues.map((i) => [String(i.path[0]), i.message])) };
   }
   const supabase = await getServerSupabase();
-  const { error } = await supabase
-    .from("company_profiles")
-    .upsert({ organisation_id: ctx.organisation.id, ...parsed.data, updated_by: ctx.userId }, { onConflict: "organisation_id" });
+  const { error } = await supabase.from("company_profiles").upsert({ organisation_id: ctx.organisation.id, ...parsed.data }, { onConflict: "organisation_id" });
   if (error) return { error: toUserError(error, "Could not save the company profile") };
   revalidatePath("/company");
   revalidatePath("/discover");

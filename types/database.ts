@@ -225,14 +225,14 @@ isOneToOne: false
                   ]
                 },"company_profiles": {
                   Row: {
-                    "authorised_signatory": string | null,"bbbee_expires_at": string | null,"bbbee_level": number | null,"cidb_grade": string | null,"csd_number": string | null,"legal_name": string | null,"max_contract_value_zar": number | null,"organisation_id": string,"provinces": (string)[],"registration_number": string | null,"sectors": (string)[],"tax_pin": string | null,"tax_pin_expires_at": string | null,"updated_at": string,"updated_by": string | null
+                    "authorised_signatory": string | null,"bbbee_expires_at": string | null,"bbbee_level": number | null,"cidb_grade": string | null,"contact_email": string | null,"contact_person": string | null,"contact_phone": string | null,"csd_number": string | null,"legal_name": string | null,"max_contract_value_zar": number | null,"organisation_id": string,"physical_address": string | null,"postal_address": string | null,"provinces": (string)[],"registration_number": string | null,"sectors": (string)[],"tax_pin": string | null,"tax_pin_expires_at": string | null,"trading_name": string | null,"updated_at": string,"updated_by": string | null,"vat_number": string | null,"website": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"csd_number"?: string | null,"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id": string,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"updated_at"?: string,"updated_by"?: string | null
+                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"contact_email"?: string | null,"contact_person"?: string | null,"contact_phone"?: string | null,"csd_number"?: string | null,"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id": string,"physical_address"?: string | null,"postal_address"?: string | null,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"trading_name"?: string | null,"updated_at"?: string,"updated_by"?: string | null,"vat_number"?: string | null,"website"?: string | null
                   }
                   Update: {
-                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"csd_number"?: string | null,"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id"?: string,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"updated_at"?: string,"updated_by"?: string | null
+                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"contact_email"?: string | null,"contact_person"?: string | null,"contact_phone"?: string | null,"csd_number"?: string | null,"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id"?: string,"physical_address"?: string | null,"postal_address"?: string | null,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"trading_name"?: string | null,"updated_at"?: string,"updated_by"?: string | null,"vat_number"?: string | null,"website"?: string | null
                   }
                   Relationships: [
                     {
@@ -318,6 +318,70 @@ isOneToOne: false
       columns: ["organisation_id"]
 isOneToOne: false
       referencedRelation: "organisations"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"email_accounts": {
+                  Row: {
+                    "created_at": string,"display_name": string | null,"from_address": string,"id": string,"last_error": string | null,"last_used_at": string | null,"organisation_id": string,"provider": Database["public"]['Enums']["email_provider"],"revoked_at": string | null,"secret_id": string,"smtp_host": string | null,"smtp_port": number | null,"smtp_username": string | null,"status": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"display_name"?: string | null,"from_address": string,"id"?: string,"last_error"?: string | null,"last_used_at"?: string | null,"organisation_id": string,"provider": Database["public"]['Enums']["email_provider"],"revoked_at"?: string | null,"secret_id": string,"smtp_host"?: string | null,"smtp_port"?: number | null,"smtp_username"?: string | null,"status"?: string,"user_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"display_name"?: string | null,"from_address"?: string,"id"?: string,"last_error"?: string | null,"last_used_at"?: string | null,"organisation_id"?: string,"provider"?: Database["public"]['Enums']["email_provider"],"revoked_at"?: string | null,"secret_id"?: string,"smtp_host"?: string | null,"smtp_port"?: number | null,"smtp_username"?: string | null,"status"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "email_accounts_organisation_id_fkey"
+      columns: ["organisation_id"]
+isOneToOne: false
+      referencedRelation: "organisations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "email_accounts_organisation_id_user_id_fkey"
+      columns: ["organisation_id","user_id"]
+isOneToOne: false
+      referencedRelation: "organisation_members"
+      referencedColumns: ["organisation_id","user_id"]
+    }
+                  ]
+                },"email_messages": {
+                  Row: {
+                    "attachments": NonNullable<Json>,"created_at": string,"email_account_id": string,"error": string | null,"from_address": string,"id": string,"organisation_id": string,"provider_message_id": string | null,"sent_by": string,"status": string,"subject": string,"submission_record_id": string | null,"tender_id": string,"to_address": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id": string,"error"?: string | null,"from_address": string,"id"?: string,"organisation_id": string,"provider_message_id"?: string | null,"sent_by": string,"status": string,"subject": string,"submission_record_id"?: string | null,"tender_id": string,"to_address": string
+                  }
+                  Update: {
+                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id"?: string,"error"?: string | null,"from_address"?: string,"id"?: string,"organisation_id"?: string,"provider_message_id"?: string | null,"sent_by"?: string,"status"?: string,"subject"?: string,"submission_record_id"?: string | null,"tender_id"?: string,"to_address"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "email_messages_email_account_id_fkey"
+      columns: ["email_account_id"]
+isOneToOne: false
+      referencedRelation: "email_accounts"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "email_messages_organisation_id_fkey"
+      columns: ["organisation_id"]
+isOneToOne: false
+      referencedRelation: "organisations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "email_messages_organisation_id_tender_id_fkey"
+      columns: ["organisation_id","tender_id"]
+isOneToOne: false
+      referencedRelation: "tenders"
+      referencedColumns: ["organisation_id","id"]
+    },{
+      foreignKeyName: "email_messages_submission_record_id_fkey"
+      columns: ["submission_record_id"]
+isOneToOne: false
+      referencedRelation: "submission_records"
       referencedColumns: ["id"]
     }
                   ]
@@ -732,14 +796,28 @@ isOneToOne: false
 "cancel_workflow":
 { Args: { "p_reason": string,"p_run_id": string }; Returns: undefined
                            },
+"connect_email_account":
+{ Args: { "p_display_name": string,"p_from": string,"p_org": string,"p_provider": Database["public"]['Enums']["email_provider"],"p_secret": string,"p_smtp_host"?: string,"p_smtp_port"?: number,"p_smtp_username"?: string }; Returns: string
+                           },
 "decide_approval":
 { Args: { "p_approval_id": string,"p_approve": boolean,"p_comments"?: string }; Returns: Database["public"]['Enums']["approval_status"]
+                           },
+"disconnect_email_account":
+{ Args: { "p_id": string }; Returns: undefined
+                           },
+"email_account_credential":
+{ Args: { "p_id": string,"p_user": string }; Returns: {
+              "display_name": string,"from_address": string,"organisation_id": string,"provider": Database["public"]['Enums']["email_provider"],"secret": string,"smtp_host": string,"smtp_port": number,"smtp_username": string
+            }[]
                            },
 "hit_rate_limit":
 { Args: { "p_action": string,"p_max"?: number,"p_window_seconds"?: number }; Returns: undefined
                            },
 "mark_notifications_read":
 { Args: { "p_ids": (string)[] }; Returns: undefined
+                           },
+"record_bid_delivery":
+{ Args: { "p_note"?: string,"p_reference"?: string,"p_submission_id": string }; Returns: undefined
                            },
 "register_company_document":
 { Args: { "p_doc_type": string,"p_expires_at"?: string,"p_org": string,"p_path": string,"p_title": string }; Returns: string
@@ -768,12 +846,15 @@ isOneToOne: false
 "transition_tender":
 { Args: { "p_reason": string,"p_tender_id": string,"p_to": Database["public"]['Enums']["tender_status"] }; Returns: Database["public"]['Enums']["tender_status"]
                            },
+"update_email_account_secret":
+{ Args: { "p_id": string,"p_secret": string }; Returns: undefined
+                           },
 "verify_company_document":
 { Args: { "p_id": string }; Returns: undefined
                            }
           }
           Enums: {
-            "access_level": "READ"|"WRITE","actor_type": "user"|"agent"|"system","agent_status": "IDLE"|"QUEUED"|"RUNNING"|"WAITING"|"BLOCKED"|"NEEDS_APPROVAL"|"PAUSED"|"COMPLETED"|"FAILED"|"DISABLED","approval_status": "PENDING"|"APPROVED"|"REJECTED"|"EXPIRED"|"CANCELLED","approval_type": "FINAL_PRICING"|"LEGAL_DECLARATION"|"BID_SUBMISSION"|"CLARIFICATION_EMAIL"|"CONTRACT_ACCEPTANCE"|"FINANCIAL_COMMITMENT"|"SENSITIVE_DOCUMENT_DISCLOSURE"|"EXCEPTION","cost_tier": "LOW"|"MID"|"HIGH","data_category": "PUBLIC_TENDER_DATA"|"TENDER_DOCUMENTS"|"COMPANY_PROFILE"|"COMPANY_CAPABILITIES"|"PROJECT_REFERENCES"|"FINANCIAL"|"BANKING"|"TAX"|"BBBEE"|"DIRECTOR_PERSONAL"|"PROOF_OF_ADDRESS"|"INSURANCE"|"CERTIFICATIONS"|"PRICING"|"COMMUNICATIONS"|"SUBMISSION","discovery_status": "QUEUED"|"RUNNING"|"COMPLETED"|"FAILED","event_severity": "DEBUG"|"INFO"|"WARNING"|"ERROR"|"CRITICAL","handoff_status": "PENDING"|"ACCEPTED"|"REJECTED"|"CANCELLED","job_status": "QUEUED"|"RUNNING"|"COMPLETED"|"FAILED"|"DEAD","org_role": "owner"|"admin"|"operator"|"viewer","risk_level": "LOW"|"MEDIUM"|"HIGH"|"CRITICAL","submission_method": "ELECTRONIC_PORTAL"|"EMAIL"|"PHYSICAL"|"UNKNOWN","submission_status": "PREPARING"|"SUBMITTED"|"FAILED"|"ACTION_REQUIRED","task_status": "QUEUED"|"RUNNING"|"WAITING"|"BLOCKED"|"NEEDS_APPROVAL"|"COMPLETED"|"FAILED"|"CANCELLED","tender_source_kind": "MANUAL"|"PORTAL"|"EMAIL"|"API","tender_status": "DISCOVERED"|"INGESTING"|"ANALYSING"|"QUALIFYING"|"REJECTED"|"QUALIFIED"|"COMPLIANCE_REVIEW"|"MISSING_INFORMATION"|"PREPARING_BID"|"PRICING"|"QUALITY_ASSURANCE"|"QA_FAILED"|"READY_FOR_APPROVAL"|"APPROVED"|"SUBMITTING"|"SUBMITTED"|"SUBMISSION_FAILED"|"UNDER_EVALUATION"|"CLARIFICATION"|"AWARDED"|"UNSUCCESSFUL"|"CANCELLED"|"ARCHIVED","workflow_run_status": "PENDING"|"RUNNING"|"WAITING_APPROVAL"|"BLOCKED"|"COMPLETED"|"FAILED"|"CANCELLED"
+            "access_level": "READ"|"WRITE","actor_type": "user"|"agent"|"system","agent_status": "IDLE"|"QUEUED"|"RUNNING"|"WAITING"|"BLOCKED"|"NEEDS_APPROVAL"|"PAUSED"|"COMPLETED"|"FAILED"|"DISABLED","approval_status": "PENDING"|"APPROVED"|"REJECTED"|"EXPIRED"|"CANCELLED","approval_type": "FINAL_PRICING"|"LEGAL_DECLARATION"|"BID_SUBMISSION"|"CLARIFICATION_EMAIL"|"CONTRACT_ACCEPTANCE"|"FINANCIAL_COMMITMENT"|"SENSITIVE_DOCUMENT_DISCLOSURE"|"EXCEPTION","cost_tier": "LOW"|"MID"|"HIGH","data_category": "PUBLIC_TENDER_DATA"|"TENDER_DOCUMENTS"|"COMPANY_PROFILE"|"COMPANY_CAPABILITIES"|"PROJECT_REFERENCES"|"FINANCIAL"|"BANKING"|"TAX"|"BBBEE"|"DIRECTOR_PERSONAL"|"PROOF_OF_ADDRESS"|"INSURANCE"|"CERTIFICATIONS"|"PRICING"|"COMMUNICATIONS"|"SUBMISSION","discovery_status": "QUEUED"|"RUNNING"|"COMPLETED"|"FAILED","email_provider": "GMAIL"|"SMTP","event_severity": "DEBUG"|"INFO"|"WARNING"|"ERROR"|"CRITICAL","handoff_status": "PENDING"|"ACCEPTED"|"REJECTED"|"CANCELLED","job_status": "QUEUED"|"RUNNING"|"COMPLETED"|"FAILED"|"DEAD","org_role": "owner"|"admin"|"operator"|"viewer","risk_level": "LOW"|"MEDIUM"|"HIGH"|"CRITICAL","submission_method": "ELECTRONIC_PORTAL"|"EMAIL"|"PHYSICAL"|"UNKNOWN","submission_status": "PREPARING"|"SUBMITTED"|"FAILED"|"ACTION_REQUIRED","task_status": "QUEUED"|"RUNNING"|"WAITING"|"BLOCKED"|"NEEDS_APPROVAL"|"COMPLETED"|"FAILED"|"CANCELLED","tender_source_kind": "MANUAL"|"PORTAL"|"EMAIL"|"API","tender_status": "DISCOVERED"|"INGESTING"|"ANALYSING"|"QUALIFYING"|"REJECTED"|"QUALIFIED"|"COMPLIANCE_REVIEW"|"MISSING_INFORMATION"|"PREPARING_BID"|"PRICING"|"QUALITY_ASSURANCE"|"QA_FAILED"|"READY_FOR_APPROVAL"|"APPROVED"|"SUBMITTING"|"SUBMITTED"|"SUBMISSION_FAILED"|"UNDER_EVALUATION"|"CLARIFICATION"|"AWARDED"|"UNSUCCESSFUL"|"CANCELLED"|"ARCHIVED","workflow_run_status": "PENDING"|"RUNNING"|"WAITING_APPROVAL"|"BLOCKED"|"COMPLETED"|"FAILED"|"CANCELLED"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -893,7 +974,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "access_level": ["READ", "WRITE"],"actor_type": ["user", "agent", "system"],"agent_status": ["IDLE", "QUEUED", "RUNNING", "WAITING", "BLOCKED", "NEEDS_APPROVAL", "PAUSED", "COMPLETED", "FAILED", "DISABLED"],"approval_status": ["PENDING", "APPROVED", "REJECTED", "EXPIRED", "CANCELLED"],"approval_type": ["FINAL_PRICING", "LEGAL_DECLARATION", "BID_SUBMISSION", "CLARIFICATION_EMAIL", "CONTRACT_ACCEPTANCE", "FINANCIAL_COMMITMENT", "SENSITIVE_DOCUMENT_DISCLOSURE", "EXCEPTION"],"cost_tier": ["LOW", "MID", "HIGH"],"data_category": ["PUBLIC_TENDER_DATA", "TENDER_DOCUMENTS", "COMPANY_PROFILE", "COMPANY_CAPABILITIES", "PROJECT_REFERENCES", "FINANCIAL", "BANKING", "TAX", "BBBEE", "DIRECTOR_PERSONAL", "PROOF_OF_ADDRESS", "INSURANCE", "CERTIFICATIONS", "PRICING", "COMMUNICATIONS", "SUBMISSION"],"discovery_status": ["QUEUED", "RUNNING", "COMPLETED", "FAILED"],"event_severity": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],"handoff_status": ["PENDING", "ACCEPTED", "REJECTED", "CANCELLED"],"job_status": ["QUEUED", "RUNNING", "COMPLETED", "FAILED", "DEAD"],"org_role": ["owner", "admin", "operator", "viewer"],"risk_level": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],"submission_method": ["ELECTRONIC_PORTAL", "EMAIL", "PHYSICAL", "UNKNOWN"],"submission_status": ["PREPARING", "SUBMITTED", "FAILED", "ACTION_REQUIRED"],"task_status": ["QUEUED", "RUNNING", "WAITING", "BLOCKED", "NEEDS_APPROVAL", "COMPLETED", "FAILED", "CANCELLED"],"tender_source_kind": ["MANUAL", "PORTAL", "EMAIL", "API"],"tender_status": ["DISCOVERED", "INGESTING", "ANALYSING", "QUALIFYING", "REJECTED", "QUALIFIED", "COMPLIANCE_REVIEW", "MISSING_INFORMATION", "PREPARING_BID", "PRICING", "QUALITY_ASSURANCE", "QA_FAILED", "READY_FOR_APPROVAL", "APPROVED", "SUBMITTING", "SUBMITTED", "SUBMISSION_FAILED", "UNDER_EVALUATION", "CLARIFICATION", "AWARDED", "UNSUCCESSFUL", "CANCELLED", "ARCHIVED"],"workflow_run_status": ["PENDING", "RUNNING", "WAITING_APPROVAL", "BLOCKED", "COMPLETED", "FAILED", "CANCELLED"]
+            "access_level": ["READ", "WRITE"],"actor_type": ["user", "agent", "system"],"agent_status": ["IDLE", "QUEUED", "RUNNING", "WAITING", "BLOCKED", "NEEDS_APPROVAL", "PAUSED", "COMPLETED", "FAILED", "DISABLED"],"approval_status": ["PENDING", "APPROVED", "REJECTED", "EXPIRED", "CANCELLED"],"approval_type": ["FINAL_PRICING", "LEGAL_DECLARATION", "BID_SUBMISSION", "CLARIFICATION_EMAIL", "CONTRACT_ACCEPTANCE", "FINANCIAL_COMMITMENT", "SENSITIVE_DOCUMENT_DISCLOSURE", "EXCEPTION"],"cost_tier": ["LOW", "MID", "HIGH"],"data_category": ["PUBLIC_TENDER_DATA", "TENDER_DOCUMENTS", "COMPANY_PROFILE", "COMPANY_CAPABILITIES", "PROJECT_REFERENCES", "FINANCIAL", "BANKING", "TAX", "BBBEE", "DIRECTOR_PERSONAL", "PROOF_OF_ADDRESS", "INSURANCE", "CERTIFICATIONS", "PRICING", "COMMUNICATIONS", "SUBMISSION"],"discovery_status": ["QUEUED", "RUNNING", "COMPLETED", "FAILED"],"email_provider": ["GMAIL", "SMTP"],"event_severity": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],"handoff_status": ["PENDING", "ACCEPTED", "REJECTED", "CANCELLED"],"job_status": ["QUEUED", "RUNNING", "COMPLETED", "FAILED", "DEAD"],"org_role": ["owner", "admin", "operator", "viewer"],"risk_level": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],"submission_method": ["ELECTRONIC_PORTAL", "EMAIL", "PHYSICAL", "UNKNOWN"],"submission_status": ["PREPARING", "SUBMITTED", "FAILED", "ACTION_REQUIRED"],"task_status": ["QUEUED", "RUNNING", "WAITING", "BLOCKED", "NEEDS_APPROVAL", "COMPLETED", "FAILED", "CANCELLED"],"tender_source_kind": ["MANUAL", "PORTAL", "EMAIL", "API"],"tender_status": ["DISCOVERED", "INGESTING", "ANALYSING", "QUALIFYING", "REJECTED", "QUALIFIED", "COMPLIANCE_REVIEW", "MISSING_INFORMATION", "PREPARING_BID", "PRICING", "QUALITY_ASSURANCE", "QA_FAILED", "READY_FOR_APPROVAL", "APPROVED", "SUBMITTING", "SUBMITTED", "SUBMISSION_FAILED", "UNDER_EVALUATION", "CLARIFICATION", "AWARDED", "UNSUCCESSFUL", "CANCELLED", "ARCHIVED"],"workflow_run_status": ["PENDING", "RUNNING", "WAITING_APPROVAL", "BLOCKED", "COMPLETED", "FAILED", "CANCELLED"]
           }
         }
 } as const

@@ -138,6 +138,14 @@ fields are explicit:
   decided.
 - TenderOS never auto-submits. In simulation mode the submission is a record
   with a package hash; nothing leaves the system.
+- An approved bid is emailed only when an owner or admin presses Send on the
+  tender page (`sendBidEmail`), from a mailbox they connected themselves.
+  Agents never send email. Every send is logged in `email_messages`, and
+  `record_bid_delivery` closes the submission, tender and run.
+- Mailbox credentials (Gmail refresh token or SMTP password) live in Supabase
+  Vault. Browsers cannot read `secret_id`; only the service role can decrypt,
+  through `email_account_credential`, and only for the member who connected
+  the mailbox. SMTP hosts must resolve to public addresses (`lib/email/network.ts`).
 
 ## 9. Error handling
 

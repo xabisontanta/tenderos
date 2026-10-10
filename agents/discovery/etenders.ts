@@ -139,13 +139,7 @@ export function mapEtendersRow(row: EtendersRow, now: Date): MapResult {
   const delivery = clean(row.delivery?.replace(/-+/g, ", "), 500);
   // A delivery field that names a mailbox means the bid goes by email.
   const deliveryEmail = delivery?.match(EMAIL_IN_TEXT)?.[0].toLowerCase() ?? null;
-  const method: DiscoveredTender["submission_method"] = row.eSubmission
-    ? "ELECTRONIC_PORTAL"
-    : deliveryEmail
-      ? "EMAIL"
-      : delivery
-        ? "PHYSICAL"
-        : "UNKNOWN";
+  const method: DiscoveredTender["submission_method"] = row.eSubmission ? "ELECTRONIC_PORTAL" : deliveryEmail ? "EMAIL" : delivery ? "PHYSICAL" : "UNKNOWN";
 
   const documents = (row.supportDocument ?? []).map((d) => {
     const ext = d.extension ?? "";
