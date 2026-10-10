@@ -177,6 +177,24 @@ describe("simulated bid workflow (first milestone)", () => {
     await drainOrg(worker, pool, orgId);
   });
 
+  it("runs a workflow to the approval gate in one time-boxed run, as the edge worker does", async () => {
+    const tender = await createTender(owner.client, orgId, { reference_number: `EDGE-${Date.now()}` });
+    const { data: runId, error } = await owner.client.rpc("start_tender_workflow", { p_tender_id: tender.id });
+    expect(error).toBeNull();
+
+    const processed = await worker.runFor(10_000, 50);
+    expect(processed).toBeGreaterThan(0);
+
+    const { data: run } = await owner.client.from("workflow_runs").select("status").eq("id", runId!).single();
+    expect(run!.status).toBe("WAITING_APPROVAL");
+    const { rows } = await pool.query(`select 1 from public.worker_heartbeats where worker_id = $1 and last_seen_at > now() - interval '1 minute'`, [
+      worker.id,
+    ]);
+    expect(rows).toHaveLength(1);
+    await owner.client.rpc("cancel_workflow", { p_run_id: runId!, p_reason: "test cleanup" });
+    await drainOrg(worker, pool, orgId);
+  });
+
   it("refuses the simulated workflow on a tender not marked as simulation", async () => {
     const tender = await createTender(owner.client, orgId, { is_simulation: false });
     const { error } = await owner.client.rpc("start_tender_workflow", { p_tender_id: tender.id });

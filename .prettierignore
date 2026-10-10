@@ -4,3 +4,4 @@ supabase/.temp
 playwright-report
 test-results
 package-lock.json
+supabase/functions/worker/index.ts

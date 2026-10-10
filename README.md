@@ -38,6 +38,7 @@ approve it on the Approvals page.
 | --------------------------------------------------------------------- | ----------------------------------------------------------- |
 | `dev`, `build`, `start`                                               | Next.js                                                     |
 | `worker`                                                              | Background job worker (agent execution)                     |
+| `build:edge-worker`                                                   | Bundles the worker as the `tenderos-worker` Edge Function   |
 | `lint`, `typecheck`, `format`, `format:check`                         | Code quality                                                |
 | `test` / `test:unit`                                                  | Unit tests (business rules, state machine, permissions)     |
 | `test:integration`                                                    | Against local Supabase: workflow, RLS, roles, failure paths |
@@ -49,6 +50,29 @@ approve it on the Approvals page.
 For e2e, run `npm run build` first; if Playwright's bundled browser is not
 installed, set `PLAYWRIGHT_CHROMIUM_PATH`. Set `E2E_SCREENSHOTS=<dir>` to keep
 screenshots of each stage.
+
+## Hosted worker (Supabase Edge Function)
+
+Supabase does not run long-lived processes, so on a hosted project the worker
+runs as the `tenderos-worker` Edge Function, called every minute by pg_cron.
+Each call processes ready jobs for about 45 seconds, so steps advance within a
+minute rather than instantly.
+
+1. `npm run build:edge-worker` writes `supabase/functions/worker/index.ts`.
+2. Deploy it as `tenderos-worker` with JWT verification on
+   (`supabase functions deploy`, or the dashboard).
+3. Migration `20261010000008` generates the worker secret in Vault. Add the
+   project URL and the legacy anon JWT to Vault, then schedule the job:
+
+```sql
+select vault.create_secret('https://<ref>.supabase.co', 'tenderos_project_url');
+select vault.create_secret('<legacy anon JWT>', 'tenderos_function_jwt');
+select private.schedule_edge_worker();
+```
+
+The function also requires the Vault-held secret in an `x-worker-secret`
+header, so the public anon key alone cannot trigger it. Set
+`SIMULATION_STEP_MS` or `RUN_BUDGET_MS` as function secrets to change pacing.
 
 ## Configuration
 

@@ -71,6 +71,43 @@ export class Worker {
     return n;
   }
 
+  /**
+   * Process jobs for a bounded time without LISTEN/NOTIFY, for hosts that only
+   * run short invocations (the Supabase Edge Function on a one-minute timer).
+   * Stops claiming at the deadline and waits for in-flight jobs to finish.
+   */
+  async runFor(budgetMs: number, idleWaitMs = 2000): Promise<number> {
+    const deadline = Date.now() + budgetMs;
+    const startedWith = this.processed;
+    await this.beat();
+    let lastBeat = Date.now();
+    while (Date.now() < deadline) {
+      if (Date.now() - lastBeat > 15_000) {
+        await this.beat().catch(() => undefined);
+        lastBeat = Date.now();
+      }
+      if (this.inFlight.size >= this.opts.concurrency) {
+        await Promise.race(this.inFlight);
+        continue;
+      }
+      let job: Job | null = null;
+      try {
+        job = await this.claim();
+      } catch (err) {
+        this.opts.logger.error("claim failed", { error: (err as Error).message });
+      }
+      if (!job) {
+        await Promise.race([new Promise((r) => setTimeout(r, idleWaitMs)), ...this.inFlight]);
+        continue;
+      }
+      const p = this.process(job).finally(() => this.inFlight.delete(p));
+      this.inFlight.add(p);
+    }
+    await Promise.allSettled([...this.inFlight]);
+    await this.beat().catch(() => undefined);
+    return this.processed - startedWith;
+  }
+
   private async loop(): Promise<void> {
     while (this.running) {
       if (this.inFlight.size >= this.opts.concurrency) {
