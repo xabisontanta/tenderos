@@ -39,6 +39,15 @@ describe("eTenders connector", () => {
     expect(m.ok && m.tender.submission_method).toBe("ELECTRONIC_PORTAL");
   });
 
+  it("marks tenders delivered to a mailbox as email bids, and an @ in an address as physical", () => {
+    const email = mapEtendersRow(etendersRow({ delivery: "Email to Tenders@Example.gov.za before closing" }) as never, new Date());
+    expect(email.ok && [email.tender.submission_method, email.tender.submission_destination]).toEqual(["EMAIL", "tenders@example.gov.za"]);
+    const address = mapEtendersRow(etendersRow({ delivery: "05 KENSINGTON BOULEVARD @ KINGSMEAD OFFICE, DURBAN" }) as never, new Date());
+    expect(address.ok && address.tender.submission_method).toBe("PHYSICAL");
+    const none = mapEtendersRow(etendersRow({ delivery: null }) as never, new Date());
+    expect(none.ok && none.tender.submission_method).toBe("UNKNOWN");
+  });
+
   it("pages through the feed until every row is read", async () => {
     const rows = Array.from({ length: 1100 }, (_, i) => etendersRow({ id: i }));
     const { fetcher, calls } = etendersFetcher(rows);

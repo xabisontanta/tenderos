@@ -6,6 +6,7 @@ import { TenderStatusBadge } from "@/components/command-centre/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProvinceScanner } from "@/features/discovery/province-scanner";
+import { DELIVERY_METHODS } from "@/features/discovery/provinces";
 import { LiveRefresh } from "@/features/realtime/live-refresh";
 import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -16,7 +17,7 @@ export const metadata: Metadata = { title: "Discover" };
 
 const RUN_VARIANT = { QUEUED: "secondary", RUNNING: "warning", COMPLETED: "success", FAILED: "danger" } as const;
 
-export default async function DiscoverPage({ searchParams }: { searchParams: Promise<{ province?: string }> }) {
+export default async function DiscoverPage({ searchParams }: { searchParams: Promise<{ province?: string; method?: string }> }) {
   const ctx = await requireContext();
   const sp = await searchParams;
   const supabase = await getServerSupabase();
@@ -24,13 +25,27 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
 
   let tendersQuery = supabase
     .from("tenders")
-    .select("id,title,reference_number,issuing_organisation,province,closing_at,status,sector,source_url,created_at", { count: "exact" })
+    .select("id,title,reference_number,issuing_organisation,province,closing_at,status,sector,source_url,created_at,submission_method,submission_destination", { count: "exact" })
     .eq("organisation_id", ctx.organisation.id)
     .not("source_ref", "is", null)
     .gt("closing_at", new Date().toISOString())
     .order("created_at", { ascending: false })
     .limit(100);
   if (sp.province) tendersQuery = tendersQuery.eq("province", sp.province);
+  const method = DELIVERY_METHODS.find((m) => m.value === sp.method)?.value;
+  tendersQuery = method
+    ? tendersQuery.eq("submission_method", method)
+    : tendersQuery.in("submission_method", s.watched_methods as (typeof DELIVERY_METHODS)[number]["value"][]);
+  const filterHref = (next: { province?: string | null; method?: string | null }) => {
+    const q = new URLSearchParams();
+    const pv = next.province === undefined ? sp.province : next.province;
+    const mv = next.method === undefined ? method : next.method;
+    if (pv) q.set("province", pv);
+    if (mv) q.set("method", mv);
+    const qs = q.toString();
+    return qs ? `/discover?${qs}` : "/discover";
+  };
+  const methodLabel = (v: string) => DELIVERY_METHODS.find((m) => m.value === v)?.label ?? v;
 
   const [{ data: runs }, { data: tenders, count }, { data: profile }] = await Promise.all([
     supabase.from("discovery_runs").select("*").eq("organisation_id", ctx.organisation.id).order("created_at", { ascending: false }).limit(8),
@@ -81,6 +96,7 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
           <CardContent>
             <ProvinceScanner
               watched={s.watched_provinces}
+              watchedMethods={s.watched_methods}
               autoRun={s.auto_run_workflows}
               canChange={canAdminister(ctx.role)}
               canScan={canOperate(ctx.role)}
@@ -123,14 +139,28 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
           <h2 id="found" className="text-sm font-semibold">
             Open tenders found ({count ?? 0})
           </h2>
+          <nav aria-label="Filter by delivery method" className="flex flex-wrap gap-1 text-xs">
+            <Link href={filterHref({ method: null })} className={!method ? "rounded bg-accent px-2 py-1" : "rounded px-2 py-1 text-muted-foreground hover:bg-accent"}>
+              Any method
+            </Link>
+            {s.watched_methods.map((m) => (
+              <Link
+                key={m}
+                href={filterHref({ method: m })}
+                className={method === m ? "rounded bg-accent px-2 py-1" : "rounded px-2 py-1 text-muted-foreground hover:bg-accent"}
+              >
+                {methodLabel(m)}
+              </Link>
+            ))}
+          </nav>
           <nav aria-label="Filter by province" className="flex flex-wrap gap-1 text-xs">
-            <Link href="/discover" className={!sp.province ? "rounded bg-accent px-2 py-1" : "rounded px-2 py-1 text-muted-foreground hover:bg-accent"}>
+            <Link href={filterHref({ province: null })} className={!sp.province ? "rounded bg-accent px-2 py-1" : "rounded px-2 py-1 text-muted-foreground hover:bg-accent"}>
               All
             </Link>
             {s.watched_provinces.map((p) => (
               <Link
                 key={p}
-                href={`/discover?province=${p}`}
+                href={filterHref({ province: p })}
                 className={sp.province === p ? "rounded bg-accent px-2 py-1" : "rounded px-2 py-1 text-muted-foreground hover:bg-accent"}
               >
                 {provinceLabel(p)}
@@ -155,6 +185,9 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
                   </th>
                   <th scope="col" className="px-3 py-2 font-medium">
                     Closes
+                  </th>
+                  <th scope="col" className="hidden px-3 py-2 font-medium md:table-cell">
+                    Apply by
                   </th>
                   <th scope="col" className="hidden px-3 py-2 font-medium md:table-cell">
                     Province
@@ -192,6 +225,12 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
                     <td className="whitespace-nowrap px-3 py-2.5 text-xs">
                       {formatDateTime(t.closing_at)}
                       <span className="block text-muted-foreground">{relativeTime(t.closing_at)}</span>
+                    </td>
+                    <td className="hidden max-w-[14rem] px-3 py-2.5 text-xs md:table-cell">
+                      {methodLabel(t.submission_method)}
+                      {t.submission_method === "EMAIL" && t.submission_destination && (
+                        <span className="block truncate text-muted-foreground">{t.submission_destination}</span>
+                      )}
                     </td>
                     <td className="hidden px-3 py-2.5 text-xs md:table-cell">{provinceLabel(t.province)}</td>
                   </tr>

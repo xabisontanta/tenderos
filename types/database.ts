@@ -303,14 +303,14 @@ isOneToOne: false
                   ]
                 },"discovery_runs": {
                   Row: {
-                    "completed_at": string | null,"created_at": string,"created_tenders": number,"error": string | null,"id": string,"matched": number,"organisation_id": string,"provinces": (string)[],"requested_by": string | null,"scanned": number,"source": string,"started_at": string | null,"started_workflows": number,"status": Database["public"]['Enums']["discovery_status"],"trigger": string
+                    "completed_at": string | null,"created_at": string,"created_tenders": number,"error": string | null,"id": string,"matched": number,"methods": (string)[],"organisation_id": string,"provinces": (string)[],"requested_by": string | null,"scanned": number,"source": string,"started_at": string | null,"started_workflows": number,"status": Database["public"]['Enums']["discovery_status"],"trigger": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"organisation_id": string,"provinces": (string)[],"requested_by"?: string | null,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger": string
+                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id": string,"provinces": (string)[],"requested_by"?: string | null,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger": string
                   }
                   Update: {
-                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"organisation_id"?: string,"provinces"?: (string)[],"requested_by"?: string | null,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger"?: string
+                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id"?: string,"provinces"?: (string)[],"requested_by"?: string | null,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger"?: string
                   }
                   Relationships: [
                     {
@@ -505,14 +505,14 @@ isOneToOne: false
                   ]
                 },"system_settings": {
                   Row: {
-                    "audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"organisation_id": string,"per_tender_budget_usd": number,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_provinces": (string)[]
+                    "audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"organisation_id": string,"per_tender_budget_usd": number,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_methods": (string)[],"watched_provinces": (string)[]
                   }
                   ComputedFields: never
                   Insert: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"organisation_id": string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_provinces"?: (string)[]
+                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"organisation_id": string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Update: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"organisation_id"?: string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_provinces"?: (string)[]
+                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"organisation_id"?: string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Relationships: [
                     {
@@ -752,6 +752,9 @@ isOneToOne: false
                            },
 "set_kill_switch":
 { Args: { "p_engaged": boolean,"p_org": string,"p_reason": string }; Returns: undefined
+                           },
+"set_watched_methods":
+{ Args: { "p_methods": (string)[],"p_org": string }; Returns: undefined
                            },
 "set_watched_provinces":
 { Args: { "p_auto_run": boolean,"p_org": string,"p_provinces": (string)[] }; Returns: undefined

@@ -7,6 +7,7 @@ import { z } from "zod";
  * delivery details for every published tender.
  */
 export const ETENDERS_BASE = "https://www.etenders.gov.za";
+const EMAIL_IN_TEXT = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const PAGE_SIZE = 500;
 const MAX_PAGES = 20;
 
@@ -136,7 +137,15 @@ export function mapEtendersRow(row: EtendersRow, now: Date): MapResult {
   if (briefing && briefing > closing) briefing = null;
 
   const delivery = clean(row.delivery?.replace(/-+/g, ", "), 500);
-  const method: DiscoveredTender["submission_method"] = row.eSubmission ? "ELECTRONIC_PORTAL" : delivery ? "PHYSICAL" : "UNKNOWN";
+  // A delivery field that names a mailbox means the bid goes by email.
+  const deliveryEmail = delivery?.match(EMAIL_IN_TEXT)?.[0].toLowerCase() ?? null;
+  const method: DiscoveredTender["submission_method"] = row.eSubmission
+    ? "ELECTRONIC_PORTAL"
+    : deliveryEmail
+      ? "EMAIL"
+      : delivery
+        ? "PHYSICAL"
+        : "UNKNOWN";
 
   const documents = (row.supportDocument ?? []).map((d) => {
     const ext = d.extension ?? "";
@@ -163,7 +172,7 @@ export function mapEtendersRow(row: EtendersRow, now: Date): MapResult {
       briefing_compulsory: Boolean(row.briefingCompulsory),
       briefing_location: row.briefingSession ? clean(row.briefingVenue, 300) : null,
       submission_method: method,
-      submission_destination: method === "ELECTRONIC_PORTAL" ? `${ETENDERS_BASE} (eSubmission)` : delivery,
+      submission_destination: method === "ELECTRONIC_PORTAL" ? `${ETENDERS_BASE} (eSubmission)` : method === "EMAIL" ? deliveryEmail : delivery,
       source_url: documents[0]?.url ?? `${ETENDERS_BASE}/Home/opportunities?id=1`,
       documents,
       contact: { person: clean(row.contactPerson, 120), email: clean(row.email, 200), telephone: clean(row.telephone, 60) },

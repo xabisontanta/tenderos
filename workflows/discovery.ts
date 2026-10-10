@@ -20,6 +20,7 @@ interface RunRow {
   id: string;
   organisation_id: string;
   provinces: string[];
+  methods: string[];
   status: string;
 }
 
@@ -31,7 +32,7 @@ interface RunRow {
  */
 export async function runDiscovery(pool: Pool, runId: string, attempts: number, deps: DiscoveryDeps): Promise<JobOutcome> {
   const setup = await withTx(pool, async (c) => {
-    const { rows } = await c.query<RunRow>("select id, organisation_id, provinces, status from public.discovery_runs where id = $1 for update", [runId]);
+    const { rows } = await c.query<RunRow>("select id, organisation_id, provinces, methods, status from public.discovery_runs where id = $1 for update", [runId]);
     const run = rows[0];
     if (!run || (run.status !== "QUEUED" && run.status !== "RUNNING")) return null;
     const scout = await db.getAgentBySlug(c, run.organisation_id, "tender_discovery");
@@ -72,6 +73,7 @@ export async function runDiscovery(pool: Pool, runId: string, attempts: number, 
   const { run, scout, sourceId, taskId } = setup;
   const log = deps.logger.child({ discovery_run_id: run.id });
   const wanted = new Set(run.provinces);
+  const methods = new Set(run.methods);
 
   // 1. Read the portal.
   const found: DiscoveredTender[] = [];
@@ -81,7 +83,7 @@ export async function runDiscovery(pool: Pool, runId: string, attempts: number, 
       scanned += page.rows.length;
       for (const row of page.rows) {
         const m = mapEtendersRow(row, deps.now());
-        if (m.ok && wanted.has(m.tender.province)) found.push(m.tender);
+        if (m.ok && wanted.has(m.tender.province) && methods.has(m.tender.submission_method)) found.push(m.tender);
       }
       const pct = page.total ? Math.min(90, Math.round((scanned / page.total) * 90)) : 50;
       await pool.query("update public.tasks set progress = $2, progress_message = $3 where id = $1", [
@@ -212,11 +214,12 @@ async function autoStartWorkflows(pool: Pool, run: RunRow, log: Logger): Promise
   const { rows } = await pool.query<{ id: string }>(
     `select t.id from public.tenders t
       where t.organisation_id = $1 and t.status = 'DISCOVERED' and not t.is_simulation
-        and t.province = any ($2) and t.closing_at > now() + make_interval(hours => $3)
+        and t.province = any ($2) and t.submission_method::text = any ($5)
+        and t.closing_at > now() + make_interval(hours => $3)
         and not exists (select 1 from public.workflow_runs r where r.tender_id = t.id)
       order by t.closing_at asc
       limit $4`,
-    [run.organisation_id, run.provinces, MIN_PREPARATION_HOURS, s.max_auto_workflows_per_scan],
+    [run.organisation_id, run.provinces, MIN_PREPARATION_HOURS, s.max_auto_workflows_per_scan, run.methods],
   );
   let started = 0;
   for (const r of rows) {

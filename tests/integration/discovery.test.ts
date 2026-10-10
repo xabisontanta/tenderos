@@ -103,6 +103,25 @@ describe("province discovery", () => {
     expect(record).toEqual({ status: "ACTION_REQUIRED", is_simulation: false });
   });
 
+  it("only picks up the delivery methods the organisation chose", async () => {
+    const viewerless = await owner.client.rpc("set_watched_methods", { p_org: orgId, p_methods: [] });
+    expect(viewerless.error?.message).toMatch(/at least one/);
+    expect((await owner.client.rpc("set_watched_methods", { p_org: orgId, p_methods: ["EMAIL"] })).error).toBeNull();
+    const mixed = [
+      etendersRow({ id: 900101, tender_No: "GT-EMAIL-1", province: "Gauteng", delivery: "Submit to bids@example.gov.za" }),
+      etendersRow({ id: 900102, tender_No: "GT-BOX-1", province: "Gauteng" }),
+    ];
+    const { data: runId } = await owner.client.rpc("start_discovery", { p_org: orgId, p_provinces: ["GAUTENG"] });
+    await drainOrg(worker(mixed), pool, orgId);
+    const { data: run } = await owner.client.from("discovery_runs").select("methods, matched, created_tenders").eq("id", runId!).single();
+    expect(run).toEqual({ methods: ["EMAIL"], matched: 1, created_tenders: 1 });
+    const { data: t } = await owner.client.from("tenders").select("submission_method, submission_destination").eq("reference_number", "GT-EMAIL-1").single();
+    expect(t).toEqual({ submission_method: "EMAIL", submission_destination: "bids@example.gov.za" });
+    const { count } = await owner.client.from("tenders").select("id", { count: "exact", head: true }).eq("reference_number", "GT-BOX-1");
+    expect(count).toBe(0);
+    await owner.client.rpc("set_watched_methods", { p_org: orgId, p_methods: ["ELECTRONIC_PORTAL", "EMAIL", "PHYSICAL", "UNKNOWN"] });
+  });
+
   it("does not store the same tender twice", async () => {
     const { data: runId } = await owner.client.rpc("start_discovery", { p_org: orgId, p_provinces: ["GAUTENG", "KWAZULU_NATAL"] });
     await drainOrg(worker(), pool, orgId);
