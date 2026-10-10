@@ -13,5 +13,7 @@ export const submissionOutputSchema = z.object({
   /** True when nothing was sent to any external system. */
   simulated: z.boolean(),
   receipt_note: z.string(),
+  /** Uploaded company documents the compliance check relied on, to include in the bid pack. */
+  attachments: z.array(z.object({ key: z.string(), label: z.string(), document_id: z.string().uuid() })).default([]),
 });
 export type SubmissionOutput = z.infer<typeof submissionOutputSchema>;

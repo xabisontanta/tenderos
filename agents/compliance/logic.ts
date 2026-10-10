@@ -1,4 +1,4 @@
-import type { CompanyProfile, TenderSnapshot } from "@/agents/runtime/types";
+import type { CompanyDocumentMeta, CompanyProfile, TenderSnapshot } from "@/agents/runtime/types";
 import type { ComplianceItem } from "./schema";
 
 export interface VaultDocumentMeta {
@@ -7,6 +7,7 @@ export interface VaultDocumentMeta {
   verified: boolean;
   /** Where the fact came from, shown as evidence when valid. */
   source?: string;
+  documentId?: string;
 }
 
 /** Standard South African public-procurement returnables. */
@@ -35,7 +36,7 @@ export function evaluateCompliance(tender: Pick<TenderSnapshot, "closing_at" | "
     if (vault === null) {
       return { ...item, status: "MISSING_INFORMATION", evidence: "Document vault not configured" };
     }
-    const doc = vault.find((d) => d.type === item.key);
+    const doc = bestEvidence(vault, item.key);
     if (!doc) return { ...item, status: "MISSING_INFORMATION", evidence: "No document on file" };
     if (!doc.verified) return { ...item, status: "REQUIRES_CONFIRMATION", evidence: "Document on file but not verified" };
     if (doc.expiresAt) {
@@ -44,12 +45,33 @@ export function evaluateCompliance(tender: Pick<TenderSnapshot, "closing_at" | "
         return { ...item, status: "EXPIRED", evidence: `Expires ${doc.expiresAt}, before closing` };
       }
       if (exp - now.getTime() < EXPIRY_WARNING_DAYS * 86_400_000) {
-        return { ...item, status: "EXPIRING_SOON", evidence: `Expires ${doc.expiresAt}` };
+        return { ...item, status: "EXPIRING_SOON", evidence: `Expires ${doc.expiresAt}`, document_id: doc.documentId ?? null };
       }
     }
     const from = doc.source ? `${doc.source}; ` : "";
-    return { ...item, status: "VALID", evidence: `${from}${doc.expiresAt ? `valid until ${doc.expiresAt}` : "no expiry recorded"}` };
+    return {
+      ...item,
+      status: "VALID",
+      evidence: `${from}${doc.expiresAt ? `valid until ${doc.expiresAt}` : "no expiry recorded"}`,
+      document_id: doc.documentId ?? null,
+    };
   });
+}
+
+/**
+ * Picks the strongest evidence for a checklist item: verified before
+ * unverified, then the latest expiry (no expiry counts as latest). On a tie
+ * the earlier entry wins, so callers list uploaded documents first.
+ */
+export function bestEvidence(vault: VaultDocumentMeta[], key: string): VaultDocumentMeta | undefined {
+  const rank = (d: VaultDocumentMeta) => (d.expiresAt ? new Date(d.expiresAt).getTime() : Number.POSITIVE_INFINITY);
+  return vault
+    .filter((d) => d.type === key)
+    .reduce<VaultDocumentMeta | undefined>((best, d) => {
+      if (!best) return d;
+      if (d.verified !== best.verified) return d.verified ? d : best;
+      return rank(d) > rank(best) ? d : best;
+    }, undefined);
 }
 
 export function isComplete(items: ComplianceItem[]): boolean {
@@ -74,4 +96,15 @@ export function profileEvidence(p: CompanyProfile | null): VaultDocumentMeta[] |
   add("sbd_declarations", p.authorised_signatory, `To be signed by ${p.authorised_signatory} at approval`);
   add("cidb_grading", p.cidb_grade, `CIDB grade ${p.cidb_grade} in company profile`);
   return docs;
+}
+
+/** Uploaded documents as checklist evidence. Unverified uploads stay REQUIRES_CONFIRMATION. */
+export function documentEvidence(docs: CompanyDocumentMeta[]): VaultDocumentMeta[] {
+  return docs.map((d) => ({
+    type: d.doc_type,
+    verified: d.verified,
+    expiresAt: d.expires_at,
+    source: `Uploaded document "${d.title}"`,
+    documentId: d.id,
+  }));
 }

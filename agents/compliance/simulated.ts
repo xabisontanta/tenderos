@@ -1,7 +1,7 @@
 import type { AgentExecutor } from "@/agents/runtime/types";
 import { NonRetryableError } from "@/agents/runtime/types";
 import { SIMULATED_COST, simulateWork } from "@/agents/runtime/simulation";
-import { evaluateCompliance, isComplete, profileEvidence } from "./logic";
+import { documentEvidence, evaluateCompliance, isComplete, profileEvidence } from "./logic";
 import { complianceOutputSchema, type ComplianceOutput } from "./schema";
 
 export const complianceCheck: AgentExecutor<ComplianceOutput> = {
@@ -12,9 +12,13 @@ export const complianceCheck: AgentExecutor<ComplianceOutput> = {
   outputSchema: complianceOutputSchema,
   async run(ctx) {
     if (!ctx.tender) throw new NonRetryableError("Tender data unavailable");
-    await simulateWork(ctx, ["Building returnables checklist", "Checking company profile", "Checking expiry dates"]);
-    // Evidence comes from the company profile. Without one every item is reported missing.
-    const items = evaluateCompliance(ctx.tender, profileEvidence(ctx.company), ctx.now);
+    await simulateWork(ctx, ["Building returnables checklist", "Checking uploaded documents and company profile", "Checking expiry dates"]);
+    // Evidence comes from uploaded documents first, then the company profile.
+    // With neither, every item is reported missing.
+    const profile = profileEvidence(ctx.company);
+    const docs = documentEvidence(ctx.documents);
+    const vault = profile === null && docs.length === 0 ? null : [...docs, ...(profile ?? [])];
+    const items = evaluateCompliance(ctx.tender, vault, ctx.now);
     const complete = isComplete(items);
     const missing = items.filter((i) => i.status !== "VALID").map((i) => i.label);
     const continued = !complete && ctx.workflow.isSimulation;

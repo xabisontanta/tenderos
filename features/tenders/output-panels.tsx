@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleHelp, Download, XCircle } from "lucide-react";
 import { JsonView } from "@/components/command-centre/json-view";
 import { Badge } from "@/components/ui/badge";
 import { qualificationOutputSchema } from "@/agents/qualification/schema";
@@ -112,7 +112,22 @@ export function RequirementsPanel({ output }: { output: unknown }) {
   );
 }
 
-export function CompliancePanel({ output }: { output: unknown }) {
+/** Signed download links for uploaded company documents, keyed by document id. */
+export type DocumentLinks = Record<string, { title: string; url: string | null }>;
+
+function DocumentLink({ id, links }: { id: string | null | undefined; links: DocumentLinks }) {
+  const doc = id ? links[id] : undefined;
+  if (!doc) return null;
+  return doc.url ? (
+    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+      <Download className="size-3" aria-hidden /> {doc.title}
+    </a>
+  ) : (
+    <span className="text-[11px] text-muted-foreground">{doc.title} (removed from Documents)</span>
+  );
+}
+
+export function CompliancePanel({ output, links = {} }: { output: unknown; links?: DocumentLinks }) {
   if (!output) return <Empty what="Compliance review" />;
   const p = complianceOutputSchema.safeParse(output);
   if (!p.success) return <JsonView value={output} />;
@@ -133,6 +148,7 @@ export function CompliancePanel({ output }: { output: unknown }) {
               <p className="text-[11px] text-muted-foreground">
                 {humanize(i.status)} · {i.evidence}
               </p>
+              <DocumentLink id={i.document_id} links={links} />
             </div>
           </li>
         ))}
@@ -220,8 +236,10 @@ export function QaPanel({ output }: { output: unknown }) {
 export function SubmissionPanel({
   output,
   record,
+  links = {},
 }: {
   output: unknown;
+  links?: DocumentLinks;
   record: { status: string; is_simulation: boolean; package_hash: string | null; submitted_at: string | null; method: string } | null;
 }) {
   if (!output && !record) return <Empty what="Submission" />;
@@ -246,6 +264,19 @@ export function SubmissionPanel({
       {p.success && (
         <>
           <p>{p.data.receipt_note}</p>
+          {p.data.attachments.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] font-medium text-muted-foreground">Company documents for the bid pack</p>
+              <ul className="grid gap-1">
+                {p.data.attachments.map((a) => (
+                  <li key={a.document_id} className="flex flex-wrap items-center gap-2">
+                    <span>{a.label}</span>
+                    <DocumentLink id={a.document_id} links={links} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <ul className="flex flex-wrap gap-2 text-xs">
             {Object.entries(p.data.verified).map(([k, v]) => (
               <li key={k}>

@@ -7,6 +7,16 @@ type TenderRow = Database["public"]["Tables"]["tenders"]["Row"];
 /** Company facts entered by the organisation (company_profiles row). */
 export type CompanyProfile = Omit<Database["public"]["Tables"]["company_profiles"]["Row"], "updated_at" | "updated_by">;
 
+/** Metadata of an uploaded company document. Agents never receive file contents here. */
+export interface CompanyDocumentMeta {
+  id: string;
+  doc_type: string;
+  title: string;
+  file_name: string;
+  expires_at: string | null;
+  verified: boolean;
+}
+
 /** The tender fields classified as PUBLIC_TENDER_DATA. */
 export type TenderSnapshot = Pick<
   TenderRow,
@@ -54,6 +64,8 @@ export interface AgentContext {
   tender: TenderSnapshot | null;
   /** Present only when the agent holds COMPANY_PROFILE and a profile exists. */
   company: CompanyProfile | null;
+  /** Uploaded documents in the data categories this agent holds. */
+  documents: CompanyDocumentMeta[];
   /** Checkpointed outputs of earlier steps in this run, keyed by step key. */
   previousOutputs: Record<string, unknown>;
   /** Data categories this agent was granted for this task (already enforced). */

@@ -13,6 +13,7 @@ import { TenderActions } from "@/features/tenders/tender-actions";
 import { WorkflowTimeline } from "@/features/tenders/workflow-timeline";
 import {
   CompliancePanel,
+  type DocumentLinks,
   PricingPanel,
   ProposalPanel,
   QaPanel,
@@ -25,6 +26,7 @@ import { getRecentEvents, type TaskSummary } from "@/lib/data/queries";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { formatDateTime, formatZar, humanize, provinceLabel, relativeTime } from "@/lib/format";
 import type { TenderStatus } from "@/lib/domain/tender-state";
+import { DOCUMENT_BUCKET } from "@/lib/domain/documents";
 
 export const metadata: Metadata = { title: "Tender" };
 
@@ -58,6 +60,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   const agentNames = Object.fromEntries((agents.data ?? []).map((a) => [a.id, a.display_name]));
   const totalCost = (costs.data ?? []).reduce((s, c) => s + Number(c.cost_usd), 0);
   const submission = submissions.data?.[0] ?? null;
+  const documentLinks = await bidPackLinks(supabase, output("compliance"));
 
   return (
     <>
@@ -171,7 +174,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
                   <RequirementsPanel output={output("analysis")} />
                 </TabsContent>
                 <TabsContent value="compliance" className="mt-0">
-                  <CompliancePanel output={output("compliance")} />
+                  <CompliancePanel output={output("compliance")} links={documentLinks} />
                 </TabsContent>
                 <TabsContent value="proposal" className="mt-0">
                   <ProposalPanel output={output("proposal")} />
@@ -183,7 +186,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
                   <QaPanel output={output("qa")} />
                 </TabsContent>
                 <TabsContent value="submission" className="mt-0">
-                  <SubmissionPanel output={output("submission")} record={submission} />
+                  <SubmissionPanel output={output("submission")} record={submission} links={documentLinks} />
                 </TabsContent>
                 <TabsContent value="tasks" className="mt-0">
                   {tasks.length === 0 ? (
@@ -304,4 +307,18 @@ function Item({ k, v }: { k: string; v: string }) {
       <dd>{v}</dd>
     </div>
   );
+}
+
+/** Short-lived download links for the uploaded documents the compliance check relied on. */
+async function bidPackLinks(supabase: Awaited<ReturnType<typeof getServerSupabase>>, compliance: unknown): Promise<DocumentLinks> {
+  const items = (compliance as { items?: Array<{ document_id?: string | null }> } | null)?.items ?? [];
+  const ids = [...new Set(items.flatMap((i) => (i.document_id ? [i.document_id] : [])))];
+  if (ids.length === 0) return {};
+  const { data: docs } = await supabase.from("company_documents").select("id,title,storage_path,archived_at").in("id", ids);
+  const live = (docs ?? []).filter((d) => !d.archived_at);
+  const { data: signed } = live.length
+    ? await supabase.storage.from(DOCUMENT_BUCKET).createSignedUrls(live.map((d) => d.storage_path), 3600)
+    : { data: [] };
+  const urlByPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
+  return Object.fromEntries((docs ?? []).map((d) => [d.id, { title: d.title, url: d.archived_at ? null : (urlByPath.get(d.storage_path) ?? null) }]));
 }

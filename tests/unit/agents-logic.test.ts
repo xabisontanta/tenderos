@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { TenderSnapshot } from "@/agents/runtime/types";
+import type { CompanyDocumentMeta, TenderSnapshot } from "@/agents/runtime/types";
 import { assessQualification, MIN_PREPARATION_HOURS } from "@/agents/qualification/logic";
-import { evaluateCompliance, isComplete } from "@/agents/compliance/logic";
+import { bestEvidence, documentEvidence, evaluateCompliance, isComplete } from "@/agents/compliance/logic";
 import { reviewBid } from "@/agents/qa/logic";
 import { subtotal, withVat } from "@/agents/pricing/logic";
-import { packageHash, stableStringify } from "@/agents/submission/logic";
+import { bidPackAttachments, packageHash, stableStringify } from "@/agents/submission/logic";
 import { extractRecordRequirements } from "@/agents/analysis/logic";
 
 const NOW = new Date("2026-10-10T10:00:00Z");
@@ -155,5 +155,60 @@ describe("requirement extraction", () => {
     expect(r.requirements.every((x) => x.source.kind === "TENDER_RECORD" && x.source.field)).toBe(true);
     expect(r.requirements.find((x) => x.id === "briefing")!.status).toBe("MISSING_INFORMATION");
     expect(r.gaps.join()).toMatch(/No tender documents/);
+  });
+});
+
+describe("company document vault", () => {
+  const doc = (o: Partial<CompanyDocumentMeta> = {}): CompanyDocumentMeta => ({
+    id: "00000000-0000-4000-8000-000000000001",
+    doc_type: "cipc_registration",
+    title: "CIPC CoR 14.3",
+    file_name: "cor14-3.pdf",
+    expires_at: null,
+    verified: true,
+    ...o,
+  });
+
+  it("turns uploaded documents into traceable evidence", () => {
+    const [e] = documentEvidence([doc()]);
+    expect(e).toMatchObject({ type: "cipc_registration", verified: true, documentId: doc().id });
+    expect(e.source).toContain("CIPC CoR 14.3");
+    const cipc = evaluateCompliance(tender(), [e], NOW).find((i) => i.key === "cipc_registration")!;
+    expect(cipc.status).toBe("VALID");
+    expect(cipc.document_id).toBe(doc().id);
+    expect(cipc.evidence).toContain("Uploaded document");
+  });
+
+  it("prefers verified documents, then the latest expiry", () => {
+    const vault = [
+      { type: "tax_compliance", expiresAt: inDays(400), verified: false, documentId: "a" },
+      { type: "tax_compliance", expiresAt: inDays(60), verified: true, documentId: "b" },
+      { type: "tax_compliance", expiresAt: inDays(200), verified: true, documentId: "c" },
+    ];
+    expect(bestEvidence(vault, "tax_compliance")?.documentId).toBe("c");
+    expect(bestEvidence(vault, "bbbee")).toBeUndefined();
+  });
+
+  it("an unverified upload needs confirmation and is not attached", () => {
+    const items = evaluateCompliance(tender(), documentEvidence([doc({ verified: false })]), NOW);
+    const cipc = items.find((i) => i.key === "cipc_registration")!;
+    expect(cipc.status).toBe("REQUIRES_CONFIRMATION");
+    expect(bidPackAttachments({ compliance: { items } })).toEqual([]);
+  });
+
+  it("an expired upload is reported, not attached", () => {
+    const items = evaluateCompliance(tender(), documentEvidence([doc({ doc_type: "tax_compliance", expires_at: inDays(3) })]), NOW);
+    expect(items.find((i) => i.key === "tax_compliance")!.status).toBe("EXPIRED");
+    expect(bidPackAttachments({ compliance: { items } })).toEqual([]);
+  });
+
+  it("the bid pack lists every document compliance relied on", () => {
+    const items = evaluateCompliance(
+      tender(),
+      documentEvidence([doc(), doc({ id: "00000000-0000-4000-8000-000000000002", doc_type: "tax_compliance", expires_at: inDays(20) })]),
+      NOW,
+    );
+    expect(bidPackAttachments({ compliance: { items } }).map((a) => a.key)).toEqual(["cipc_registration", "tax_compliance"]);
+    expect(bidPackAttachments({})).toEqual([]);
   });
 });

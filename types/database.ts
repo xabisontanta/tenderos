@@ -203,6 +203,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"company_documents": {
+                  Row: {
+                    "archived_at": string | null,"created_at": string,"data_category": Database["public"]['Enums']["data_category"],"doc_type": string,"expires_at": string | null,"file_name": string,"id": string,"mime_type": string | null,"organisation_id": string,"size_bytes": number | null,"storage_path": string,"title": string,"uploaded_by": string | null,"verified": boolean,"verified_at": string | null,"verified_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived_at"?: string | null,"created_at"?: string,"data_category": Database["public"]['Enums']["data_category"],"doc_type": string,"expires_at"?: string | null,"file_name": string,"id"?: string,"mime_type"?: string | null,"organisation_id": string,"size_bytes"?: number | null,"storage_path": string,"title": string,"uploaded_by"?: string | null,"verified"?: boolean,"verified_at"?: string | null,"verified_by"?: string | null
+                  }
+                  Update: {
+                    "archived_at"?: string | null,"created_at"?: string,"data_category"?: Database["public"]['Enums']["data_category"],"doc_type"?: string,"expires_at"?: string | null,"file_name"?: string,"id"?: string,"mime_type"?: string | null,"organisation_id"?: string,"size_bytes"?: number | null,"storage_path"?: string,"title"?: string,"uploaded_by"?: string | null,"verified"?: boolean,"verified_at"?: string | null,"verified_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "company_documents_organisation_id_fkey"
+      columns: ["organisation_id"]
+isOneToOne: false
+      referencedRelation: "organisations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"company_profiles": {
                   Row: {
                     "authorised_signatory": string | null,"bbbee_expires_at": string | null,"bbbee_level": number | null,"cidb_grade": string | null,"csd_number": string | null,"legal_name": string | null,"max_contract_value_zar": number | null,"organisation_id": string,"provinces": (string)[],"registration_number": string | null,"sectors": (string)[],"tax_pin": string | null,"tax_pin_expires_at": string | null,"updated_at": string,"updated_by": string | null
@@ -703,7 +723,10 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "bootstrap_organisation":
+            "archive_company_document":
+{ Args: { "p_id": string }; Returns: undefined
+                           },
+"bootstrap_organisation":
 { Args: { "p_agents": Json,"p_departments": Json,"p_name": string,"p_slug": string,"p_user_id": string }; Returns: string
                            },
 "cancel_workflow":
@@ -717,6 +740,9 @@ isOneToOne: false
                            },
 "mark_notifications_read":
 { Args: { "p_ids": (string)[] }; Returns: undefined
+                           },
+"register_company_document":
+{ Args: { "p_doc_type": string,"p_expires_at"?: string,"p_org": string,"p_path": string,"p_title": string }; Returns: string
                            },
 "retry_task":
 { Args: { "p_task_id": string }; Returns: undefined
@@ -738,6 +764,9 @@ isOneToOne: false
                            },
 "transition_tender":
 { Args: { "p_reason": string,"p_tender_id": string,"p_to": Database["public"]['Enums']["tender_status"] }; Returns: Database["public"]['Enums']["tender_status"]
+                           },
+"verify_company_document":
+{ Args: { "p_id": string }; Returns: undefined
                            }
           }
           Enums: {

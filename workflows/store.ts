@@ -3,7 +3,7 @@ import type { Database, Json } from "@/types/database";
 import { deriveAgentState, type AgentTaskSnapshot } from "@/lib/domain/agent-status";
 import { assertTransition, type TenderStatus } from "@/lib/domain/tender-state";
 import type { DataCategory } from "@/agents/registry";
-import type { CompanyProfile, CostRecord, TenderSnapshot } from "@/agents/runtime/types";
+import type { CompanyDocumentMeta, CompanyProfile, CostRecord, TenderSnapshot } from "@/agents/runtime/types";
 
 type Tables = Database["public"]["Tables"];
 export type TaskRow = Tables["tasks"]["Row"];
@@ -153,6 +153,19 @@ export async function getCompanyProfile(c: PoolClient, organisationId: string): 
   if (!rows[0]) return null;
   const { updated_at: _a, updated_by: _b, ...profile } = rows[0];
   return profile;
+}
+
+/** Current documents in the given data categories; categories the agent lacks are never read. */
+export async function getCompanyDocuments(c: PoolClient, organisationId: string, categories: string[]): Promise<CompanyDocumentMeta[]> {
+  if (categories.length === 0) return [];
+  const { rows } = await c.query<CompanyDocumentMeta>(
+    `select id, doc_type, title, file_name, to_char(expires_at, 'YYYY-MM-DD') as expires_at, verified
+       from public.company_documents
+      where organisation_id = $1 and archived_at is null and data_category::text = any ($2)
+      order by created_at desc`,
+    [organisationId, categories],
+  );
+  return rows;
 }
 
 export async function getPreviousOutputs(c: PoolClient, runId: string): Promise<Record<string, unknown>> {

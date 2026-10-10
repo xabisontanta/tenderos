@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Briefcase, Building2, FileStack, Gauge, Hand, Network, Radar, Settings } from "lucide-react";
+import { Activity, Briefcase, Building2, FileStack, FolderOpen, Gauge, Hand, Network, Radar, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -14,6 +14,7 @@ const NAV = [
   { href: "/approvals", label: "Approvals", icon: Hand },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/company", label: "Company", icon: Briefcase },
+  { href: "/documents", label: "Documents", icon: FolderOpen },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

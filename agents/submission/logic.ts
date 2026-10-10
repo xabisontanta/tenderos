@@ -15,3 +15,12 @@ export function stableStringify(value: unknown): string {
     .map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`)
     .join(",")}}`;
 }
+
+/**
+ * Company documents to include in the bid pack: the uploaded documents the
+ * compliance check accepted as evidence, in checklist order.
+ */
+export function bidPackAttachments(previousOutputs: Record<string, unknown>): Array<{ key: string; label: string; document_id: string }> {
+  const compliance = previousOutputs.compliance as { items?: Array<{ key: string; label: string; document_id?: string | null }> } | undefined;
+  return (compliance?.items ?? []).flatMap((i) => (i.document_id ? [{ key: i.key, label: i.label, document_id: i.document_id }] : []));
+}

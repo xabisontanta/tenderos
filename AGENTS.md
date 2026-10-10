@@ -86,6 +86,16 @@ verified pack and delivery instructions. TenderOS never submits a bid itself.
   grant is a `PermissionDeniedError`: the task fails without retrying.
 - Director personal data, banking and proof of address are only granted to
   the Document Manager.
+- Company documents (`company_documents`, `lib/domain/documents.ts`) each carry
+  the data category of their type. The engine gives an agent metadata only
+  (`AgentContext.documents`: id, type, title, file name, expiry, verified) for
+  the categories it holds, never file contents or signed URLs. The type list
+  is mirrored by the table's check and `private.document_category`; a parity
+  test keeps them identical.
+- Compliance treats a document as evidence only when it is verified and in
+  date at closing, and records its `document_id`. The Submission Officer's
+  bid pack lists those documents as `attachments`. Verifying or adding a
+  verified document re-queues blocked compliance tasks.
 - Browser users read through RLS (`private.is_org_member`) and write only
   through RPCs that check role (`private.has_org_role`).
 

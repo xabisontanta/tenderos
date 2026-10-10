@@ -7,6 +7,8 @@ export const complianceItemSchema = z.object({
   mandatory: z.boolean(),
   status: z.enum(["VALID", "EXPIRED", "EXPIRING_SOON", "MISSING_INFORMATION", "REQUIRES_CONFIRMATION"]),
   evidence: z.string(),
+  /** The uploaded document relied on, when the evidence is a document. */
+  document_id: z.string().uuid().nullable().optional(),
 });
 
 export const complianceOutputSchema = z.object({

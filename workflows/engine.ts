@@ -347,6 +347,7 @@ export class WorkflowEngine {
           workflow: { runId: run.id, correlationId: run.correlation_id, isSimulation: run.is_simulation, options: (run.options ?? {}) as SimulationOptions },
           tender: granted.has("PUBLIC_TENDER_DATA") ? db.toTenderSnapshot(tender) : null,
           company: granted.has("COMPANY_PROFILE") ? await db.getCompanyProfile(c, run.organisation_id) : null,
+          documents: await db.getCompanyDocuments(c, run.organisation_id, [...granted]),
           previousOutputs: await db.getPreviousOutputs(c, run.id),
           granted,
           now: this.now(),

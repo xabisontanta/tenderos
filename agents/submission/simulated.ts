@@ -1,7 +1,7 @@
 import type { AgentExecutor } from "@/agents/runtime/types";
 import { NonRetryableError } from "@/agents/runtime/types";
 import { SIMULATED_COST, simulateWork } from "@/agents/runtime/simulation";
-import { packageHash } from "./logic";
+import { bidPackAttachments, packageHash } from "./logic";
 import { submissionOutputSchema, type SubmissionOutput } from "./schema";
 
 /**
@@ -24,10 +24,14 @@ export const submissionExecute: AgentExecutor<SubmissionOutput> = {
     }
     await simulateWork(ctx, ["Verifying approval and deadline", "Hashing bid package", "Recording submission"]);
     const hash = packageHash(ctx.previousOutputs);
+    const attachments = bidPackAttachments(ctx.previousOutputs);
 
     // Real tenders: TenderOS never submits on anyone's behalf. It hands over a
     // verified pack and tells the person exactly where and by when to deliver.
     if (!ctx.workflow.isSimulation) {
+      const docs = attachments.length
+        ? ` Include the ${attachments.length} company document${attachments.length === 1 ? "" : "s"} listed in the bid pack.`
+        : "";
       const where =
         t.submission_method === "ELECTRONIC_PORTAL"
           ? "upload it on eTenders (eSubmission)"
@@ -42,7 +46,8 @@ export const submissionExecute: AgentExecutor<SubmissionOutput> = {
           destination: t.submission_destination,
           verified: { approval: true, deadline: true, reference: Boolean(t.reference_number) },
           simulated: false,
-          receipt_note: `Bid pack approved. Sign the declarations, ${where} before ${t.closing_at}, then record the receipt.`,
+          receipt_note: `Bid pack approved. Sign the declarations, ${where} before ${t.closing_at}, then record the receipt.${docs}`,
+          attachments,
         },
         summary: "Approved bid pack ready for delivery",
         events: [
@@ -65,6 +70,7 @@ export const submissionExecute: AgentExecutor<SubmissionOutput> = {
         receipt_note: physical
           ? "Physical submission required: a person must deliver the bid and record the receipt"
           : "Simulated submission: no bid was sent to any external portal or mailbox",
+        attachments,
       },
       summary: physical ? "Physical submission action item created" : "Simulated submission recorded (nothing sent externally)",
       events: [
