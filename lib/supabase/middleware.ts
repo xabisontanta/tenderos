@@ -2,7 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth"];
+// /api/autofill authenticates the browser helper with its own pairing code.
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth", "/api/autofill"];
 
 /**
  * Refreshes the Supabase session cookie on every request and redirects

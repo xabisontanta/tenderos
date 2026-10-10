@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>TenderOS browser helper</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>TenderOS browser helper</h1>
+      <p id="paired" class="muted"></p>
+    </header>
+
+    <section id="setup" hidden>
+      <label for="server">TenderOS address</label>
+      <input id="server" type="url" placeholder="https://tenderos-six.vercel.app" autocomplete="off" spellcheck="false" />
+      <label for="token">Pairing code</label>
+      <input id="token" type="password" placeholder="tos_…" autocomplete="off" spellcheck="false" />
+      <p class="muted">Create a pairing code in TenderOS on Settings → Browser helper. It is shown once.</p>
+      <div class="row">
+        <button id="save" type="button">Save</button>
+        <button id="forget" type="button" class="secondary">Forget pairing</button>
+      </div>
+    </section>
+
+    <section id="fill" hidden>
+      <label for="bid">Tender (optional)</label>
+      <select id="bid">
+        <option value="">None: company details only</option>
+      </select>
+      <p id="bid-info" class="muted"></p>
+      <label class="check" id="sensitive-row" hidden>
+        <input id="sensitive" type="checkbox" />
+        <span>Also attach ID copies, bank letter and proof of address</span>
+      </label>
+      <p class="muted">Page: <span id="page">—</span></p>
+      <button id="fill-btn" type="button">Fill this page</button>
+      <button id="change" type="button" class="link">Change server or pairing code</button>
+    </section>
+
+    <p id="status" class="muted" role="status" hidden></p>
+    <p id="error" class="error" role="alert" hidden></p>
+
+    <section id="summary" hidden>
+      <h2 id="summary-title"></h2>
+      <p class="reminder">Check every field, then submit it yourself.</p>
+      <details open>
+        <summary id="filled-title"></summary>
+        <ul id="filled"></ul>
+      </details>
+      <details open>
+        <summary id="attached-title"></summary>
+        <ul id="attached"></ul>
+      </details>
+      <details open>
+        <summary id="left-title"></summary>
+        <ul id="left"></ul>
+      </details>
+    </section>
+
+    <footer class="muted">The helper never submits, never ticks declarations, never enters prices and never signs.</footer>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

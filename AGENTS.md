@@ -116,6 +116,19 @@ agent row. Milestone 1 executors call no external tools. When real tools are
 added, the runtime must refuse any tool that is not on the list, and log the
 refusal as an `agent_events` row with severity `WARNING`.
 
+### Browser helper (`extension/`)
+
+The browser helper is a person's tool, not an agent. It runs only when a
+member clicks **Fill this page** in their own browser, and it fills but never
+submits: it fills company details and attaches verified documents, and never
+clicks a submit, send or confirm button, ticks a declaration, enters a price
+or amount, or signs. Skip rules live in `extension/src/match.js` and are
+unit-tested; never relax them. It authenticates with a pairing code
+(`autofill_tokens`, stored as a SHA-256 hash, 30 days, revoked when the member
+leaves) through `/api/autofill/*`, which serves only the profile, the
+documents the member's role may read (section 4) and approved bids awaiting
+delivery, and audits every file download.
+
 ## 6. Handoff conventions
 
 - A handoff row is created for every step boundary, inside the same

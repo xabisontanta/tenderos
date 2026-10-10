@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "TenderOS browser helper",
+  "short_name": "TenderOS",
+  "version": "0.1.0",
+  "description": "Fills tender portal forms with your company's TenderOS details and documents. You check every field and submit it yourself.",
+  "minimum_chrome_version": "116",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["https://tenderos-six.vercel.app/*", "http://localhost:3000/*"],
+  "optional_host_permissions": ["https://*/*"],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "TenderOS: fill this page",
+    "default_popup": "popup/popup.html"
+  }
+}

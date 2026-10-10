@@ -1,0 +1,180 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #111827;
+  --muted: #6b7280;
+  --border: #d1d5db;
+  --accent: #15803d;
+  --accent-fg: #ffffff;
+  --warn: #b45309;
+  --error-bg: #fef2f2;
+  --error-fg: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0f14;
+    --fg: #e5e7eb;
+    --muted: #9ca3af;
+    --border: #374151;
+    --accent: #22c55e;
+    --accent-fg: #052e16;
+    --warn: #fbbf24;
+    --error-bg: #3f1d1d;
+    --error-fg: #fca5a5;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 380px;
+  margin: 0;
+  padding: 14px;
+  background: var(--bg);
+  color: var(--fg);
+  font:
+    13px/1.45 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+
+h1 {
+  margin: 0;
+  font-size: 15px;
+}
+
+h2 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+header {
+  margin-bottom: 10px;
+}
+
+section {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+input[type="url"],
+input[type="password"],
+select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+label.check {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-weight: 400;
+}
+
+button {
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+button.secondary {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+}
+
+button.link {
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font-weight: 400;
+  text-decoration: underline;
+  justify-self: start;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.error {
+  margin: 0 0 10px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--error-bg);
+  color: var(--error-fg);
+}
+
+.reminder {
+  margin: 0;
+  font-weight: 600;
+  color: var(--warn);
+}
+
+details {
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+li {
+  margin-bottom: 3px;
+}
+
+li small {
+  display: block;
+  color: var(--muted);
+}
+
+footer {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+a {
+  color: inherit;
+}

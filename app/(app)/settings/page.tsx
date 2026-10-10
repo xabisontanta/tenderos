@@ -4,8 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { KillSwitch } from "@/features/settings/kill-switch";
 import { MailboxSettings } from "@/features/email/mailbox-settings";
+import { AutofillSettings } from "@/features/autofill/autofill-settings";
 import { googleConfig } from "@/lib/email/gmail";
-import { canAdminister, requireContext } from "@/lib/data/context";
+import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { formatDateTime, formatUsd, humanize } from "@/lib/format";
 import { configuredModels } from "@/agents/runtime/model-routing";
@@ -36,6 +37,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     .eq("organisation_id", ctx.organisation.id)
     .is("revoked_at", null)
     .order("created_at");
+  const { data: autofillTokens } = canOperate(ctx.role)
+    ? await supabase
+        .from("autofill_tokens")
+        .select("id,label,created_at,last_used_at,expires_at")
+        .eq("organisation_id", ctx.organisation.id)
+        .eq("user_id", ctx.userId)
+        .is("revoked_at", null)
+        .order("created_at", { ascending: false })
+    : { data: [] };
   const models = configuredModels();
 
   return (
@@ -66,6 +76,20 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             />
           </CardContent>
         </Card>
+        {canOperate(ctx.role) && (
+          <Card id="browser-helper" className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Browser helper</CardTitle>
+              <CardDescription>
+                Fills tender portal forms in your own browser with the company profile and attaches your verified documents. You check every field and submit it
+                yourself.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AutofillSettings tokens={autofillTokens ?? []} />
+            </CardContent>
+          </Card>
+        )}
         <Card className={s.kill_switch ? "border-red-500/40" : undefined}>
           <CardHeader>
             <CardTitle>Kill switch</CardTitle>

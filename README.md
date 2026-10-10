@@ -101,6 +101,24 @@ Google Cloud OAuth client with the redirect URI
 `<APP_URL>/api/email/google/callback`. Until Google verifies the app for the
 `gmail.send` scope, only test users you add in Google Cloud can connect.
 
+## Filling portal forms (browser helper)
+
+Most portals take bids through web forms that ask for the same company facts
+every time. The browser helper in `extension/` (Chrome and Edge, loaded
+unpacked) fills those forms in your own browser: company name, registration,
+CSD, VAT and tax PIN, B-BBEE level, CIDB grade, addresses and contacts, the
+tender number, and your verified, in-date documents as attachments. **It
+fills; you submit.** It never presses submit, never ticks declarations, never
+enters prices and never signs, and anything it is unsure of or TenderOS does
+not hold is left empty and listed for you.
+
+Owners, admins and operators pair it on **Settings → Browser helper** with a
+pairing code that is shown once, lasts 30 days and can be revoked there. Only
+its SHA-256 hash is stored. The helper reads `GET /api/autofill/profile` and
+`GET /api/autofill/documents/<id>` with that code; director IDs, bank letters
+and proof of address only reach owners and admins, and every file download is
+audited. See `extension/README.md` to install and use it.
+
 ## Hosted worker (Supabase Edge Function)
 
 Supabase does not run long-lived processes, so on a hosted project the worker
