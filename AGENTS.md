@@ -92,6 +92,10 @@ verified pack and delivery instructions. TenderOS never submits a bid itself.
   the categories it holds, never file contents or signed URLs. The type list
   is mirrored by the table's check and `private.document_category`; a parity
   test keeps them identical.
+- Files are served only while their document row is live; director IDs, bank
+  letters and proof of address only to owners and admins. Pages sign a
+  60-second download link on click through `document_download`, which audits
+  the access. Never embed signed URLs in rendered pages.
 - Compliance treats a document as evidence only when it is verified and in
   date at closing, and records its `document_id`. The Submission Officer's
   bid pack lists those documents as `attachments`. Verifying or adding a
@@ -135,7 +139,9 @@ fields are explicit:
   owner or admin. Operators and viewers cannot decide.
 - Rejecting requires a reason. Decisions are final and audited.
 - One pending approval per task (unique index). Expired approvals cannot be
-  decided.
+  decided. Approvals expire at the tender's closing time; pg_cron
+  `tenderos-expire-approvals` marks them every 15 minutes and the engine
+  cancels the run and the tender.
 - TenderOS never auto-submits. In simulation mode the submission is a record
   with a package hash; nothing leaves the system.
 - An approved bid is emailed only when an owner or admin presses Send on the
@@ -186,7 +192,9 @@ fields are explicit:
 - Writes from users go through role-checked RPCs; agents write through the
   worker only.
 - Per-request nonce CSP, HSTS in production, frame-ancestors none.
-- Rate limits on sensitive actions (`hit_rate_limit`).
+- Rate limits on sensitive actions (`hit_rate_limit`) live inside the RPCs,
+  not only in server actions. A new state-changing RPC must call it; the
+  hardening integration test lists them.
 - Secrets live in environment variables, never in the repo.
 
 See `docs/security.md` for the full model.

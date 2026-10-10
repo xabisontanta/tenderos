@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/data/context";
-import { rateLimit, toUserError, type ActionResult } from "@/lib/actions";
+import { toUserError, type ActionResult } from "@/lib/actions";
 import { tenderInputSchema } from "./schema";
 import { USER_SETTABLE_STATUSES } from "@/lib/domain/tender-state";
 
@@ -50,8 +50,6 @@ export async function createTender(_: TenderFormState, formData: FormData): Prom
     return { error: "Please correct the highlighted fields", fieldErrors };
   }
   const supabase = await getServerSupabase();
-  const limited = await rateLimit(supabase, "tender.create", 30, 60);
-  if (limited) return { error: limited };
 
   const { data, error } = await supabase
     .from("tenders")
@@ -79,8 +77,6 @@ export async function startWorkflow(tenderId: string, options: { failStep?: stri
     .safeParse(options);
   if (!opts.success) return { ok: false, error: "Invalid options" };
   const supabase = await getServerSupabase();
-  const limited = await rateLimit(supabase, "workflow.start", 20, 60);
-  if (limited) return { ok: false, error: limited };
   const p_options = opts.data.failStep ? { fail_step: opts.data.failStep, fail_times: opts.data.failTimes ?? 1 } : {};
   const { data, error } = await supabase.rpc("start_tender_workflow", { p_tender_id: tenderId, p_options });
   if (error) return { ok: false, error: toUserError(error, "Could not start the workflow") };
@@ -101,8 +97,6 @@ export async function cancelWorkflow(runId: string, reason: string): Promise<Act
 export async function retryTask(taskId: string): Promise<ActionResult> {
   if (!uuid.safeParse(taskId).success) return { ok: false, error: "Invalid task" };
   const supabase = await getServerSupabase();
-  const limited = await rateLimit(supabase, "task.retry", 30, 60);
-  if (limited) return { ok: false, error: limited };
   const { error } = await supabase.rpc("retry_task", { p_task_id: taskId });
   if (error) return { ok: false, error: toUserError(error, "Could not retry the task") };
   return { ok: true };

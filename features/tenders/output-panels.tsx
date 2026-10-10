@@ -1,6 +1,7 @@
-import { AlertTriangle, CheckCircle2, CircleHelp, Download, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 import { JsonView } from "@/components/command-centre/json-view";
 import { Badge } from "@/components/ui/badge";
+import { DownloadButton } from "@/features/documents/download-button";
 import { qualificationOutputSchema } from "@/agents/qualification/schema";
 import { analysisOutputSchema } from "@/agents/analysis/schema";
 import { complianceOutputSchema } from "@/agents/compliance/schema";
@@ -112,16 +113,14 @@ export function RequirementsPanel({ output }: { output: unknown }) {
   );
 }
 
-/** Signed download links for uploaded company documents, keyed by document id. */
-export type DocumentLinks = Record<string, { title: string; url: string | null }>;
+/** Uploaded company documents a panel refers to, keyed by document id. Links are signed on click. */
+export type DocumentLinks = Record<string, { title: string; available: boolean }>;
 
 function DocumentLink({ id, links }: { id: string | null | undefined; links: DocumentLinks }) {
   const doc = id ? links[id] : undefined;
   if (!doc) return null;
-  return doc.url ? (
-    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-      <Download className="size-3" aria-hidden /> {doc.title}
-    </a>
+  return doc.available ? (
+    <DownloadButton id={id!} label={doc.title} className="text-[11px] text-primary" />
   ) : (
     <span className="text-[11px] text-muted-foreground">{doc.title} (removed from Documents)</span>
   );

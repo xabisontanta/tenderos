@@ -50,3 +50,26 @@ export const ALLOWED_DOCUMENT_MIME = [
 export function documentType(key: string): DocumentType | undefined {
   return DOCUMENT_TYPES.find((t) => t.key === key);
 }
+
+/** Categories only owners and admins may open (mirrors private.can_read_document). */
+export const RESTRICTED_DOCUMENT_CATEGORIES = ["DIRECTOR_PERSONAL", "BANKING", "PROOF_OF_ADDRESS"] as const;
+
+export function canReadDocumentType(docType: string, isAdmin: boolean): boolean {
+  const category = documentType(docType)?.category;
+  return isAdmin || !(RESTRICTED_DOCUMENT_CATEGORIES as readonly string[]).includes(category ?? "");
+}
+
+const SIGNATURES: Record<string, (b: Uint8Array) => boolean> = {
+  "application/pdf": (b) => b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46,
+  "image/png": (b) => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47,
+  "image/jpeg": (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  "application/msword": (b) => b[0] === 0xd0 && b[1] === 0xcf && b[2] === 0x11 && b[3] === 0xe0,
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": (b) => b[0] === 0x50 && b[1] === 0x4b && b[2] === 0x03 && b[3] === 0x04,
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": (b) => b[0] === 0x50 && b[1] === 0x4b && b[2] === 0x03 && b[3] === 0x04,
+};
+
+/** True when the file's first bytes match the type the browser declared for it. */
+export function contentMatchesType(mimeType: string | null, head: Uint8Array): boolean {
+  const check = mimeType ? SIGNATURES[mimeType] : undefined;
+  return check ? head.length >= 4 && check(head) : false;
+}

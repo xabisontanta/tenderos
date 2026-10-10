@@ -7,6 +7,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { getAdminSupabase } from "@/lib/supabase/admin";
 import { registryPayload, slugify } from "@/lib/org/bootstrap";
 import { toUserError } from "@/lib/actions";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 export interface FormState {
   error?: string;
@@ -18,11 +19,6 @@ const credentials = z.object({
   password: z.string().min(1, "Enter your password").max(200),
 });
 
-function safeNext(next: FormDataEntryValue | null): string {
-  const v = typeof next === "string" ? next : "/";
-  return v.startsWith("/") && !v.startsWith("//") ? v : "/";
-}
-
 export async function signIn(_: FormState, formData: FormData): Promise<FormState> {
   const parsed = credentials.safeParse({ email: formData.get("email"), password: formData.get("password") });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -30,7 +26,7 @@ export async function signIn(_: FormState, formData: FormData): Promise<FormStat
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
   // Generic message: do not reveal whether the account exists.
   if (error) return { error: error.status === 429 ? "Too many attempts. Wait a moment and try again." : "Invalid email or password" };
-  redirect(safeNext(formData.get("next")));
+  redirect(safeRedirectPath(formData.get("next")));
 }
 
 const signUpSchema = z.object({

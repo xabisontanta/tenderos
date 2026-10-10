@@ -734,11 +734,11 @@ isOneToOne: false
       referencedRelation: "organisations"
       referencedColumns: ["id"]
     },{
-      foreignKeyName: "tenders_source_id_fkey"
-      columns: ["source_id"]
+      foreignKeyName: "tenders_source_fkey"
+      columns: ["organisation_id","source_id"]
 isOneToOne: false
       referencedRelation: "tender_sources"
-      referencedColumns: ["id"]
+      referencedColumns: ["organisation_id","id"]
     }
                   ]
                 },"worker_heartbeats": {
@@ -805,6 +805,11 @@ isOneToOne: false
 "disconnect_email_account":
 { Args: { "p_id": string }; Returns: undefined
                            },
+"document_download":
+{ Args: { "p_id": string }; Returns: {
+              "file_name": string,"storage_path": string
+            }[]
+                           },
 "email_account_credential":
 { Args: { "p_id": string,"p_user": string }; Returns: {
               "display_name": string,"from_address": string,"organisation_id": string,"provider": Database["public"]['Enums']["email_provider"],"secret": string,"smtp_host": string,"smtp_port": number,"smtp_username": string
@@ -851,6 +856,11 @@ isOneToOne: false
                            },
 "verify_company_document":
 { Args: { "p_id": string }; Returns: undefined
+                           },
+"worker_health":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "last_seen_at": string,"workers": number
+            }[]
                            }
           }
           Enums: {

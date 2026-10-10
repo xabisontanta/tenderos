@@ -666,10 +666,10 @@ export class WorkflowEngine {
       const def = this.definition(run);
       await c.query(`select set_config('app.actor_agent_id', $1, true)`, [agent.id]);
 
-      // The handoff into the approval gate is settled by the human decision.
+      // The handoff into the approval gate is settled by the human decision (or by expiry).
       await c.query(`update public.handoffs set status = $2::public.handoff_status, accepted_at = now() where to_task_id = $1 and status = 'PENDING'`, [
         task.id,
-        approval.status === "APPROVED" ? "ACCEPTED" : "REJECTED",
+        approval.status === "APPROVED" ? "ACCEPTED" : approval.status === "REJECTED" ? "REJECTED" : "CANCELLED",
       ]);
 
       if (approval.status === "APPROVED") {
@@ -708,6 +708,42 @@ export class WorkflowEngine {
           correlationId: run.correlation_id,
           payload: { comments: approval.comments },
         });
+        await this.refreshAgentsInRun(c, run.id);
+      } else if (approval.status === "EXPIRED") {
+        // The approval expires at the tender's closing time, so the bid can no longer go in.
+        await c.query(`update public.tasks set status = 'CANCELLED', blocked_reason = 'Approval expired', output = $2 where id = $1`, [
+          task.id,
+          JSON.stringify({ approval_status: "EXPIRED" }),
+        ]);
+        await db.transitionTender(
+          c,
+          { organisationId: run.organisation_id, tenderId: run.tender_id, agentId: agent.id, runId: run.id, correlationId: run.correlation_id },
+          ["CANCELLED"],
+          "The closing date passed before the bid was approved",
+        );
+        await c.query(`update public.workflow_runs set status = 'CANCELLED', outcome = 'APPROVAL_EXPIRED', error = $2, completed_at = now() where id = $1`, [
+          run.id,
+          "The closing date passed before the bid was approved",
+        ]);
+        await db.emitEvent(c, {
+          organisationId: run.organisation_id,
+          type: "WORKFLOW_CANCELLED",
+          severity: "WARNING",
+          summary: "Workflow stopped: the closing date passed before approval",
+          tenderId: run.tender_id,
+          runId: run.id,
+          approvalId: approval.id,
+          correlationId: run.correlation_id,
+        });
+        await db.notifyMembers(
+          c,
+          run.organisation_id,
+          "APPROVAL_EXPIRED",
+          "WARNING",
+          "Bid approval expired",
+          "The closing date passed before anyone approved the bid, so the run was stopped.",
+          `/tenders/${run.tender_id}`,
+        );
         await this.refreshAgentsInRun(c, run.id);
       }
       await db.refreshAgent(c, agent.id);

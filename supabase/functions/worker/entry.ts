@@ -18,20 +18,40 @@ function sameSecret(a: string, b: string): boolean {
   return diff === 0;
 }
 
-Deno.serve(async (req) => {
-  const given = req.headers.get("x-worker-secret") ?? "";
-  if (!given) return new Response("forbidden", { status: 403 });
-
-  const logger = createLogger({ service: "tenderos-edge-worker" }, "info");
-  const pool = createPool(Deno.env.get("SUPABASE_DB_URL")!, 4);
+// The shared secret lives in Supabase Vault, where the pg_cron job that calls
+// this function also reads it. It is read once per instance over a single
+// connection, so a caller without it never opens the worker's pool.
+let cachedSecret: string | null = null;
+async function workerSecret(): Promise<string | null> {
+  if (cachedSecret) return cachedSecret;
+  const probe = createPool(Deno.env.get("SUPABASE_DB_URL")!, 1);
   try {
-    // The shared secret lives in Supabase Vault, where the pg_cron job that
-    // calls this function also reads it.
-    const { rows } = await pool.query<{ secret: string }>(
+    const { rows } = await probe.query<{ secret: string }>(
       `select decrypted_secret as secret from vault.decrypted_secrets where name = 'tenderos_worker_secret'`,
     );
-    if (!rows[0] || !sameSecret(given, rows[0].secret)) return new Response("forbidden", { status: 403 });
+    cachedSecret = rows[0]?.secret ?? null;
+    return cachedSecret;
+  } finally {
+    await probe.end().catch(() => undefined);
+  }
+}
 
+Deno.serve(async (req) => {
+  const given = req.headers.get("x-worker-secret") ?? "";
+  if (!/^[A-Za-z0-9+/=_-]{32,256}$/.test(given)) return new Response("forbidden", { status: 403 });
+
+  const logger = createLogger({ service: "tenderos-edge-worker" }, "info");
+  let secret: string | null;
+  try {
+    secret = await workerSecret();
+  } catch (err) {
+    logger.error("edge worker could not read its secret", { error: (err as Error).message });
+    return Response.json({ error: "worker failed" }, { status: 500 });
+  }
+  if (!secret || !sameSecret(given, secret)) return new Response("forbidden", { status: 403 });
+
+  const pool = createPool(Deno.env.get("SUPABASE_DB_URL")!, 4);
+  try {
     const worker = new Worker(pool, { concurrency: 2, simulationStepMs: STEP_MS, logger });
     const processed = await worker.runFor(RUN_BUDGET_MS);
     return Response.json({ processed });

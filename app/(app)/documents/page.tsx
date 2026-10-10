@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { CheckCircle2, CircleAlert, CircleDashed, Download } from "lucide-react";
+import { CheckCircle2, CircleAlert, CircleDashed } from "lucide-react";
 import { PageHeader } from "@/components/command-centre/page-header";
 import { Badge } from "@/components/ui/badge";
 import { DocumentActions } from "@/features/documents/document-actions";
+import { DownloadButton } from "@/features/documents/download-button";
 import { UploadForm } from "@/features/documents/upload-form";
 import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
-import { DOCUMENT_BUCKET, DOCUMENT_TYPES, documentType } from "@/lib/domain/documents";
+import { DOCUMENT_TYPES, canReadDocumentType, documentType } from "@/lib/domain/documents";
 import { formatDate } from "@/lib/format";
 import { getServerSupabase } from "@/lib/supabase/server";
 
@@ -22,15 +23,11 @@ export default async function DocumentsPage() {
   const supabase = await getServerSupabase();
   const { data: docs, error } = await supabase
     .from("company_documents")
-    .select("id, doc_type, title, file_name, storage_path, size_bytes, expires_at, verified, created_at")
+    .select("id, doc_type, title, file_name, size_bytes, expires_at, verified, created_at")
     .eq("organisation_id", ctx.organisation.id)
     .is("archived_at", null)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-
-  const paths = (docs ?? []).map((d) => d.storage_path);
-  const { data: signed } = paths.length ? await supabase.storage.from(DOCUMENT_BUCKET).createSignedUrls(paths, 3600) : { data: [] };
-  const urlFor = new Map((signed ?? []).filter((s) => s.signedUrl).map((s) => [s.path, s.signedUrl]));
 
   const today = new Date().toISOString().slice(0, 10);
   const byType = new Map<string, NonNullable<typeof docs>>();
@@ -101,7 +98,6 @@ export default async function DocumentsPage() {
           <ul className="divide-y rounded-xl border bg-card">
             {docs.map((d) => {
               const expired = d.expires_at !== null && d.expires_at < today;
-              const url = urlFor.get(d.storage_path);
               return (
                 <li key={d.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
@@ -118,10 +114,10 @@ export default async function DocumentsPage() {
                     )}
                     <Badge variant={d.verified ? "success" : "warning"}>{d.verified ? "Verified" : "Unverified"}</Badge>
                   </div>
-                  {url && (
-                    <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-sky-300 hover:underline">
-                      <Download className="size-3.5" aria-hidden /> Download
-                    </a>
+                  {canReadDocumentType(d.doc_type, isAdmin) ? (
+                    <DownloadButton id={d.id} />
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">Owners and admins only</span>
                   )}
                   {isAdmin && <DocumentActions id={d.id} verified={d.verified} />}
                 </li>

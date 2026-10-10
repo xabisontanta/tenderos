@@ -108,6 +108,17 @@ describe("log redaction", () => {
       nested: { password: "[REDACTED]", bank_account_number: "[REDACTED]" },
     });
   });
+
+  it("redacts company identifiers and contact details", () => {
+    expect(redact({ organisation_id: "o", tax_pin: "1", registration_number: "2", contact_phone: "3", from_address: "a@b.co", refresh_token: "t" })).toEqual({
+      organisation_id: "o",
+      tax_pin: "[REDACTED]",
+      registration_number: "[REDACTED]",
+      contact_phone: "[REDACTED]",
+      from_address: "[REDACTED]",
+      refresh_token: "[REDACTED]",
+    });
+  });
 });
 
 describe("content security policy", () => {

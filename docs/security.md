@@ -23,6 +23,10 @@ append-only record of every consequential action.
 | Decide approvals                                       | ✓     | ✓     |          |        |
 | Pause, resume, disable or enable agents                | ✓     | ✓     |          |        |
 | Engage or release the kill switch                      | ✓     | ✓     |          |        |
+| Upload company documents                               | ✓     | ✓     | ✓        |        |
+| Verify or remove documents                             | ✓     | ✓     |          |        |
+| Open director IDs, bank letters, proof of address      | ✓     | ✓     |          |        |
+| Connect a sending mailbox, email or record a bid       | ✓     | ✓     |          |        |
 
 The UI hides controls a role cannot use, but the RPC is the enforcement point.
 Integration tests cover role refusals and cross-tenant isolation.
@@ -39,6 +43,23 @@ Integration tests cover role refusals and cross-tenant isolation.
   by the database (approval rows can only be decided through
   `decide_approval` by owners and admins).
 
+## Company documents and mailboxes
+
+- Files live in the private `company-documents` bucket under the
+  organisation's folder. The Storage read policy only serves a file while its
+  `company_documents` row is live, and director IDs, bank letters and proof of
+  address only to owners and admins (`private.can_read_document`).
+- Pages never embed download links. A click calls `document_download`, which
+  applies the same rules, rate-limits and writes a `document.downloaded`
+  audit row; the app then signs a 60-second URL that forces a download.
+- Uploads are checked server-side: the file's first bytes must match its
+  declared type, or the file is deleted. Removing a document deletes the file
+  and keeps the record for the audit trail.
+- Mailbox credentials (Gmail refresh token, SMTP password) are stored in
+  Supabase Vault. Browsers cannot select `secret_id`; only the service role
+  decrypts, for the member who connected the mailbox. SMTP hosts must resolve
+  to public addresses and connections require TLS 1.2 or later.
+
 ## Web hardening
 
 - Content-Security-Policy with a per-request nonce and `strict-dynamic`;
@@ -48,10 +69,16 @@ Integration tests cover role refusals and cross-tenant isolation.
   referrer policy, restrictive Permissions-Policy, COOP, and HSTS in production.
 - Inputs are validated with zod in server actions and again by database
   constraints.
-- Rate limits (fixed window, stored in Postgres) on tender creation,
-  workflow start, approvals, agent controls and task retries. Sign-in and
-  sign-up rely on Supabase Auth's built-in rate limits.
-- Open-redirect protection on the `next` parameter after sign-in.
+- Rate limits (fixed window, stored in Postgres) inside every
+  state-changing RPC and on tender inserts, so calling the API directly is
+  limited the same as using the app. An integration test fails if an RPC
+  loses its limit. Sign-in and sign-up rely on Supabase Auth's built-in rate
+  limits.
+- Open-redirect protection on the `next` parameter (`lib/safe-redirect.ts`):
+  only same-origin paths, no `//`, backslashes or control characters.
+- Passwords: at least 12 characters with letters and digits, checked in the
+  app and by Supabase Auth. Hosted projects must also require email
+  confirmation and secure password change (Authentication settings).
 
 ## Secrets
 
@@ -59,7 +86,11 @@ Integration tests cover role refusals and cross-tenant isolation.
 - The service role key is used only by the admin client, which is marked
   `server-only`; `DATABASE_URL` is used only by the worker process. Neither
   has a `NEXT_PUBLIC_` prefix.
-- The logger redacts keys, tokens, passwords and authorization headers.
+- The logger redacts keys, tokens, passwords, authorization headers,
+  credentials, tax and registration numbers, phone numbers and email
+  addresses.
+- The hosted worker checks its Vault-held secret over a single connection
+  before it opens its pool.
 
 ## Audit
 
@@ -69,8 +100,8 @@ Retention is configurable (minimum 365 days, default about seven years).
 
 ## Not yet built (tracked in the roadmap)
 
-- Company document vault with encryption at rest using `ENCRYPTION_KEY`,
-  signed URLs and per-document access logs.
+- Malware scanning of uploaded documents.
+- Removing unregistered uploads (files uploaded but never recorded).
 - MFA for owners and admins, invitations and member management.
 - Sentry error reporting (`SENTRY_DSN`) and alerting.
 - Signed webhooks using `WORKFLOW_SECRET`.

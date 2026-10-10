@@ -27,7 +27,6 @@ import { getRecentEvents, type TaskSummary } from "@/lib/data/queries";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { formatDateTime, formatZar, humanize, provinceLabel, relativeTime } from "@/lib/format";
 import type { TenderStatus } from "@/lib/domain/tender-state";
-import { DOCUMENT_BUCKET } from "@/lib/domain/documents";
 
 export const metadata: Metadata = { title: "Tender" };
 
@@ -317,21 +316,13 @@ function Item({ k, v }: { k: string; v: string }) {
   );
 }
 
-/** Short-lived download links for the uploaded documents the compliance check relied on. */
+/** The uploaded documents the compliance check relied on; download links are signed on click. */
 async function bidPackLinks(supabase: Awaited<ReturnType<typeof getServerSupabase>>, compliance: unknown): Promise<DocumentLinks> {
   const items = (compliance as { items?: Array<{ document_id?: string | null }> } | null)?.items ?? [];
   const ids = [...new Set(items.flatMap((i) => (i.document_id ? [i.document_id] : [])))];
   if (ids.length === 0) return {};
-  const { data: docs } = await supabase.from("company_documents").select("id,title,storage_path,archived_at").in("id", ids);
-  const live = (docs ?? []).filter((d) => !d.archived_at);
-  const { data: signed } = live.length
-    ? await supabase.storage.from(DOCUMENT_BUCKET).createSignedUrls(
-        live.map((d) => d.storage_path),
-        3600,
-      )
-    : { data: [] };
-  const urlByPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
-  return Object.fromEntries((docs ?? []).map((d) => [d.id, { title: d.title, url: d.archived_at ? null : (urlByPath.get(d.storage_path) ?? null) }]));
+  const { data: docs } = await supabase.from("company_documents").select("id,title,archived_at").in("id", ids);
+  return Object.fromEntries((docs ?? []).map((d) => [d.id, { title: d.title, available: !d.archived_at }]));
 }
 
 type Tender = { title: string; reference_number: string | null; issuing_organisation: string; closing_at: string; id: string };

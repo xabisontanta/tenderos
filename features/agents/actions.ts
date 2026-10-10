@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { rateLimit, toUserError, type ActionResult } from "@/lib/actions";
+import { toUserError, type ActionResult } from "@/lib/actions";
 
 const schema = z.object({
   agentId: z.string().uuid(),
@@ -15,8 +15,6 @@ export async function controlAgent(input: z.input<typeof schema>): Promise<Actio
   const parsed = schema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid request" };
   const supabase = await getServerSupabase();
-  const limited = await rateLimit(supabase, "agent.control", 20, 60);
-  if (limited) return { ok: false, error: limited };
   const { error } = await supabase.rpc("set_agent_control", {
     p_agent_id: parsed.data.agentId,
     p_action: parsed.data.action,

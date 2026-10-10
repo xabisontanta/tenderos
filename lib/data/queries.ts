@@ -200,10 +200,9 @@ export async function getDashboardData(orgId: string) {
 
 export async function getWorkerHealth() {
   const supabase = await getServerSupabase();
-  const { data } = await supabase.from("worker_heartbeats").select("*").order("last_seen_at", { ascending: false }).limit(5);
-  const rows = data ?? [];
-  const live = rows.filter((r) => Date.now() - new Date(r.last_seen_at).getTime() < 60_000);
-  return { online: live.length > 0, workers: live.length, lastSeen: rows[0]?.last_seen_at ?? null };
+  const { data } = await supabase.rpc("worker_health");
+  const row = data?.[0];
+  return { online: (row?.workers ?? 0) > 0, workers: row?.workers ?? 0, lastSeen: row?.last_seen_at ?? null };
 }
 
 export async function getUnreadNotifications(userId: string) {

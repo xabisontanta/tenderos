@@ -43,3 +43,19 @@ describe("documents reach the right agents", () => {
     }
   });
 });
+
+describe("document content check", () => {
+  it("accepts files whose bytes match the declared type and rejects disguised ones", async () => {
+    const { contentMatchesType, canReadDocumentType } = await import("@/lib/domain/documents");
+    const bytes = (s: string) => new TextEncoder().encode(s);
+    expect(contentMatchesType("application/pdf", bytes("%PDF-1.7"))).toBe(true);
+    expect(contentMatchesType("application/pdf", bytes("<html><script>"))).toBe(false);
+    expect(contentMatchesType("image/png", new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d]))).toBe(true);
+    expect(contentMatchesType("application/vnd.openxmlformats-officedocument.wordprocessingml.document", new Uint8Array([0x50, 0x4b, 3, 4]))).toBe(true);
+    expect(contentMatchesType("text/html", bytes("%PDF-1.7"))).toBe(false);
+    expect(contentMatchesType(null, bytes("%PDF-1.7"))).toBe(false);
+    expect(canReadDocumentType("director_ids", false)).toBe(false);
+    expect(canReadDocumentType("director_ids", true)).toBe(true);
+    expect(canReadDocumentType("cipc_registration", false)).toBe(true);
+  });
+});

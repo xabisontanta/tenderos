@@ -70,10 +70,11 @@ Upload CIPC, CSD, tax status, B-BBEE, SBD forms and other returnables on
 under the organisation's folder; `register_company_document` records each one.
 Owner and admin uploads count as verified; an operator's upload needs an owner
 or admin to verify it. Compliance uses verified, in-date documents as evidence
-on every tender, and the Submission Officer lists them in the bid pack with
-download links. Verifying or adding a document re-checks bids stopped at
-compliance. Bank letters, director IDs and proof of address are only visible to
-the Document Manager agent.
+on every tender, and the Submission Officer lists them in the bid pack.
+Download links are created when you click and last 60 seconds; each download
+is audited. Verifying or adding a document re-checks bids stopped at
+compliance. Bank letters, director IDs and proof of address can only be opened by owners
+and admins, and among the agents only the Document Manager sees them.
 
 ## Sending bids by email
 

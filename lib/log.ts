@@ -4,7 +4,8 @@
  */
 type Level = "debug" | "info" | "warn" | "error";
 const ORDER: Record<Level, number> = { debug: 10, info: 20, warn: 30, error: 40 };
-const REDACT = /(pass(word)?|secret|token|key|authorization|cookie|id_number|bank|account_number)/i;
+const REDACT =
+  /(pass(word)?|secret|token|key|authorization|cookie|credential|id_number|bank|account_number|tax_pin|vat_number|registration_number|csd_number|phone|e?mail|address)/i;
 
 export function redact(value: unknown, depth = 0): unknown {
   if (depth > 6 || value === null || typeof value !== "object") return value;
