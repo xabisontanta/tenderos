@@ -4,6 +4,9 @@ import type { Database } from "@/types/database";
 
 type TenderRow = Database["public"]["Tables"]["tenders"]["Row"];
 
+/** Company facts entered by the organisation (company_profiles row). */
+export type CompanyProfile = Omit<Database["public"]["Tables"]["company_profiles"]["Row"], "updated_at" | "updated_by">;
+
 /** The tender fields classified as PUBLIC_TENDER_DATA. */
 export type TenderSnapshot = Pick<
   TenderRow,
@@ -49,6 +52,8 @@ export interface AgentContext {
   };
   /** Present only when the agent holds PUBLIC_TENDER_DATA. */
   tender: TenderSnapshot | null;
+  /** Present only when the agent holds COMPANY_PROFILE and a profile exists. */
+  company: CompanyProfile | null;
   /** Checkpointed outputs of earlier steps in this run, keyed by step key. */
   previousOutputs: Record<string, unknown>;
   /** Data categories this agent was granted for this task (already enforced). */
@@ -88,6 +93,8 @@ export interface AgentExecutor<T = unknown> {
   agent: AgentSlug;
   /** Data categories the executor needs. The engine refuses to run it unless all are granted. */
   requires: DataCategory[];
+  /** Categories the executor uses when the agent holds them (e.g. the company profile). */
+  optional?: DataCategory[];
   outputSchema: z.ZodType<T>;
   run(ctx: AgentContext): Promise<AgentResult<T>>;
 }

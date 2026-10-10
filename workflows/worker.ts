@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from "@/lib/db/pool";
 import type { Logger } from "@/lib/log";
 import { backoffMs } from "./retry";
 import { WorkflowEngine, type Job, type JobOutcome } from "./engine";
+import type { Fetcher } from "@/agents/discovery/etenders";
 
 export interface WorkerOptions {
   concurrency: number;
@@ -10,6 +11,8 @@ export interface WorkerOptions {
   logger: Logger;
   /** Fallback poll interval when no NOTIFY arrives. */
   idlePollMs?: number;
+  /** HTTP client for tender source connectors (tests inject a fake). */
+  fetcher?: Fetcher;
 }
 
 /**
@@ -31,7 +34,7 @@ export class Worker {
     private readonly pool: Pool,
     private readonly opts: WorkerOptions,
   ) {
-    this.engine = new WorkflowEngine(pool, { simulationStepMs: opts.simulationStepMs, logger: opts.logger });
+    this.engine = new WorkflowEngine(pool, { simulationStepMs: opts.simulationStepMs, logger: opts.logger, fetcher: opts.fetcher });
   }
 
   async start(): Promise<void> {

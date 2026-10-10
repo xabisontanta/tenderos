@@ -92,7 +92,7 @@ export async function createOrganisation(_: FormState, formData: FormData): Prom
     ...registryPayload(),
   } as never);
   if (error) return { error: toUserError(error, "Could not create the organisation") };
-  redirect("/");
+  redirect("/discover");
 }
 
 export async function signOut(): Promise<void> {

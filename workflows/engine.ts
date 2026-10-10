@@ -9,6 +9,8 @@ import { backoffMs, shouldRetry } from "./retry";
 import { WORKFLOWS, getStep, type StepResolution, type WorkflowDefinition } from "./definitions/simulated-bid";
 import type { PlanStep } from "./definitions/plan";
 import * as db from "./store";
+import { runDiscovery } from "./discovery";
+import type { Fetcher } from "@/agents/discovery/etenders";
 
 export interface Job {
   id: number;
@@ -31,6 +33,8 @@ export interface EngineOptions {
   now?: () => Date;
   /** Minimum interval between persisted progress updates. */
   progressThrottleMs?: number;
+  /** HTTP client for tender source connectors. Defaults to global fetch. */
+  fetcher?: Fetcher;
 }
 
 const DEFER_PAUSED_MS = 30_000;
@@ -58,6 +62,12 @@ export class WorkflowEngine {
         return this.startWorkflow(String(job.payload.workflow_run_id));
       case "task.run":
         return this.runTask(String(job.payload.task_id));
+      case "discovery.run":
+        return runDiscovery(this.pool, String(job.payload.discovery_run_id), job.attempts, {
+          fetcher: this.opts.fetcher ?? (globalThis.fetch as unknown as Fetcher),
+          logger: this.opts.logger,
+          now: this.now,
+        });
       case "approval.decided":
         return this.approvalDecided(String(job.payload.approval_id));
       case "agents.refresh":
@@ -336,6 +346,7 @@ export class WorkflowEngine {
           task: { id: task.id, type: task.type, stepKey: step.key, input: (task.input ?? {}) as Record<string, unknown>, retryCount: task.retry_count },
           workflow: { runId: run.id, correlationId: run.correlation_id, isSimulation: run.is_simulation, options: (run.options ?? {}) as SimulationOptions },
           tender: granted.has("PUBLIC_TENDER_DATA") ? db.toTenderSnapshot(tender) : null,
+          company: granted.has("COMPANY_PROFILE") ? await db.getCompanyProfile(c, run.organisation_id) : null,
           previousOutputs: await db.getPreviousOutputs(c, run.id),
           granted,
           now: this.now(),

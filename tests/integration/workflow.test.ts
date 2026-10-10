@@ -195,10 +195,16 @@ describe("simulated bid workflow (first milestone)", () => {
     await drainOrg(worker, pool, orgId);
   });
 
-  it("refuses the simulated workflow on a tender not marked as simulation", async () => {
-    const tender = await createTender(owner.client, orgId, { is_simulation: false });
-    const { error } = await owner.client.rpc("start_tender_workflow", { p_tender_id: tender.id });
+  it("refuses the simulated workflow on a real tender and runs the live workflow by default", async () => {
+    const tender = await createTender(owner.client, orgId, { is_simulation: false, reference_number: `LIVE-${Date.now()}` });
+    const { error } = await owner.client.rpc("start_tender_workflow", { p_tender_id: tender.id, p_workflow_key: "simulated_bid" });
     expect(error?.message).toMatch(/simulation tenders/);
+    const live = await owner.client.rpc("start_tender_workflow", { p_tender_id: tender.id });
+    expect(live.error).toBeNull();
+    const { data: run } = await owner.client.from("workflow_runs").select("workflow_key, is_simulation").eq("id", live.data!).single();
+    expect(run).toEqual({ workflow_key: "tender_bid", is_simulation: false });
+    await owner.client.rpc("cancel_workflow", { p_run_id: live.data!, p_reason: "test cleanup" });
+    await drainOrg(worker, pool, orgId);
   });
 });
 

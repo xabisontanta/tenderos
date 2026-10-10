@@ -42,13 +42,13 @@ export function TenderActions({
   const allowed = USER_SETTABLE_STATUSES.filter((s) => canTransition(status, s));
   const [target, setTarget] = useState<string>(allowed[0] ?? "");
 
-  const canStart = !activeRunId && status === "DISCOVERED" && isSimulation && simulationEnabled && !killSwitch;
+  const canStart = !activeRunId && status === "DISCOVERED" && (!isSimulation || simulationEnabled) && !killSwitch;
   const startHint = activeRunId
     ? "A workflow is already running"
     : status !== "DISCOVERED"
       ? "Workflows start from Discovered"
-      : !isSimulation
-        ? "Live workflows are not enabled yet; only simulation tenders can run"
+      : isSimulation && !simulationEnabled
+        ? "Simulation workflows are disabled"
         : killSwitch
           ? "Kill switch is engaged"
           : undefined;
@@ -60,18 +60,19 @@ export function TenderActions({
         <Dialog open={startOpen} onOpenChange={setStartOpen}>
           <DialogTrigger asChild>
             <Button size="sm" disabled={!canStart || pending} title={startHint}>
-              <Play /> Start simulated workflow
+              <Play /> {isSimulation ? "Start simulated workflow" : "Send to the agents"}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Start the simulated bid workflow</DialogTitle>
+              <DialogTitle>{isSimulation ? "Start the simulated bid workflow" : "Send this tender to the agents"}</DialogTitle>
               <DialogDescription>
-                Nine steps run in order: intake, analysis, qualification, compliance, proposal, pricing, QA, your approval, and a simulated submission. No AI
-                calls are made and nothing is sent outside TenderOS.
+                {isSimulation
+                  ? "Nine steps run in order: intake, analysis, qualification, compliance, proposal, pricing, QA, your approval, and a simulated submission. No AI calls are made and nothing is sent outside TenderOS."
+                  : "The agents run intake, analysis, qualification, compliance, proposal, pricing and QA, then ask for your approval. TenderOS never submits a bid: once approved you get the pack and delivery instructions."}
               </DialogDescription>
             </DialogHeader>
-            <details className="rounded-lg border p-3 text-sm">
+            <details className={isSimulation ? "rounded-lg border p-3 text-sm" : "hidden"}>
               <summary className="cursor-pointer text-xs font-medium text-muted-foreground">Failure testing (optional)</summary>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div className="grid gap-1.5">

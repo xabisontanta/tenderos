@@ -1,10 +1,12 @@
-import type { TenderSnapshot } from "@/agents/runtime/types";
+import type { CompanyProfile, TenderSnapshot } from "@/agents/runtime/types";
 import type { ComplianceItem } from "./schema";
 
 export interface VaultDocumentMeta {
   type: string;
   expiresAt: string | null;
   verified: boolean;
+  /** Where the fact came from, shown as evidence when valid. */
+  source?: string;
 }
 
 /** Standard South African public-procurement returnables. */
@@ -45,10 +47,31 @@ export function evaluateCompliance(tender: Pick<TenderSnapshot, "closing_at" | "
         return { ...item, status: "EXPIRING_SOON", evidence: `Expires ${doc.expiresAt}` };
       }
     }
-    return { ...item, status: "VALID", evidence: doc.expiresAt ? `Valid until ${doc.expiresAt}` : "Verified, no expiry" };
+    const from = doc.source ? `${doc.source}; ` : "";
+    return { ...item, status: "VALID", evidence: `${from}${doc.expiresAt ? `valid until ${doc.expiresAt}` : "no expiry recorded"}` };
   });
 }
 
 export function isComplete(items: ComplianceItem[]): boolean {
   return items.every((i) => !i.mandatory || i.status === "VALID" || i.status === "EXPIRING_SOON");
+}
+
+/**
+ * Company profile facts as checklist evidence. These are values the
+ * organisation entered; they are reported as such, never as documents the
+ * system has inspected.
+ */
+export function profileEvidence(p: CompanyProfile | null): VaultDocumentMeta[] | null {
+  if (!p) return null;
+  const docs: VaultDocumentMeta[] = [];
+  const add = (type: string, present: unknown, source: string, expiresAt: string | null = null) => {
+    if (present) docs.push({ type, verified: true, expiresAt, source });
+  };
+  add("cipc_registration", p.registration_number, `Registration ${p.registration_number} in company profile`);
+  add("csd_registration", p.csd_number, `CSD ${p.csd_number} in company profile`);
+  add("tax_compliance", p.tax_pin, "Tax compliance PIN in company profile", p.tax_pin_expires_at);
+  add("bbbee", p.bbbee_level, `B-BBEE level ${p.bbbee_level} in company profile`, p.bbbee_expires_at);
+  add("sbd_declarations", p.authorised_signatory, `To be signed by ${p.authorised_signatory} at approval`);
+  add("cidb_grading", p.cidb_grade, `CIDB grade ${p.cidb_grade} in company profile`);
+  return docs;
 }

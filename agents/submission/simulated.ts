@@ -22,12 +22,37 @@ export const submissionExecute: AgentExecutor<SubmissionOutput> = {
     if (new Date(t.closing_at).getTime() <= ctx.now.getTime()) {
       throw new NonRetryableError("Closing date has passed; submission not attempted");
     }
-    if (!ctx.workflow.isSimulation) {
-      throw new NonRetryableError("Live submission is not enabled");
-    }
     await simulateWork(ctx, ["Verifying approval and deadline", "Hashing bid package", "Recording submission"]);
-
     const hash = packageHash(ctx.previousOutputs);
+
+    // Real tenders: TenderOS never submits on anyone's behalf. It hands over a
+    // verified pack and tells the person exactly where and by when to deliver.
+    if (!ctx.workflow.isSimulation) {
+      const where =
+        t.submission_method === "ELECTRONIC_PORTAL"
+          ? "upload it on eTenders (eSubmission)"
+          : t.submission_destination
+            ? `deliver it to ${t.submission_destination}`
+            : "deliver it as the tender documents instruct";
+      return {
+        output: {
+          status: "ACTION_REQUIRED",
+          method: t.submission_method,
+          package_hash: hash,
+          destination: t.submission_destination,
+          verified: { approval: true, deadline: true, reference: Boolean(t.reference_number) },
+          simulated: false,
+          receipt_note: `Bid pack approved. Sign the declarations, ${where} before ${t.closing_at}, then record the receipt.`,
+        },
+        summary: "Approved bid pack ready for delivery",
+        events: [
+          { type: "SUBMISSION_STARTED", summary: "Submission checks passed" },
+          { type: "SUBMISSION_FAILED", severity: "WARNING", summary: "Bid pack ready: a person must sign and deliver it", payload: { action_required: true } },
+        ],
+        cost: SIMULATED_COST,
+      };
+    }
+
     const physical = t.submission_method === "PHYSICAL";
     return {
       output: {

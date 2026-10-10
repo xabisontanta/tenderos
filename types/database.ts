@@ -203,6 +203,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"company_profiles": {
+                  Row: {
+                    "authorised_signatory": string | null,"bbbee_expires_at": string | null,"bbbee_level": number | null,"cidb_grade": string | null,"csd_number": string | null,"legal_name": string | null,"max_contract_value_zar": number | null,"organisation_id": string,"provinces": (string)[],"registration_number": string | null,"sectors": (string)[],"tax_pin": string | null,"tax_pin_expires_at": string | null,"updated_at": string,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"csd_number"?: string | null,"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id": string,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"csd_number"?: string | null,"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id"?: string,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "company_profiles_organisation_id_fkey"
+      columns: ["organisation_id"]
+isOneToOne: true
+      referencedRelation: "organisations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"cost_usage": {
                   Row: {
                     "agent_id": string | null,"cost_usd": number,"created_at": string,"id": number,"input_tokens": number,"is_simulated": boolean,"model": string,"organisation_id": string,"output_tokens": number,"provider": string,"task_id": string | null,"tender_id": string | null,"workflow_run_id": string | null
@@ -255,6 +275,26 @@ isOneToOne: false
                   Relationships: [
                     {
       foreignKeyName: "departments_organisation_id_fkey"
+      columns: ["organisation_id"]
+isOneToOne: false
+      referencedRelation: "organisations"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"discovery_runs": {
+                  Row: {
+                    "completed_at": string | null,"created_at": string,"created_tenders": number,"error": string | null,"id": string,"matched": number,"organisation_id": string,"provinces": (string)[],"requested_by": string | null,"scanned": number,"source": string,"started_at": string | null,"started_workflows": number,"status": Database["public"]['Enums']["discovery_status"],"trigger": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"organisation_id": string,"provinces": (string)[],"requested_by"?: string | null,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger": string
+                  }
+                  Update: {
+                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"organisation_id"?: string,"provinces"?: (string)[],"requested_by"?: string | null,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "discovery_runs_organisation_id_fkey"
       columns: ["organisation_id"]
 isOneToOne: false
       referencedRelation: "organisations"
@@ -445,14 +485,14 @@ isOneToOne: false
                   ]
                 },"system_settings": {
                   Row: {
-                    "audit_retention_days": number,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"organisation_id": string,"per_tender_budget_usd": number,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null
+                    "audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"organisation_id": string,"per_tender_budget_usd": number,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_provinces": (string)[]
                   }
                   ComputedFields: never
                   Insert: {
-                    "audit_retention_days"?: number,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"organisation_id": string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null
+                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"organisation_id": string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_provinces"?: (string)[]
                   }
                   Update: {
-                    "audit_retention_days"?: number,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"organisation_id"?: string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null
+                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"organisation_id"?: string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_provinces"?: (string)[]
                   }
                   Relationships: [
                     {
@@ -593,14 +633,14 @@ isOneToOne: false
                   ]
                 },"tenders": {
                   Row: {
-                    "briefing_at": string | null,"briefing_compulsory": boolean,"briefing_location": string | null,"closing_at": string,"created_at": string,"created_by": string | null,"description": string | null,"estimated_value_zar": number | null,"id": string,"is_simulation": boolean,"issuing_organisation": string,"organisation_id": string,"province": string,"published_at": string | null,"questions_deadline_at": string | null,"reference_number": string | null,"sector": string | null,"source_id": string | null,"source_url": string | null,"status": Database["public"]['Enums']["tender_status"],"status_changed_at": string,"submission_destination": string | null,"submission_method": Database["public"]['Enums']["submission_method"],"title": string,"updated_at": string
+                    "briefing_at": string | null,"briefing_compulsory": boolean,"briefing_location": string | null,"closing_at": string,"created_at": string,"created_by": string | null,"description": string | null,"documents": NonNullable<Json>,"estimated_value_zar": number | null,"id": string,"is_simulation": boolean,"issuing_organisation": string,"organisation_id": string,"province": string,"published_at": string | null,"questions_deadline_at": string | null,"reference_number": string | null,"sector": string | null,"source_id": string | null,"source_ref": string | null,"source_url": string | null,"status": Database["public"]['Enums']["tender_status"],"status_changed_at": string,"submission_destination": string | null,"submission_method": Database["public"]['Enums']["submission_method"],"title": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "briefing_at"?: string | null,"briefing_compulsory"?: boolean,"briefing_location"?: string | null,"closing_at": string,"created_at"?: string,"created_by"?: string | null,"description"?: string | null,"estimated_value_zar"?: number | null,"id"?: string,"is_simulation"?: boolean,"issuing_organisation": string,"organisation_id": string,"province"?: string,"published_at"?: string | null,"questions_deadline_at"?: string | null,"reference_number"?: string | null,"sector"?: string | null,"source_id"?: string | null,"source_url"?: string | null,"status"?: Database["public"]['Enums']["tender_status"],"status_changed_at"?: string,"submission_destination"?: string | null,"submission_method"?: Database["public"]['Enums']["submission_method"],"title": string,"updated_at"?: string
+                    "briefing_at"?: string | null,"briefing_compulsory"?: boolean,"briefing_location"?: string | null,"closing_at": string,"created_at"?: string,"created_by"?: string | null,"description"?: string | null,"documents"?: NonNullable<Json>,"estimated_value_zar"?: number | null,"id"?: string,"is_simulation"?: boolean,"issuing_organisation": string,"organisation_id": string,"province"?: string,"published_at"?: string | null,"questions_deadline_at"?: string | null,"reference_number"?: string | null,"sector"?: string | null,"source_id"?: string | null,"source_ref"?: string | null,"source_url"?: string | null,"status"?: Database["public"]['Enums']["tender_status"],"status_changed_at"?: string,"submission_destination"?: string | null,"submission_method"?: Database["public"]['Enums']["submission_method"],"title": string,"updated_at"?: string
                   }
                   Update: {
-                    "briefing_at"?: string | null,"briefing_compulsory"?: boolean,"briefing_location"?: string | null,"closing_at"?: string,"created_at"?: string,"created_by"?: string | null,"description"?: string | null,"estimated_value_zar"?: number | null,"id"?: string,"is_simulation"?: boolean,"issuing_organisation"?: string,"organisation_id"?: string,"province"?: string,"published_at"?: string | null,"questions_deadline_at"?: string | null,"reference_number"?: string | null,"sector"?: string | null,"source_id"?: string | null,"source_url"?: string | null,"status"?: Database["public"]['Enums']["tender_status"],"status_changed_at"?: string,"submission_destination"?: string | null,"submission_method"?: Database["public"]['Enums']["submission_method"],"title"?: string,"updated_at"?: string
+                    "briefing_at"?: string | null,"briefing_compulsory"?: boolean,"briefing_location"?: string | null,"closing_at"?: string,"created_at"?: string,"created_by"?: string | null,"description"?: string | null,"documents"?: NonNullable<Json>,"estimated_value_zar"?: number | null,"id"?: string,"is_simulation"?: boolean,"issuing_organisation"?: string,"organisation_id"?: string,"province"?: string,"published_at"?: string | null,"questions_deadline_at"?: string | null,"reference_number"?: string | null,"sector"?: string | null,"source_id"?: string | null,"source_ref"?: string | null,"source_url"?: string | null,"status"?: Database["public"]['Enums']["tender_status"],"status_changed_at"?: string,"submission_destination"?: string | null,"submission_method"?: Database["public"]['Enums']["submission_method"],"title"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -687,6 +727,12 @@ isOneToOne: false
 "set_kill_switch":
 { Args: { "p_engaged": boolean,"p_org": string,"p_reason": string }; Returns: undefined
                            },
+"set_watched_provinces":
+{ Args: { "p_auto_run": boolean,"p_org": string,"p_provinces": (string)[] }; Returns: undefined
+                           },
+"start_discovery":
+{ Args: { "p_org": string,"p_provinces"?: (string)[] }; Returns: string
+                           },
 "start_tender_workflow":
 { Args: { "p_options"?: Json,"p_tender_id": string,"p_workflow_key"?: string }; Returns: string
                            },
@@ -695,7 +741,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "access_level": "READ"|"WRITE","actor_type": "user"|"agent"|"system","agent_status": "IDLE"|"QUEUED"|"RUNNING"|"WAITING"|"BLOCKED"|"NEEDS_APPROVAL"|"PAUSED"|"COMPLETED"|"FAILED"|"DISABLED","approval_status": "PENDING"|"APPROVED"|"REJECTED"|"EXPIRED"|"CANCELLED","approval_type": "FINAL_PRICING"|"LEGAL_DECLARATION"|"BID_SUBMISSION"|"CLARIFICATION_EMAIL"|"CONTRACT_ACCEPTANCE"|"FINANCIAL_COMMITMENT"|"SENSITIVE_DOCUMENT_DISCLOSURE"|"EXCEPTION","cost_tier": "LOW"|"MID"|"HIGH","data_category": "PUBLIC_TENDER_DATA"|"TENDER_DOCUMENTS"|"COMPANY_PROFILE"|"COMPANY_CAPABILITIES"|"PROJECT_REFERENCES"|"FINANCIAL"|"BANKING"|"TAX"|"BBBEE"|"DIRECTOR_PERSONAL"|"PROOF_OF_ADDRESS"|"INSURANCE"|"CERTIFICATIONS"|"PRICING"|"COMMUNICATIONS"|"SUBMISSION","event_severity": "DEBUG"|"INFO"|"WARNING"|"ERROR"|"CRITICAL","handoff_status": "PENDING"|"ACCEPTED"|"REJECTED"|"CANCELLED","job_status": "QUEUED"|"RUNNING"|"COMPLETED"|"FAILED"|"DEAD","org_role": "owner"|"admin"|"operator"|"viewer","risk_level": "LOW"|"MEDIUM"|"HIGH"|"CRITICAL","submission_method": "ELECTRONIC_PORTAL"|"EMAIL"|"PHYSICAL"|"UNKNOWN","submission_status": "PREPARING"|"SUBMITTED"|"FAILED"|"ACTION_REQUIRED","task_status": "QUEUED"|"RUNNING"|"WAITING"|"BLOCKED"|"NEEDS_APPROVAL"|"COMPLETED"|"FAILED"|"CANCELLED","tender_source_kind": "MANUAL"|"PORTAL"|"EMAIL"|"API","tender_status": "DISCOVERED"|"INGESTING"|"ANALYSING"|"QUALIFYING"|"REJECTED"|"QUALIFIED"|"COMPLIANCE_REVIEW"|"MISSING_INFORMATION"|"PREPARING_BID"|"PRICING"|"QUALITY_ASSURANCE"|"QA_FAILED"|"READY_FOR_APPROVAL"|"APPROVED"|"SUBMITTING"|"SUBMITTED"|"SUBMISSION_FAILED"|"UNDER_EVALUATION"|"CLARIFICATION"|"AWARDED"|"UNSUCCESSFUL"|"CANCELLED"|"ARCHIVED","workflow_run_status": "PENDING"|"RUNNING"|"WAITING_APPROVAL"|"BLOCKED"|"COMPLETED"|"FAILED"|"CANCELLED"
+            "access_level": "READ"|"WRITE","actor_type": "user"|"agent"|"system","agent_status": "IDLE"|"QUEUED"|"RUNNING"|"WAITING"|"BLOCKED"|"NEEDS_APPROVAL"|"PAUSED"|"COMPLETED"|"FAILED"|"DISABLED","approval_status": "PENDING"|"APPROVED"|"REJECTED"|"EXPIRED"|"CANCELLED","approval_type": "FINAL_PRICING"|"LEGAL_DECLARATION"|"BID_SUBMISSION"|"CLARIFICATION_EMAIL"|"CONTRACT_ACCEPTANCE"|"FINANCIAL_COMMITMENT"|"SENSITIVE_DOCUMENT_DISCLOSURE"|"EXCEPTION","cost_tier": "LOW"|"MID"|"HIGH","data_category": "PUBLIC_TENDER_DATA"|"TENDER_DOCUMENTS"|"COMPANY_PROFILE"|"COMPANY_CAPABILITIES"|"PROJECT_REFERENCES"|"FINANCIAL"|"BANKING"|"TAX"|"BBBEE"|"DIRECTOR_PERSONAL"|"PROOF_OF_ADDRESS"|"INSURANCE"|"CERTIFICATIONS"|"PRICING"|"COMMUNICATIONS"|"SUBMISSION","discovery_status": "QUEUED"|"RUNNING"|"COMPLETED"|"FAILED","event_severity": "DEBUG"|"INFO"|"WARNING"|"ERROR"|"CRITICAL","handoff_status": "PENDING"|"ACCEPTED"|"REJECTED"|"CANCELLED","job_status": "QUEUED"|"RUNNING"|"COMPLETED"|"FAILED"|"DEAD","org_role": "owner"|"admin"|"operator"|"viewer","risk_level": "LOW"|"MEDIUM"|"HIGH"|"CRITICAL","submission_method": "ELECTRONIC_PORTAL"|"EMAIL"|"PHYSICAL"|"UNKNOWN","submission_status": "PREPARING"|"SUBMITTED"|"FAILED"|"ACTION_REQUIRED","task_status": "QUEUED"|"RUNNING"|"WAITING"|"BLOCKED"|"NEEDS_APPROVAL"|"COMPLETED"|"FAILED"|"CANCELLED","tender_source_kind": "MANUAL"|"PORTAL"|"EMAIL"|"API","tender_status": "DISCOVERED"|"INGESTING"|"ANALYSING"|"QUALIFYING"|"REJECTED"|"QUALIFIED"|"COMPLIANCE_REVIEW"|"MISSING_INFORMATION"|"PREPARING_BID"|"PRICING"|"QUALITY_ASSURANCE"|"QA_FAILED"|"READY_FOR_APPROVAL"|"APPROVED"|"SUBMITTING"|"SUBMITTED"|"SUBMISSION_FAILED"|"UNDER_EVALUATION"|"CLARIFICATION"|"AWARDED"|"UNSUCCESSFUL"|"CANCELLED"|"ARCHIVED","workflow_run_status": "PENDING"|"RUNNING"|"WAITING_APPROVAL"|"BLOCKED"|"COMPLETED"|"FAILED"|"CANCELLED"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -815,7 +861,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "access_level": ["READ", "WRITE"],"actor_type": ["user", "agent", "system"],"agent_status": ["IDLE", "QUEUED", "RUNNING", "WAITING", "BLOCKED", "NEEDS_APPROVAL", "PAUSED", "COMPLETED", "FAILED", "DISABLED"],"approval_status": ["PENDING", "APPROVED", "REJECTED", "EXPIRED", "CANCELLED"],"approval_type": ["FINAL_PRICING", "LEGAL_DECLARATION", "BID_SUBMISSION", "CLARIFICATION_EMAIL", "CONTRACT_ACCEPTANCE", "FINANCIAL_COMMITMENT", "SENSITIVE_DOCUMENT_DISCLOSURE", "EXCEPTION"],"cost_tier": ["LOW", "MID", "HIGH"],"data_category": ["PUBLIC_TENDER_DATA", "TENDER_DOCUMENTS", "COMPANY_PROFILE", "COMPANY_CAPABILITIES", "PROJECT_REFERENCES", "FINANCIAL", "BANKING", "TAX", "BBBEE", "DIRECTOR_PERSONAL", "PROOF_OF_ADDRESS", "INSURANCE", "CERTIFICATIONS", "PRICING", "COMMUNICATIONS", "SUBMISSION"],"event_severity": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],"handoff_status": ["PENDING", "ACCEPTED", "REJECTED", "CANCELLED"],"job_status": ["QUEUED", "RUNNING", "COMPLETED", "FAILED", "DEAD"],"org_role": ["owner", "admin", "operator", "viewer"],"risk_level": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],"submission_method": ["ELECTRONIC_PORTAL", "EMAIL", "PHYSICAL", "UNKNOWN"],"submission_status": ["PREPARING", "SUBMITTED", "FAILED", "ACTION_REQUIRED"],"task_status": ["QUEUED", "RUNNING", "WAITING", "BLOCKED", "NEEDS_APPROVAL", "COMPLETED", "FAILED", "CANCELLED"],"tender_source_kind": ["MANUAL", "PORTAL", "EMAIL", "API"],"tender_status": ["DISCOVERED", "INGESTING", "ANALYSING", "QUALIFYING", "REJECTED", "QUALIFIED", "COMPLIANCE_REVIEW", "MISSING_INFORMATION", "PREPARING_BID", "PRICING", "QUALITY_ASSURANCE", "QA_FAILED", "READY_FOR_APPROVAL", "APPROVED", "SUBMITTING", "SUBMITTED", "SUBMISSION_FAILED", "UNDER_EVALUATION", "CLARIFICATION", "AWARDED", "UNSUCCESSFUL", "CANCELLED", "ARCHIVED"],"workflow_run_status": ["PENDING", "RUNNING", "WAITING_APPROVAL", "BLOCKED", "COMPLETED", "FAILED", "CANCELLED"]
+            "access_level": ["READ", "WRITE"],"actor_type": ["user", "agent", "system"],"agent_status": ["IDLE", "QUEUED", "RUNNING", "WAITING", "BLOCKED", "NEEDS_APPROVAL", "PAUSED", "COMPLETED", "FAILED", "DISABLED"],"approval_status": ["PENDING", "APPROVED", "REJECTED", "EXPIRED", "CANCELLED"],"approval_type": ["FINAL_PRICING", "LEGAL_DECLARATION", "BID_SUBMISSION", "CLARIFICATION_EMAIL", "CONTRACT_ACCEPTANCE", "FINANCIAL_COMMITMENT", "SENSITIVE_DOCUMENT_DISCLOSURE", "EXCEPTION"],"cost_tier": ["LOW", "MID", "HIGH"],"data_category": ["PUBLIC_TENDER_DATA", "TENDER_DOCUMENTS", "COMPANY_PROFILE", "COMPANY_CAPABILITIES", "PROJECT_REFERENCES", "FINANCIAL", "BANKING", "TAX", "BBBEE", "DIRECTOR_PERSONAL", "PROOF_OF_ADDRESS", "INSURANCE", "CERTIFICATIONS", "PRICING", "COMMUNICATIONS", "SUBMISSION"],"discovery_status": ["QUEUED", "RUNNING", "COMPLETED", "FAILED"],"event_severity": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],"handoff_status": ["PENDING", "ACCEPTED", "REJECTED", "CANCELLED"],"job_status": ["QUEUED", "RUNNING", "COMPLETED", "FAILED", "DEAD"],"org_role": ["owner", "admin", "operator", "viewer"],"risk_level": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],"submission_method": ["ELECTRONIC_PORTAL", "EMAIL", "PHYSICAL", "UNKNOWN"],"submission_status": ["PREPARING", "SUBMITTED", "FAILED", "ACTION_REQUIRED"],"task_status": ["QUEUED", "RUNNING", "WAITING", "BLOCKED", "NEEDS_APPROVAL", "COMPLETED", "FAILED", "CANCELLED"],"tender_source_kind": ["MANUAL", "PORTAL", "EMAIL", "API"],"tender_status": ["DISCOVERED", "INGESTING", "ANALYSING", "QUALIFYING", "REJECTED", "QUALIFIED", "COMPLIANCE_REVIEW", "MISSING_INFORMATION", "PREPARING_BID", "PRICING", "QUALITY_ASSURANCE", "QA_FAILED", "READY_FOR_APPROVAL", "APPROVED", "SUBMITTING", "SUBMITTED", "SUBMISSION_FAILED", "UNDER_EVALUATION", "CLARIFICATION", "AWARDED", "UNSUCCESSFUL", "CANCELLED", "ARCHIVED"],"workflow_run_status": ["PENDING", "RUNNING", "WAITING_APPROVAL", "BLOCKED", "COMPLETED", "FAILED", "CANCELLED"]
           }
         }
 } as const

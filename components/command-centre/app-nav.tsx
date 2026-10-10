@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Building2, FileStack, Gauge, Hand, Network, Settings } from "lucide-react";
+import { Activity, Briefcase, Building2, FileStack, Gauge, Hand, Network, Radar, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: Gauge },
+  { href: "/discover", label: "Discover", icon: Radar },
   { href: "/office", label: "Office", icon: Building2 },
   { href: "/operations", label: "Operations", icon: Network },
   { href: "/tenders", label: "Tenders", icon: FileStack },
   { href: "/approvals", label: "Approvals", icon: Hand },
   { href: "/activity", label: "Activity", icon: Activity },
+  { href: "/company", label: "Company", icon: Briefcase },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

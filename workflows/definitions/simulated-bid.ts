@@ -90,8 +90,16 @@ export const simulatedBidWorkflow: WorkflowDefinition = {
   },
 };
 
+/**
+ * The same plan on a real tender found by the Tender Scout. The resolver is
+ * shared: compliance gaps block (they do not in simulation), and submission
+ * ends with an approved pack a person delivers.
+ */
+export const tenderBidWorkflow: WorkflowDefinition = { ...simulatedBidWorkflow, key: "tender_bid" };
+
 export const WORKFLOWS: Record<string, WorkflowDefinition> = {
   [simulatedBidWorkflow.key]: simulatedBidWorkflow,
+  [tenderBidWorkflow.key]: tenderBidWorkflow,
 };
 
 export function getStep(def: WorkflowDefinition, key: string): PlanStep {

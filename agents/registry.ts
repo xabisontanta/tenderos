@@ -101,9 +101,9 @@ export const AGENTS: AgentDefinition[] = [
     displayName: "Tender Scout",
     roleTitle: "Tender Discovery Agent",
     department: "tender_intelligence",
-    description: "Searches approved tender sources and records opportunity metadata.",
+    description: "Scans National Treasury eTenders for the provinces you watch, records each open tender and hands it to the Tender Director.",
     responsibilities: [
-      "Search configured tender source connectors",
+      "Scan eTenders for the watched provinces on request and every morning",
       "Record publication and closing dates, organisation, province and sector",
       "Capture briefing requirements, submission type and source links",
       "Never treat a discovered tender as qualified",
@@ -113,7 +113,7 @@ export const AGENTS: AgentDefinition[] = [
     modelTier: "LOW",
     maxConcurrentTasks: 3,
     escalationPolicy: ESCALATE_DEFAULT,
-    implemented: false,
+    implemented: true,
   },
   {
     slug: "opportunity_qualification",

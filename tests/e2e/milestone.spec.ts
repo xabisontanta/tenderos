@@ -25,7 +25,11 @@ test("simulated tender runs from creation to approved submission", async ({ page
   await page.waitForURL("**/onboarding");
   await page.getByLabel("Company name").fill(`E2E Construction ${stamp}`);
   await page.getByRole("button", { name: "Create organisation" }).click();
-  await page.waitForURL((u) => u.pathname === "/");
+  // New organisations land on Discover to choose provinces.
+  await page.waitForURL((u) => u.pathname === "/discover");
+  await expect(page.getByRole("heading", { name: "Discover tenders" })).toBeVisible();
+  await expect(page.getByLabel("KwaZulu-Natal")).toBeVisible();
+  await page.goto("/");
   await expect(page.getByRole("heading", { name: /dashboard|command/i }).first()).toBeVisible();
 
   // Office shows the persisted agent registry, all idle.

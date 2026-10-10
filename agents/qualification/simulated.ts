@@ -8,12 +8,18 @@ export const opportunityQualification: AgentExecutor<QualificationOutput> = {
   taskType: "qualification.assess",
   agent: "opportunity_qualification",
   requires: ["PUBLIC_TENDER_DATA"],
+  optional: ["COMPANY_PROFILE", "COMPANY_CAPABILITIES"],
   outputSchema: qualificationOutputSchema,
   async run(ctx) {
     if (!ctx.tender) throw new NonRetryableError("Tender data unavailable");
     await simulateWork(ctx, ["Checking hard disqualifiers", "Assessing feasibility", "Compiling evidence"]);
-    // Company profile arrives in Phase 5; until then capability factors stay unconfirmed.
-    const result = assessQualification(ctx.tender, ctx.now, null);
+    // Without a company profile the capability factors stay unconfirmed.
+    const p = ctx.company;
+    const company =
+      p && (p.provinces.length || p.sectors.length || p.max_contract_value_zar != null)
+        ? { provinces: p.provinces, sectors: p.sectors, maxContractValueZar: p.max_contract_value_zar }
+        : null;
+    const result = assessQualification(ctx.tender, ctx.now, company);
     const qualified = result.decision === "QUALIFIED";
     return {
       output: { ...result, simulated: ctx.workflow.isSimulation },

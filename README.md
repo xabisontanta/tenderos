@@ -51,6 +51,18 @@ For e2e, run `npm run build` first; if Playwright's bundled browser is not
 installed, set `PLAYWRIGHT_CHROMIUM_PATH`. Set `E2E_SCREENSHOTS=<dir>` to keep
 screenshots of each stage.
 
+## Province discovery
+
+Choose provinces on **Discover**. The Tender Scout reads every published
+tender on National Treasury eTenders, keeps the ones in those provinces and
+hands each to the Tender Director, who runs analysis, qualification,
+compliance, proposal, pricing and QA without anyone pressing a button. Scans
+repeat every morning. Fill in **Company** (CIPC, CSD, tax PIN, B-BBEE,
+signatory) so compliance can pass; tenders stopped at compliance resume when
+you save it. You approve each finished bid, then sign and deliver it: the
+portal does not accept automated submissions and the declarations are yours
+to sign.
+
 ## Hosted worker (Supabase Edge Function)
 
 Supabase does not run long-lived processes, so on a hosted project the worker

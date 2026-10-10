@@ -34,7 +34,7 @@ registry at sign-up (`bootstrap_organisation`).
 | ------------------------- | ------------------------------------------------- | ---- | --------------------- |
 | Executive / Orchestration | Tender Director (`tender_director`)               | MID  | yes, plans every run  |
 | Executive / Orchestration | Deadline Agent (`deadline`)                       | LOW  | no                    |
-| Tender Intelligence       | Tender Scout (`tender_discovery`)                 | LOW  | no                    |
+| Tender Intelligence       | Tender Scout (`tender_discovery`)                 | LOW  | yes, scans eTenders   |
 | Tender Intelligence       | Qualification Agent (`opportunity_qualification`) | MID  | yes                   |
 | Tender Intelligence       | Intelligence Analyst (`tender_intelligence`)      | MID  | no                    |
 | Bid Operations            | Tender Analyst (`tender_analyst`)                 | MID  | yes                   |
@@ -50,6 +50,20 @@ registry at sign-up (`bootstrap_organisation`).
 The Tender Director is the only agent that plans. Other agents do one kind of
 step and hand off. Agents marked "no" exist, show in the Office and can be
 paused, but no workflow routes to them yet; their page says so.
+
+### Discovery
+
+The Tender Scout scans National Treasury eTenders (`agents/discovery/etenders.ts`)
+for the organisation's watched provinces, on request from the Discover page
+and every morning at 04:00 UTC (pg_cron `tenderos-daily-discovery`). It stores
+only facts present in the portal row, deduplicates on the portal id, and, when
+`auto_run_workflows` is on, starts the `tender_bid` workflow on up to
+`max_auto_workflows_per_scan` tenders that still leave 48 hours to bid.
+
+`tender_bid` uses the same plan as `simulated_bid` on real tenders. Compliance
+gaps block it at `MISSING_INFORMATION`; saving the company profile re-queues
+blocked compliance tasks. After approval the Submission Officer hands over a
+verified pack and delivery instructions. TenderOS never submits a bid itself.
 
 ## 3. Responsibility boundaries
 

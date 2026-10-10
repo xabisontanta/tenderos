@@ -3,7 +3,7 @@ import type { Database, Json } from "@/types/database";
 import { deriveAgentState, type AgentTaskSnapshot } from "@/lib/domain/agent-status";
 import { assertTransition, type TenderStatus } from "@/lib/domain/tender-state";
 import type { DataCategory } from "@/agents/registry";
-import type { CostRecord, TenderSnapshot } from "@/agents/runtime/types";
+import type { CompanyProfile, CostRecord, TenderSnapshot } from "@/agents/runtime/types";
 
 type Tables = Database["public"]["Tables"];
 export type TaskRow = Tables["tasks"]["Row"];
@@ -145,6 +145,16 @@ export function toTenderSnapshot(t: TenderRow): TenderSnapshot {
 }
 
 /** Checkpointed outputs of completed steps in a run, keyed by step key. */
+export async function getCompanyProfile(c: PoolClient, organisationId: string): Promise<CompanyProfile | null> {
+  const { rows } = await c.query<CompanyProfile & { updated_at?: string; updated_by?: string }>(
+    `select * from public.company_profiles where organisation_id = $1`,
+    [organisationId],
+  );
+  if (!rows[0]) return null;
+  const { updated_at: _a, updated_by: _b, ...profile } = rows[0];
+  return profile;
+}
+
 export async function getPreviousOutputs(c: PoolClient, runId: string): Promise<Record<string, unknown>> {
   const { rows } = await c.query<{ step_key: string; output: unknown }>(
     `select distinct on (step_key) step_key, output from public.tasks

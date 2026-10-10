@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 
-export const LIVE_TABLES = ["agents", "tasks", "agent_events", "handoffs", "approvals", "tenders", "workflow_runs", "notifications"] as const;
+export const LIVE_TABLES = ["agents", "tasks", "agent_events", "handoffs", "approvals", "tenders", "workflow_runs", "notifications", "discovery_runs"] as const;
 export type LiveTable = (typeof LIVE_TABLES)[number];
 export type ChangePayload = RealtimePostgresChangesPayload<Record<string, unknown>>;
 type Listener = (payload: ChangePayload) => void;
