@@ -96,10 +96,7 @@ export class WorkflowEngine {
       const run = await db.lockRun(c, runId);
       if (!run || run.status !== "PENDING") return;
       const def = this.definition(run);
-      await c.query(`update public.workflow_runs set status = 'RUNNING', started_at = now(), workflow_version = $2 where id = $1`, [
-        run.id,
-        def.version,
-      ]);
+      await c.query(`update public.workflow_runs set status = 'RUNNING', started_at = now(), workflow_version = $2 where id = $1`, [run.id, def.version]);
       await db.emitEvent(c, {
         organisationId: run.organisation_id,
         type: "WORKFLOW_STARTED",
@@ -145,10 +142,13 @@ export class WorkflowEngine {
       approvalRequired: isApproval,
     });
 
+    // After an approval gate the work comes from the human decision, not the gate's owner.
+    const fromApproval = from?.task.approval_required === true;
     await db.createHandoff(c, {
       organisationId: run.organisation_id,
       run,
-      fromAgentId: from?.agent.id ?? null,
+      fromAgentId: fromApproval ? null : (from?.agent.id ?? null),
+      fromApproval,
       toAgentId: agent.id,
       fromTaskId: from?.task.id ?? null,
       toTaskId: task.id,
@@ -359,10 +359,11 @@ export class WorkflowEngine {
         const t = Date.now();
         if (t - lastProgressAt < (this.opts.progressThrottleMs ?? 250) && percent < 100) return;
         lastProgressAt = t;
-        await this.pool.query(
-          `update public.tasks set progress = $2, progress_message = $3 where id = $1 and status = 'RUNNING'`,
-          [task.id, Math.max(0, Math.min(99, Math.round(percent))), message.slice(0, 200)],
-        );
+        await this.pool.query(`update public.tasks set progress = $2, progress_message = $3 where id = $1 and status = 'RUNNING'`, [
+          task.id,
+          Math.max(0, Math.min(99, Math.round(percent))),
+          message.slice(0, 200),
+        ]);
         await this.pool.query(`update public.agents set last_action = $2, last_action_at = now() where id = $1`, [agent.id, message.slice(0, 300)]);
       },
     };
@@ -371,7 +372,8 @@ export class WorkflowEngine {
     try {
       const raw = await executor.run(ctx);
       const parsed = executor.outputSchema.safeParse(raw.output);
-      if (!parsed.success) throw new Error(`Output failed schema validation: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
+      if (!parsed.success)
+        throw new Error(`Output failed schema validation: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
       result = { ...raw, output: parsed.data };
     } catch (err) {
       clearTimeout(timeout);
@@ -440,7 +442,13 @@ export class WorkflowEngine {
     res: StepResolution,
     from: { task: db.TaskRow; agent: db.AgentRow },
   ): Promise<void> {
-    const tenderCtx = { organisationId: run.organisation_id, tenderId: run.tender_id, agentId: from.agent.id, runId: run.id, correlationId: run.correlation_id };
+    const tenderCtx = {
+      organisationId: run.organisation_id,
+      tenderId: run.tender_id,
+      agentId: from.agent.id,
+      runId: run.id,
+      correlationId: run.correlation_id,
+    };
     if (res.tender.length) await db.transitionTender(c, tenderCtx, res.tender, `${from.agent.display_name} completed: ${from.task.title}`);
 
     switch (res.next.type) {
@@ -448,10 +456,10 @@ export class WorkflowEngine {
         await this.scheduleStep(c, run, def, getStep(def, res.next.key), res.next.payload, from);
         return;
       case "complete":
-        await c.query(
-          `update public.workflow_runs set status = 'COMPLETED', outcome = $2, completed_at = now(), current_step = null where id = $1`,
-          [run.id, res.next.outcome],
-        );
+        await c.query(`update public.workflow_runs set status = 'COMPLETED', outcome = $2, completed_at = now(), current_step = null where id = $1`, [
+          run.id,
+          res.next.outcome,
+        ]);
         await db.emitEvent(c, {
           organisationId: run.organisation_id,
           type: "WORKFLOW_COMPLETED",
@@ -462,7 +470,15 @@ export class WorkflowEngine {
           payload: { outcome: res.next.outcome },
         });
         await db.audit(c, run.organisation_id, "workflow.completed", "workflow_run", run.id, { outcome: res.next.outcome }, run.correlation_id);
-        await db.notifyMembers(c, run.organisation_id, "WORKFLOW_COMPLETED", "INFO", "Workflow completed", res.next.outcome.replaceAll("_", " "), `/tenders/${run.tender_id}`);
+        await db.notifyMembers(
+          c,
+          run.organisation_id,
+          "WORKFLOW_COMPLETED",
+          "INFO",
+          "Workflow completed",
+          res.next.outcome.replaceAll("_", " "),
+          `/tenders/${run.tender_id}`,
+        );
         await this.refreshAgentsInRun(c, run.id);
         return;
       case "block":
@@ -507,14 +523,38 @@ export class WorkflowEngine {
         JSON.stringify({ note: output.receipt_note, simulated: run.is_simulation }),
       ],
     );
-    await db.audit(c, run.organisation_id, status === "SUBMITTED" ? "submission.completed" : "submission.action_required", "submission_record", rows[0].id, {
-      simulated: run.is_simulation,
-      package_hash: output.package_hash,
-    }, run.correlation_id);
+    await db.audit(
+      c,
+      run.organisation_id,
+      status === "SUBMITTED" ? "submission.completed" : "submission.action_required",
+      "submission_record",
+      rows[0].id,
+      {
+        simulated: run.is_simulation,
+        package_hash: output.package_hash,
+      },
+      run.correlation_id,
+    );
     if (status === "ACTION_REQUIRED") {
-      await db.notifyMembers(c, run.organisation_id, "SUBMISSION_ACTION_REQUIRED", "WARNING", "Physical submission required", String(output.receipt_note), `/tenders/${run.tender_id}`);
+      await db.notifyMembers(
+        c,
+        run.organisation_id,
+        "SUBMISSION_ACTION_REQUIRED",
+        "WARNING",
+        "Physical submission required",
+        String(output.receipt_note),
+        `/tenders/${run.tender_id}`,
+      );
     } else {
-      await db.notifyMembers(c, run.organisation_id, "SUBMISSION_SUCCESS", "INFO", run.is_simulation ? "Simulated submission recorded" : "Submission completed", tender.title, `/tenders/${run.tender_id}`);
+      await db.notifyMembers(
+        c,
+        run.organisation_id,
+        "SUBMISSION_SUCCESS",
+        "INFO",
+        run.is_simulation ? "Simulated submission recorded" : "Submission completed",
+        tender.title,
+        `/tenders/${run.tender_id}`,
+      );
     }
   }
 
@@ -614,6 +654,12 @@ export class WorkflowEngine {
       const def = this.definition(run);
       await c.query(`select set_config('app.actor_agent_id', $1, true)`, [agent.id]);
 
+      // The handoff into the approval gate is settled by the human decision.
+      await c.query(`update public.handoffs set status = $2::public.handoff_status, accepted_at = now() where to_task_id = $1 and status = 'PENDING'`, [
+        task.id,
+        approval.status === "APPROVED" ? "ACCEPTED" : "REJECTED",
+      ]);
+
       if (approval.status === "APPROVED") {
         await c.query(
           `update public.tasks set status = 'COMPLETED', completed_at = now(), progress = 100, blocked_reason = null,
@@ -635,10 +681,10 @@ export class WorkflowEngine {
           ["PREPARING_BID"],
           `Approval rejected: ${approval.comments ?? ""}`,
         );
-        await c.query(
-          `update public.workflow_runs set status = 'CANCELLED', outcome = 'APPROVAL_REJECTED', error = $2, completed_at = now() where id = $1`,
-          [run.id, approval.comments],
-        );
+        await c.query(`update public.workflow_runs set status = 'CANCELLED', outcome = 'APPROVAL_REJECTED', error = $2, completed_at = now() where id = $1`, [
+          run.id,
+          approval.comments,
+        ]);
         await db.emitEvent(c, {
           organisationId: run.organisation_id,
           type: "WORKFLOW_CANCELLED",

@@ -1,0 +1,55 @@
+# Local development and deployment
+
+## Local
+
+```bash
+npm install
+npm run db:start     # Docker must be running
+npm run db:env       # writes .env.local from `supabase status`
+npm run dev
+npm run worker       # second terminal
+```
+
+`npm run db:reset` recreates the database from migrations. After a schema
+change, run `npm run db:migrate` and `npm run db:types`.
+
+Without the worker, workflows start but no agent picks up work; the sidebar
+shows "Agent worker offline".
+
+Starting Supabase with fewer services is fine for development:
+
+```bash
+npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta,mailpit
+```
+
+## Checks before calling a change done
+
+```bash
+npm run lint && npm run typecheck && npm run test:unit
+npm run test:integration       # needs local Supabase
+npm run build && npm run test:e2e
+```
+
+## Deploying
+
+1. Create a Supabase project. Apply migrations with
+   `npx supabase link --project-ref <ref>` and `npx supabase db push`.
+2. In Supabase Auth settings, set the site URL and redirect URL
+   (`<APP_URL>/auth/callback`), and turn on email confirmation.
+3. Deploy the web app (for example to Vercel) with:
+   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `APP_URL`.
+4. Run the worker as a long-lived process (a container on Fly.io, Railway,
+   Render or similar) with `DATABASE_URL` (session pooler or direct
+   connection; `LISTEN` does not work through a transaction pooler),
+   `WORKER_CONCURRENCY`, `SIMULATION_STEP_MS`, `LOG_LEVEL`.
+5. Run more than one worker for availability; `SKIP LOCKED` keeps them from
+   taking the same job.
+
+## Troubleshooting
+
+- **Agents never start**: check the worker is running and the sidebar shows
+  it online; check the kill switch and whether the agent is paused.
+- **Workflow will not start**: only `DISCOVERED` tenders flagged simulation
+  can start while simulation mode is on.
+- **Integration tests refuse to run**: they only run against a local database.

@@ -96,10 +96,9 @@ export async function drainOrg(worker: Worker, pool: Pool, orgId: string, rounds
       [orgId],
     );
     const n = await worker.drain();
-    const { rows } = await pool.query(
-      `select count(*)::int as n from public.jobs where organisation_id = $1 and status = 'QUEUED' and run_at <= now()`,
-      [orgId],
-    );
+    const { rows } = await pool.query(`select count(*)::int as n from public.jobs where organisation_id = $1 and status = 'QUEUED' and run_at <= now()`, [
+      orgId,
+    ]);
     if (n === 0 && rows[0].n === 0) {
       const { rows: delayed } = await pool.query(
         `select count(*)::int as n from public.jobs where organisation_id = $1 and status = 'QUEUED'

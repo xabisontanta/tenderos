@@ -54,7 +54,13 @@ export type AgentSlug = (typeof AGENT_SLUGS)[number];
 
 export const DEPARTMENTS: DepartmentDefinition[] = [
   { slug: "executive", name: "Executive / Orchestration", description: "Coordinates every bid and owns deadlines.", accent: "violet", sortOrder: 0 },
-  { slug: "tender_intelligence", name: "Tender Intelligence", description: "Finds opportunities, qualifies them and learns from outcomes.", accent: "sky", sortOrder: 1 },
+  {
+    slug: "tender_intelligence",
+    name: "Tender Intelligence",
+    description: "Finds opportunities, qualifies them and learns from outcomes.",
+    accent: "sky",
+    sortOrder: 1,
+  },
   { slug: "bid_operations", name: "Bid Operations", description: "Analyses tender packs and prepares the response.", accent: "indigo", sortOrder: 2 },
   { slug: "compliance", name: "Compliance & Governance", description: "Validates eligibility and mandatory documentation.", accent: "emerald", sortOrder: 3 },
   { slug: "finance", name: "Finance & Pricing", description: "Builds pricing models for human sign-off.", accent: "amber", sortOrder: 4 },
@@ -175,16 +181,7 @@ export const AGENTS: AgentDefinition[] = [
       "Track expiry and usage; block stale documents",
     ],
     allowedTools: ["vault.read", "vault.signUrl"],
-    dataCategories: [
-      "COMPANY_PROFILE",
-      "TAX",
-      "BBBEE",
-      "BANKING",
-      "INSURANCE",
-      "CERTIFICATIONS",
-      "DIRECTOR_PERSONAL",
-      "PROOF_OF_ADDRESS",
-    ],
+    dataCategories: ["COMPANY_PROFILE", "TAX", "BBBEE", "BANKING", "INSURANCE", "CERTIFICATIONS", "DIRECTOR_PERSONAL", "PROOF_OF_ADDRESS"],
     modelTier: "LOW",
     maxConcurrentTasks: 4,
     escalationPolicy: ESCALATE_DEFAULT,

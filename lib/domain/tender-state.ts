@@ -56,13 +56,7 @@ export function assertTransition(from: TenderStatus, to: TenderStatus): void {
 export const TERMINAL_TENDER_STATUSES: readonly TenderStatus[] = ["AWARDED", "UNSUCCESSFUL", "CANCELLED", "ARCHIVED"];
 
 /** Statuses a user may set by hand; everything else belongs to the workflow engine. */
-export const USER_SETTABLE_STATUSES: readonly TenderStatus[] = [
-  "CANCELLED",
-  "ARCHIVED",
-  "UNDER_EVALUATION",
-  "AWARDED",
-  "UNSUCCESSFUL",
-];
+export const USER_SETTABLE_STATUSES: readonly TenderStatus[] = ["CANCELLED", "ARCHIVED", "UNDER_EVALUATION", "AWARDED", "UNSUCCESSFUL"];
 
 /** Coarse pipeline stage used for dashboard grouping. */
 export type PipelineStage = "new" | "qualifying" | "preparing" | "approval" | "submitted" | "won" | "lost" | "closed";

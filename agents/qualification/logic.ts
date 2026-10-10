@@ -17,11 +17,7 @@ export interface CompanyFitInputs {
  * disqualifier rejects the tender regardless of the fit score. Facts the
  * system does not have are REQUIRES_CONFIRMATION, never assumed.
  */
-export function assessQualification(
-  t: TenderSnapshot,
-  now: Date,
-  company: CompanyFitInputs | null,
-): Omit<QualificationOutput, "simulated"> {
+export function assessQualification(t: TenderSnapshot, now: Date, company: CompanyFitInputs | null): Omit<QualificationOutput, "simulated"> {
   const f: QualificationFactor[] = [];
   const hours = hoursUntil(t.closing_at, now)!;
 
@@ -42,18 +38,42 @@ export function assessQualification(
   if (t.briefing_compulsory) {
     const bh = hoursUntil(t.briefing_at, now);
     if (bh === null) {
-      f.push({ key: "briefing", label: "Compulsory briefing", result: "REQUIRES_CONFIRMATION", hard_disqualifier: false, evidence: "Briefing is compulsory but its date is not recorded" });
+      f.push({
+        key: "briefing",
+        label: "Compulsory briefing",
+        result: "REQUIRES_CONFIRMATION",
+        hard_disqualifier: false,
+        evidence: "Briefing is compulsory but its date is not recorded",
+      });
     } else if (bh <= 0) {
-      f.push({ key: "briefing", label: "Compulsory briefing", result: "FAIL", hard_disqualifier: true, evidence: `Compulsory briefing was held at ${t.briefing_at}; attendance cannot be confirmed` });
+      f.push({
+        key: "briefing",
+        label: "Compulsory briefing",
+        result: "FAIL",
+        hard_disqualifier: true,
+        evidence: `Compulsory briefing was held at ${t.briefing_at}; attendance cannot be confirmed`,
+      });
     } else {
       f.push({ key: "briefing", label: "Compulsory briefing", result: "WARN", hard_disqualifier: false, evidence: `Attendance required at ${t.briefing_at}` });
     }
   }
 
   if (t.submission_method === "UNKNOWN") {
-    f.push({ key: "submission", label: "Submission method", result: "REQUIRES_CONFIRMATION", hard_disqualifier: false, evidence: "Submission method not recorded" });
+    f.push({
+      key: "submission",
+      label: "Submission method",
+      result: "REQUIRES_CONFIRMATION",
+      hard_disqualifier: false,
+      evidence: "Submission method not recorded",
+    });
   } else if (t.submission_method === "PHYSICAL") {
-    f.push({ key: "submission", label: "Submission method", result: "WARN", hard_disqualifier: false, evidence: "Physical delivery required; a person must deliver the bid" });
+    f.push({
+      key: "submission",
+      label: "Submission method",
+      result: "WARN",
+      hard_disqualifier: false,
+      evidence: "Physical delivery required; a person must deliver the bid",
+    });
   } else {
     f.push({ key: "submission", label: "Submission method", result: "PASS", hard_disqualifier: false, evidence: t.submission_method });
   }
@@ -94,7 +114,13 @@ export function assessQualification(
         evidence: `Estimated R${Number(t.estimated_value_zar).toLocaleString("en-ZA")} vs limit R${company.maxContractValueZar.toLocaleString("en-ZA")}`,
       });
     } else {
-      f.push({ key: "financial", label: "Contract size vs exposure limit", result: "REQUIRES_CONFIRMATION", hard_disqualifier: false, evidence: "Contract value or exposure limit unknown" });
+      f.push({
+        key: "financial",
+        label: "Contract size vs exposure limit",
+        result: "REQUIRES_CONFIRMATION",
+        hard_disqualifier: false,
+        evidence: "Contract value or exposure limit unknown",
+      });
     }
   }
 

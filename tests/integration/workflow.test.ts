@@ -65,9 +65,16 @@ describe("simulated bid workflow (first milestone)", () => {
     expect(tasks!.map((t) => t.step_key)).toEqual(["intake", "analysis", "qualification", "compliance", "proposal", "pricing", "qa", "approval", "submission"]);
     expect(tasks!.every((t) => t.status === "COMPLETED")).toBe(true);
 
-    const { data: handoffs } = await owner.client.from("handoffs").select("handoff_type,status").eq("workflow_run_id", runId!).order("created_at");
+    const { data: handoffs } = await owner.client
+      .from("handoffs")
+      .select("handoff_type,status,from_agent_id,from_approval")
+      .eq("workflow_run_id", runId!)
+      .order("created_at");
     expect(handoffs).toHaveLength(9);
-    expect(handoffs!.every((h) => h.status === "ACCEPTED" || h.handoff_type === "QA_COMPLETED")).toBe(true);
+    expect(handoffs!.every((h) => h.status === "ACCEPTED")).toBe(true);
+    // The submission is handed over by the human decision, not by an agent.
+    const afterApproval = handoffs!.find((h) => h.handoff_type === "SUBMISSION_APPROVED");
+    expect(afterApproval).toMatchObject({ from_approval: true, from_agent_id: null });
 
     const { data: submission } = await owner.client.from("submission_records").select("*").eq("tender_id", tender.id).single();
     expect(submission!.is_simulation).toBe(true);
@@ -75,7 +82,20 @@ describe("simulated bid workflow (first milestone)", () => {
     expect(submission!.package_hash).toMatch(/^[a-f0-9]{64}$/);
 
     const types = await eventTypes(runId!);
-    for (const t of ["WORKFLOW_STARTED", "AGENT_STARTED_TASK", "AGENT_COMPLETED_TASK", "HANDOFF_CREATED", "HANDOFF_ACCEPTED", "TENDER_QUALIFIED", "COMPLIANCE_FAIL", "QA_PASS", "APPROVAL_REQUIRED", "APPROVAL_GRANTED", "SUBMISSION_COMPLETED", "WORKFLOW_COMPLETED"]) {
+    for (const t of [
+      "WORKFLOW_STARTED",
+      "AGENT_STARTED_TASK",
+      "AGENT_COMPLETED_TASK",
+      "HANDOFF_CREATED",
+      "HANDOFF_ACCEPTED",
+      "TENDER_QUALIFIED",
+      "COMPLIANCE_FAIL",
+      "QA_PASS",
+      "APPROVAL_REQUIRED",
+      "APPROVAL_GRANTED",
+      "SUBMISSION_COMPLETED",
+      "WORKFLOW_COMPLETED",
+    ]) {
       expect(types).toContain(t);
     }
     expect(types.indexOf("APPROVAL_GRANTED")).toBeLessThan(types.indexOf("SUBMISSION_COMPLETED"));
@@ -83,8 +103,19 @@ describe("simulated bid workflow (first milestone)", () => {
     // Tender history recorded every transition.
     const { data: history } = await owner.client.from("tender_status_history").select("to_status").eq("tender_id", tender.id).order("created_at");
     expect(history!.map((h) => h.to_status)).toEqual([
-      "DISCOVERED", "INGESTING", "ANALYSING", "QUALIFYING", "QUALIFIED", "COMPLIANCE_REVIEW", "PREPARING_BID",
-      "PRICING", "QUALITY_ASSURANCE", "READY_FOR_APPROVAL", "APPROVED", "SUBMITTING", "SUBMITTED",
+      "DISCOVERED",
+      "INGESTING",
+      "ANALYSING",
+      "QUALIFYING",
+      "QUALIFIED",
+      "COMPLIANCE_REVIEW",
+      "PREPARING_BID",
+      "PRICING",
+      "QUALITY_ASSURANCE",
+      "READY_FOR_APPROVAL",
+      "APPROVED",
+      "SUBMITTING",
+      "SUBMITTED",
     ]);
 
     // Simulated work costs nothing and says so.
@@ -179,7 +210,12 @@ describe("failure handling", () => {
     });
     await drainOrg(worker, pool, orgId);
 
-    const { data: task } = await owner.client.from("tasks").select("id,status,retry_count,error").eq("workflow_run_id", runId!).eq("step_key", "compliance").single();
+    const { data: task } = await owner.client
+      .from("tasks")
+      .select("id,status,retry_count,error")
+      .eq("workflow_run_id", runId!)
+      .eq("step_key", "compliance")
+      .single();
     expect(task!.status).toBe("FAILED");
     expect(task!.retry_count).toBe(3);
     expect(task!.error).toMatch(/Injected simulation failure/);
@@ -218,7 +254,12 @@ describe("failure handling", () => {
     const tender = await createTender(owner.client, orgId);
     const { data: runId } = await owner.client.rpc("start_tender_workflow", { p_tender_id: tender.id });
     await drainOrg(worker, pool, orgId);
-    const { data: waiting } = await owner.client.from("tasks").select("status,blocked_reason").eq("workflow_run_id", runId!).eq("step_key", "analysis").single();
+    const { data: waiting } = await owner.client
+      .from("tasks")
+      .select("status,blocked_reason")
+      .eq("workflow_run_id", runId!)
+      .eq("step_key", "analysis")
+      .single();
     expect(waiting).toEqual({ status: "WAITING", blocked_reason: "Agent paused by operator" });
     const { data: pausedAgent } = await owner.client.from("agents").select("status").eq("id", analyst!.id).single();
     expect(pausedAgent!.status).toBe("PAUSED");

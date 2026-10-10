@@ -19,10 +19,7 @@ export const pricingPrepare: AgentExecutor<PricingOutput> = {
         lines,
         subtotal_zar: lines.length ? subtotal(lines) : null,
         status: "REQUIRES_CONFIRMATION",
-        notes: [
-          "No supplier quotations or pricing rules on file; no prices were generated",
-          "Final pricing requires human approval",
-        ],
+        notes: ["No supplier quotations or pricing rules on file; no prices were generated", "Final pricing requires human approval"],
         requires_human_approval: true,
         simulated: ctx.workflow.isSimulation,
       },

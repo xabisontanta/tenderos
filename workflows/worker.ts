@@ -1,4 +1,4 @@
-import { hostname } from "node:os";
+import { randomBytes } from "node:crypto";
 import type { Pool, PoolClient } from "@/lib/db/pool";
 import type { Logger } from "@/lib/log";
 import { backoffMs } from "./retry";
@@ -18,7 +18,9 @@ export interface WorkerOptions {
  * drains in-flight jobs on shutdown.
  */
 export class Worker {
-  readonly id = `${hostname()}:${process.pid}:${Math.random().toString(36).slice(2, 8)}`;
+  readonly id = `worker-${randomBytes(6).toString("hex")}`;
+  private processed = 0;
+  private heartbeat: NodeJS.Timeout | null = null;
   private readonly engine: WorkflowEngine;
   private running = false;
   private inFlight = new Set<Promise<void>>();
@@ -37,6 +39,8 @@ export class Worker {
     this.listener = await this.pool.connect();
     await this.listener.query("listen tenderos_jobs");
     this.listener.on("notification", () => this.wake?.());
+    await this.beat();
+    this.heartbeat = setInterval(() => void this.beat().catch(() => undefined), 15_000);
     this.opts.logger.info("worker started", { worker_id: this.id, concurrency: this.opts.concurrency });
     void this.loop();
   }
@@ -45,6 +49,8 @@ export class Worker {
     this.running = false;
     this.wake?.();
     await Promise.allSettled([...this.inFlight]);
+    if (this.heartbeat) clearInterval(this.heartbeat);
+    await this.pool.query(`delete from public.worker_heartbeats where worker_id = $1`, [this.id]).catch(() => undefined);
     if (this.listener) {
       await this.listener.query("unlisten tenderos_jobs").catch(() => undefined);
       this.listener.release();
@@ -93,6 +99,17 @@ export class Worker {
     }
   }
 
+  private async beat(): Promise<void> {
+    await this.pool.query(
+      `insert into public.worker_heartbeats (worker_id, last_seen_at, in_flight, processed, version)
+       values ($1, now(), $2, $3, $4)
+       on conflict (worker_id) do update set last_seen_at = now(), in_flight = $2, processed = $3`,
+      [this.id, this.inFlight.size, this.processed, process.env.npm_package_version ?? null],
+    );
+    // Remove heartbeats from workers that died without cleaning up.
+    await this.pool.query(`delete from public.worker_heartbeats where last_seen_at < now() - interval '1 hour'`);
+  }
+
   private async claim(): Promise<Job | null> {
     const { rows } = await this.pool.query<Job>(`select * from private.claim_job($1)`, [this.id]);
     return rows[0] ?? null;
@@ -115,6 +132,7 @@ export class Worker {
       await this.engine.onJobDead(job, outcome.error).catch((err) => log.error("dead-letter handling failed", { error: (err as Error).message }));
     }
     await this.finish(job, outcome);
+    this.processed++;
     log.debug("job finished", { outcome: outcome.status });
   }
 
@@ -124,10 +142,11 @@ export class Worker {
         await this.pool.query(`update public.jobs set status = 'COMPLETED', completed_at = now(), locked_at = null where id = $1`, [job.id]);
         break;
       case "retry":
-        await this.pool.query(
-          `update public.jobs set status = 'QUEUED', run_at = $2, locked_at = null, locked_by = null, last_error = $3 where id = $1`,
-          [job.id, o.runAt.toISOString(), o.error.slice(0, 2000)],
-        );
+        await this.pool.query(`update public.jobs set status = 'QUEUED', run_at = $2, locked_at = null, locked_by = null, last_error = $3 where id = $1`, [
+          job.id,
+          o.runAt.toISOString(),
+          o.error.slice(0, 2000),
+        ]);
         break;
       case "defer":
         // Deferral is not a failed attempt.

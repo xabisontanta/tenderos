@@ -10,9 +10,10 @@ import { submissionExecute } from "./submission/simulated";
 
 /** Executors by task type. Live (model-backed) executors will register alongside these. */
 export const SIMULATED_EXECUTORS: Record<string, AgentExecutor<unknown>> = Object.fromEntries(
-  [directorIntake, tenderAnalysis, opportunityQualification, complianceCheck, proposalDraft, pricingPrepare, qaReview, submissionExecute].map(
-    (e) => [e.taskType, e as AgentExecutor<unknown>],
-  ),
+  [directorIntake, tenderAnalysis, opportunityQualification, complianceCheck, proposalDraft, pricingPrepare, qaReview, submissionExecute].map((e) => [
+    e.taskType,
+    e as AgentExecutor<unknown>,
+  ]),
 );
 
 export function getExecutor(taskType: string): AgentExecutor<unknown> | undefined {

@@ -9,9 +9,7 @@ const REDACT = /(pass(word)?|secret|token|key|authorization|cookie|id_number|ban
 export function redact(value: unknown, depth = 0): unknown {
   if (depth > 6 || value === null || typeof value !== "object") return value;
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, REDACT.test(k) ? "[REDACTED]" : redact(v, depth + 1)]),
-  );
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, REDACT.test(k) ? "[REDACTED]" : redact(v, depth + 1)]));
 }
 
 export function createLogger(base: Record<string, unknown> = {}, level: Level = (process.env.LOG_LEVEL as Level) || "info") {

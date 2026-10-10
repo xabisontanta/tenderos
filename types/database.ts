@@ -263,14 +263,14 @@ isOneToOne: false
                   ]
                 },"handoffs": {
                   Row: {
-                    "accepted_at": string | null,"correlation_id": string | null,"created_at": string,"from_agent_id": string | null,"from_task_id": string | null,"handoff_type": string,"id": string,"organisation_id": string,"payload": NonNullable<Json>,"status": Database["public"]['Enums']["handoff_status"],"tender_id": string | null,"to_agent_id": string | null,"to_approval": boolean,"to_task_id": string | null,"workflow_run_id": string | null
+                    "accepted_at": string | null,"correlation_id": string | null,"created_at": string,"from_agent_id": string | null,"from_approval": boolean,"from_task_id": string | null,"handoff_type": string,"id": string,"organisation_id": string,"payload": NonNullable<Json>,"status": Database["public"]['Enums']["handoff_status"],"tender_id": string | null,"to_agent_id": string | null,"to_approval": boolean,"to_task_id": string | null,"workflow_run_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "accepted_at"?: string | null,"correlation_id"?: string | null,"created_at"?: string,"from_agent_id"?: string | null,"from_task_id"?: string | null,"handoff_type": string,"id"?: string,"organisation_id": string,"payload"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["handoff_status"],"tender_id"?: string | null,"to_agent_id"?: string | null,"to_approval"?: boolean,"to_task_id"?: string | null,"workflow_run_id"?: string | null
+                    "accepted_at"?: string | null,"correlation_id"?: string | null,"created_at"?: string,"from_agent_id"?: string | null,"from_approval"?: boolean,"from_task_id"?: string | null,"handoff_type": string,"id"?: string,"organisation_id": string,"payload"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["handoff_status"],"tender_id"?: string | null,"to_agent_id"?: string | null,"to_approval"?: boolean,"to_task_id"?: string | null,"workflow_run_id"?: string | null
                   }
                   Update: {
-                    "accepted_at"?: string | null,"correlation_id"?: string | null,"created_at"?: string,"from_agent_id"?: string | null,"from_task_id"?: string | null,"handoff_type"?: string,"id"?: string,"organisation_id"?: string,"payload"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["handoff_status"],"tender_id"?: string | null,"to_agent_id"?: string | null,"to_approval"?: boolean,"to_task_id"?: string | null,"workflow_run_id"?: string | null
+                    "accepted_at"?: string | null,"correlation_id"?: string | null,"created_at"?: string,"from_agent_id"?: string | null,"from_approval"?: boolean,"from_task_id"?: string | null,"handoff_type"?: string,"id"?: string,"organisation_id"?: string,"payload"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["handoff_status"],"tender_id"?: string | null,"to_agent_id"?: string | null,"to_approval"?: boolean,"to_task_id"?: string | null,"workflow_run_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -617,6 +617,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"worker_heartbeats": {
+                  Row: {
+                    "in_flight": number,"last_seen_at": string,"processed": number,"started_at": string,"version": string | null,"worker_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "in_flight"?: number,"last_seen_at"?: string,"processed"?: number,"started_at"?: string,"version"?: string | null,"worker_id": string
+                  }
+                  Update: {
+                    "in_flight"?: number,"last_seen_at"?: string,"processed"?: number,"started_at"?: string,"version"?: string | null,"worker_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"workflow_runs": {
                   Row: {
                     "completed_at": string | null,"correlation_id": string,"created_at": string,"current_step": string | null,"error": string | null,"failed_at": string | null,"id": string,"is_simulation": boolean,"max_tasks": number,"options": NonNullable<Json>,"organisation_id": string,"outcome": string | null,"started_at": string | null,"started_by": string | null,"status": Database["public"]['Enums']["workflow_run_status"],"task_count": number,"tender_id": string,"updated_at": string,"workflow_key": string,"workflow_version": number
@@ -657,6 +671,9 @@ isOneToOne: false
                            },
 "decide_approval":
 { Args: { "p_approval_id": string,"p_approve": boolean,"p_comments"?: string }; Returns: Database["public"]['Enums']["approval_status"]
+                           },
+"hit_rate_limit":
+{ Args: { "p_action": string,"p_max"?: number,"p_window_seconds"?: number }; Returns: undefined
                            },
 "mark_notifications_read":
 { Args: { "p_ids": (string)[] }; Returns: undefined

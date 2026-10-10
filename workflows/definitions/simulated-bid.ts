@@ -7,9 +7,7 @@ import type { SubmissionOutput } from "@/agents/submission/schema";
 import { SIMULATED_BID_PLAN, type PlanStep } from "./plan";
 
 export type NextAction =
-  | { type: "step"; key: string; payload: Record<string, unknown> }
-  | { type: "complete"; outcome: string }
-  | { type: "block"; reason: string };
+  { type: "step"; key: string; payload: Record<string, unknown> } | { type: "complete"; outcome: string } | { type: "block"; reason: string };
 
 export interface StepResolution {
   /** Tender transitions to apply after the step completes. */

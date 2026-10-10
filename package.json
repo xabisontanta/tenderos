@@ -12,7 +12,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "test:integration": "vitest run -c vitest.integration.config.ts",
+    "test:integration": "vitest run -c vitest.integration.config.mts",
     "test:e2e": "playwright test",
     "worker": "tsx scripts/worker.ts",
     "db:start": "supabase start",

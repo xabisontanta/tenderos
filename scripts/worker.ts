@@ -6,6 +6,11 @@ import { Worker } from "@/workflows/worker";
 
 config({ path: [".env.local", ".env"], quiet: true });
 
+// If whoever reads our logs goes away (a closed pipe), keep shutting down cleanly instead of crashing.
+process.stdout.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code !== "EPIPE") throw err;
+});
+
 async function main() {
   const env = workerEnv();
   const logger = createLogger({ service: "tenderos-worker" }, env.LOG_LEVEL);

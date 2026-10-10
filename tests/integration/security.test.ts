@@ -9,7 +9,6 @@ let ownerA: TestUser;
 let ownerB: TestUser;
 let viewerA: TestUser;
 let orgA: string;
-let orgB: string;
 let tenderA: string;
 
 beforeAll(async () => {
@@ -18,7 +17,7 @@ beforeAll(async () => {
   ownerB = await createUser("owner-b");
   viewerA = await createUser("viewer-a");
   orgA = await bootstrapOrg(ownerA);
-  orgB = await bootstrapOrg(ownerB);
+  await bootstrapOrg(ownerB);
   await addMember(orgA, viewerA.id, "viewer", pool);
   tenderA = (await createTender(ownerA.client, orgA)).id;
 });
@@ -92,7 +91,10 @@ describe("role-based access", () => {
 
 describe("system-owned state cannot be written by users", () => {
   it("users cannot change tender status directly", async () => {
-    const { error } = await ownerA.client.from("tenders").update({ status: "SUBMITTED" } as never).eq("id", tenderA);
+    const { error } = await ownerA.client
+      .from("tenders")
+      .update({ status: "SUBMITTED" } as never)
+      .eq("id", tenderA);
     expect(error).not.toBeNull();
     const { data } = await ownerA.client.from("tenders").select("status").eq("id", tenderA).single();
     expect(data!.status).toBe("DISCOVERED");
@@ -101,12 +103,8 @@ describe("system-owned state cannot be written by users", () => {
   it("users cannot write agents, tasks, events or handoffs", async () => {
     const { data: agent } = await ownerA.client.from("agents").select("id").eq("organisation_id", orgA).limit(1).single();
     expect((await ownerA.client.from("agents").update({ status: "RUNNING" }).eq("id", agent!.id)).error).not.toBeNull();
-    expect(
-      (await ownerA.client.from("agent_events").insert({ organisation_id: orgA, event_type: "FAKE_EVENT", summary: "fake" })).error,
-    ).not.toBeNull();
-    expect(
-      (await ownerA.client.from("tasks").insert({ organisation_id: orgA, agent_id: agent!.id, type: "x.fake", title: "fake" })).error,
-    ).not.toBeNull();
+    expect((await ownerA.client.from("agent_events").insert({ organisation_id: orgA, event_type: "FAKE_EVENT", summary: "fake" })).error).not.toBeNull();
+    expect((await ownerA.client.from("tasks").insert({ organisation_id: orgA, agent_id: agent!.id, type: "x.fake", title: "fake" })).error).not.toBeNull();
   });
 
   it("users cannot read or write the job queue", async () => {

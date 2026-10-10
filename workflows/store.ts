@@ -105,10 +105,7 @@ export async function getAgentBySlug(c: PoolClient, organisationId: string, slug
 }
 
 export async function getAgentGrants(c: PoolClient, agentId: string): Promise<DataCategory[]> {
-  const { rows } = await c.query<{ data_category: DataCategory }>(
-    `select data_category from public.agent_permissions where agent_id = $1`,
-    [agentId],
-  );
+  const { rows } = await c.query<{ data_category: DataCategory }>(`select data_category from public.agent_permissions where agent_id = $1`, [agentId]);
   return rows.map((r) => r.data_category);
 }
 
@@ -211,10 +208,7 @@ export interface NewTask {
 /** Creates a task, enforcing the per-run task budget (loop protection). Idempotent per run+step. */
 export async function createTask(c: PoolClient, t: NewTask): Promise<TaskRow> {
   const key = `${t.run.id}:${t.stepKey}`;
-  const existing = await c.query<TaskRow>(
-    `select * from public.tasks where organisation_id = $1 and idempotency_key = $2`,
-    [t.organisationId, key],
-  );
+  const existing = await c.query<TaskRow>(`select * from public.tasks where organisation_id = $1 and idempotency_key = $2`, [t.organisationId, key]);
   if (existing.rows[0]) return existing.rows[0];
 
   const { rows: counter } = await c.query<{ task_count: number; max_tasks: number }>(
@@ -274,6 +268,7 @@ export async function createHandoff(
     fromTaskId: string | null;
     toTaskId: string;
     toApproval?: boolean;
+    fromApproval?: boolean;
     type: string;
     payload: Record<string, unknown>;
     fromName?: string;
@@ -283,8 +278,8 @@ export async function createHandoff(
   const { rows } = await c.query<{ id: string }>(
     `insert into public.handoffs
        (organisation_id, workflow_run_id, tender_id, from_agent_id, to_agent_id, from_task_id, to_task_id,
-        to_approval, handoff_type, payload, correlation_id)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning id`,
+        to_approval, handoff_type, payload, correlation_id, from_approval)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning id`,
     [
       h.organisationId,
       h.run.id,
@@ -297,20 +292,27 @@ export async function createHandoff(
       h.type,
       JSON.stringify(h.payload),
       h.run.correlation_id,
+      h.fromApproval ?? false,
     ],
   );
   const id = rows[0].id;
   await emitEvent(c, {
     organisationId: h.organisationId,
     type: "HANDOFF_CREATED",
-    summary: `${h.fromName ?? "System"} handed off to ${h.toName}${h.toApproval ? " (approval)" : ""}`,
+    summary: `${h.fromApproval ? "Human approval" : (h.fromName ?? "System")} handed off to ${h.toName}${h.toApproval ? " (approval)" : ""}`,
     agentId: h.fromAgentId,
     tenderId: h.run.tender_id,
     taskId: h.toTaskId,
     runId: h.run.id,
     handoffId: id,
     correlationId: h.run.correlation_id,
-    payload: { handoff_type: h.type, from_agent_id: h.fromAgentId, to_agent_id: h.toAgentId, to_approval: h.toApproval ?? false },
+    payload: {
+      handoff_type: h.type,
+      from_agent_id: h.fromApproval ? null : h.fromAgentId,
+      from_approval: h.fromApproval ?? false,
+      to_agent_id: h.toAgentId,
+      to_approval: h.toApproval ?? false,
+    },
   });
   return id;
 }
@@ -345,13 +347,7 @@ export async function enqueueJob(
   dedupeKey: string | null = null,
   runAt: Date = new Date(),
 ): Promise<void> {
-  await c.query(`select private.enqueue_job($1, $2, $3::jsonb, $4, $5)`, [
-    organisationId,
-    kind,
-    JSON.stringify(payload),
-    dedupeKey,
-    runAt.toISOString(),
-  ]);
+  await c.query(`select private.enqueue_job($1, $2, $3::jsonb, $4, $5)`, [organisationId, kind, JSON.stringify(payload), dedupeKey, runAt.toISOString()]);
 }
 
 export async function notifyMembers(

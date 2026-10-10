@@ -23,11 +23,7 @@ const EXPIRY_WARNING_DAYS = 30;
  * VALID only if it exists, is verified, and is in date at closing. Anything
  * else is reported; nothing is assumed.
  */
-export function evaluateCompliance(
-  tender: Pick<TenderSnapshot, "closing_at" | "sector">,
-  vault: VaultDocumentMeta[] | null,
-  now: Date,
-): ComplianceItem[] {
+export function evaluateCompliance(tender: Pick<TenderSnapshot, "closing_at" | "sector">, vault: VaultDocumentMeta[] | null, now: Date): ComplianceItem[] {
   const checklist = [...BASE_CHECKLIST];
   if (tender.sector && /construct|civil|building|infrastructure/i.test(tender.sector)) {
     checklist.push({ key: "cidb_grading", label: "CIDB grading certificate", category: "CERTIFICATIONS", mandatory: true });

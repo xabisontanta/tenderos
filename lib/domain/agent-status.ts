@@ -43,9 +43,7 @@ export function deriveAgentState(current: AgentStatus, tasks: AgentTaskSnapshot[
   const byRecency = [...tasks].sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   for (const status of ACTIVE_ORDER) {
-    const match = byRecency
-      .filter((t) => t.status === status)
-      .sort((a, b) => b.priority - a.priority || a.created_at.localeCompare(b.created_at))[0];
+    const match = byRecency.filter((t) => t.status === status).sort((a, b) => b.priority - a.priority || a.created_at.localeCompare(b.created_at))[0];
     if (match) {
       const derived = TASK_TO_AGENT[status]!;
       return {

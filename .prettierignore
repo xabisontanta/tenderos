@@ -1,0 +1,6 @@
+types/database.ts
+supabase/.temp
+.next
+playwright-report
+test-results
+package-lock.json

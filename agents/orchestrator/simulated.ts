@@ -38,10 +38,7 @@ export const directorIntake: AgentExecutor<IntakeOutput> = {
         simulated: ctx.workflow.isSimulation,
       },
       summary: `Planned ${SIMULATED_BID_PLAN.length} steps; ${missing.length} tender fields still missing`,
-      events:
-        hours > 0 && hours < 72
-          ? [{ type: "DEADLINE_WARNING", severity: "WARNING", summary: `Tender closes in ${Math.round(hours)} hours` }]
-          : [],
+      events: hours > 0 && hours < 72 ? [{ type: "DEADLINE_WARNING", severity: "WARNING", summary: `Tender closes in ${Math.round(hours)} hours` }] : [],
       cost: SIMULATED_COST,
     };
   },

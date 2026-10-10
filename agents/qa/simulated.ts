@@ -24,7 +24,11 @@ export const qaReview: AgentExecutor<QaOutput> = {
       events: [
         result.verdict === "FAIL"
           ? { type: "QA_FAIL", severity: "ERROR", summary: "Quality assurance failed", payload: { issues: result.open_issues } }
-          : { type: "QA_PASS", summary: result.verdict === "PASS" ? "Quality assurance passed" : "QA passed with open issues", payload: { verdict: result.verdict, issues: result.open_issues } },
+          : {
+              type: "QA_PASS",
+              summary: result.verdict === "PASS" ? "Quality assurance passed" : "QA passed with open issues",
+              payload: { verdict: result.verdict, issues: result.open_issues },
+            },
       ],
       cost: SIMULATED_COST,
     };
