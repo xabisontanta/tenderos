@@ -83,10 +83,10 @@ describe("compliance", () => {
 
   it("flags documents that expire before closing and unverified documents", () => {
     const vault = [
-      { type: "cipc_registration", expiresAt: null, verified: true },
-      { type: "csd_registration", expiresAt: inDays(5), verified: true },
-      { type: "tax_compliance", expiresAt: inDays(200), verified: false },
-      { type: "sbd_declarations", expiresAt: null, verified: true },
+      { type: "cipc_registration", expiresAt: null, verified: true, documentId: "d1" },
+      { type: "csd_registration", expiresAt: inDays(5), verified: true, documentId: "d2" },
+      { type: "tax_compliance", expiresAt: inDays(200), verified: false, documentId: "d3" },
+      { type: "sbd_declarations", expiresAt: null, verified: true, documentId: "d4" },
     ];
     const byKey = Object.fromEntries(evaluateCompliance(tender(), vault, NOW).map((i) => [i.key, i.status]));
     expect(byKey).toMatchObject({
@@ -95,6 +95,22 @@ describe("compliance", () => {
       tax_compliance: "REQUIRES_CONFIRMATION",
       bbbee: "MISSING_INFORMATION",
     });
+  });
+
+  it("treats a document dated on the closing day as valid until midnight in South Africa", () => {
+    // Closes 10 Oct 2026 at 11:00 SAST; the TCS letter is dated 10 Oct 2026.
+    const items = evaluateCompliance(
+      { closing_at: "2026-10-10T09:00:00Z", sector: null },
+      [{ type: "tax_compliance", expiresAt: "2026-10-10", verified: true, documentId: "d" }],
+      new Date("2026-09-01T00:00:00Z"),
+    );
+    expect(items.find((i) => i.key === "tax_compliance")?.status).toBe("VALID");
+    const dayBefore = evaluateCompliance(
+      { closing_at: "2026-10-10T09:00:00Z", sector: null },
+      [{ type: "tax_compliance", expiresAt: "2026-10-09", verified: true, documentId: "d" }],
+      new Date("2026-09-01T00:00:00Z"),
+    );
+    expect(dayBefore.find((i) => i.key === "tax_compliance")?.status).toBe("EXPIRED");
   });
 });
 

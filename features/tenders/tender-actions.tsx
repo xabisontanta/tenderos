@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Play, Square, Tags } from "lucide-react";
+import { Play, RotateCcw, Square, Tags } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { canTransition, USER_SETTABLE_STATUSES, type TenderStatus } from "@/lib/domain/tender-state";
 import { humanize } from "@/lib/format";
-import { cancelWorkflow, startWorkflow, transitionTender } from "./actions";
+import { cancelWorkflow, rerunBid, startWorkflow, transitionTender } from "./actions";
 
 const STEPS = ["intake", "analysis", "qualification", "compliance", "proposal", "pricing", "qa", "submission"];
 
@@ -21,6 +21,7 @@ export function TenderActions({
   status,
   isSimulation,
   activeRunId,
+  activeRunStatus = null,
   simulationEnabled,
   killSwitch,
 }: {
@@ -28,6 +29,8 @@ export function TenderActions({
   status: TenderStatus;
   isSimulation: boolean;
   activeRunId: string | null;
+  /** Status of the active run, if any; a BLOCKED run can be replaced by preparing the bid again. */
+  activeRunStatus?: string | null;
   simulationEnabled: boolean;
   killSwitch: boolean;
 }) {
@@ -53,8 +56,29 @@ export function TenderActions({
           ? "Kill switch is engaged"
           : undefined;
 
+  // After the approver sent the bid back, or QA failed it, the bid can be prepared again.
+  const canRerun = (status === "PREPARING_BID" || status === "QA_FAILED") && (!activeRunId || activeRunStatus === "BLOCKED") && !killSwitch;
+
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {canRerun && (
+        <Button
+          size="sm"
+          disabled={pending}
+          title="Runs compliance again with your current documents, then proposal, pricing and QA, and asks for approval again"
+          onClick={() =>
+            start(async () => {
+              const r = await rerunBid(tenderId);
+              if (r.ok) {
+                toast.success("Bid preparation restarted");
+                router.refresh();
+              } else toast.error(r.error);
+            })
+          }
+        >
+          <RotateCcw /> Prepare bid again
+        </Button>
+      )}
       {/* Only a newly discovered tender can start a workflow; elsewhere the button would be noise. */}
       {status === "DISCOVERED" && (
         <Dialog open={startOpen} onOpenChange={setStartOpen}>

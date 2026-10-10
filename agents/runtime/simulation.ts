@@ -20,10 +20,11 @@ export class InjectedFailureError extends Error {
 /**
  * Simulated agents pace their work so state changes are observable, report
  * progress at checkpoints, and honour failure injection for failure-path tests.
+ * Real tenders are not slowed down: the checkpoints are reported without waiting.
  */
 export async function simulateWork(ctx: AgentContext, checkpoints: string[]): Promise<void> {
   const { fail_step, fail_times = 1 } = ctx.workflow.options;
-  const perStep = checkpoints.length ? ctx.simulationStepMs / checkpoints.length : 0;
+  const perStep = checkpoints.length && ctx.workflow.isSimulation ? ctx.simulationStepMs / checkpoints.length : 0;
   for (let i = 0; i < checkpoints.length; i++) {
     await sleep(perStep, ctx.signal);
     if (fail_step === ctx.task.stepKey && ctx.task.retryCount < fail_times && i === Math.floor(checkpoints.length / 2)) {
@@ -34,6 +35,7 @@ export async function simulateWork(ctx: AgentContext, checkpoints: string[]): Pr
 }
 
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (ms <= 0 && !signal?.aborted) return Promise.resolve();
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(signal.reason ?? new Error("Aborted"));
     const t = setTimeout(resolve, ms);

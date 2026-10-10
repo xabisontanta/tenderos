@@ -1,4 +1,5 @@
 import type { CompanyDocumentMeta, CompanyProfile, TenderSnapshot } from "@/agents/runtime/types";
+import { endOfDaySast } from "@/lib/format";
 import type { ComplianceItem } from "./schema";
 
 export interface VaultDocumentMeta {
@@ -38,9 +39,13 @@ export function evaluateCompliance(tender: Pick<TenderSnapshot, "closing_at" | "
     }
     const doc = bestEvidence(vault, item.key);
     if (!doc) return { ...item, status: "MISSING_INFORMATION", evidence: "No document on file" };
+    if (!doc.documentId) {
+      return { ...item, status: "REQUIRES_CONFIRMATION", evidence: `${doc.source ?? "Recorded in the company profile"}; upload the document on Documents` };
+    }
     if (!doc.verified) return { ...item, status: "REQUIRES_CONFIRMATION", evidence: "Document on file but not verified" };
     if (doc.expiresAt) {
-      const exp = new Date(doc.expiresAt).getTime();
+      // A document dated D is valid until the end of D in South Africa.
+      const exp = endOfDaySast(doc.expiresAt);
       if (exp < new Date(tender.closing_at).getTime()) {
         return { ...item, status: "EXPIRED", evidence: `Expires ${doc.expiresAt}, before closing` };
       }
@@ -59,16 +64,17 @@ export function evaluateCompliance(tender: Pick<TenderSnapshot, "closing_at" | "
 }
 
 /**
- * Picks the strongest evidence for a checklist item: verified before
- * unverified, then the latest expiry (no expiry counts as latest). On a tie
- * the earlier entry wins, so callers list uploaded documents first.
+ * Picks the strongest evidence for a checklist item: an uploaded document
+ * before a profile entry, verified before unverified, then the latest expiry
+ * (no expiry counts as latest). On a tie the earlier entry wins.
  */
 export function bestEvidence(vault: VaultDocumentMeta[], key: string): VaultDocumentMeta | undefined {
-  const rank = (d: VaultDocumentMeta) => (d.expiresAt ? new Date(d.expiresAt).getTime() : Number.POSITIVE_INFINITY);
+  const rank = (d: VaultDocumentMeta) => (d.expiresAt ? endOfDaySast(d.expiresAt) : Number.POSITIVE_INFINITY);
   return vault
     .filter((d) => d.type === key)
     .reduce<VaultDocumentMeta | undefined>((best, d) => {
       if (!best) return d;
+      if (Boolean(d.documentId) !== Boolean(best.documentId)) return d.documentId ? d : best;
       if (d.verified !== best.verified) return d.verified ? d : best;
       return rank(d) > rank(best) ? d : best;
     }, undefined);
@@ -80,14 +86,15 @@ export function isComplete(items: ComplianceItem[]): boolean {
 
 /**
  * Company profile facts as checklist evidence. These are values the
- * organisation entered; they are reported as such, never as documents the
- * system has inspected.
+ * organisation typed in, not documents anyone has checked, so they never make
+ * an item VALID on their own: the item stays REQUIRES_CONFIRMATION until the
+ * document is uploaded and verified.
  */
 export function profileEvidence(p: CompanyProfile | null): VaultDocumentMeta[] | null {
   if (!p) return null;
   const docs: VaultDocumentMeta[] = [];
   const add = (type: string, present: unknown, source: string, expiresAt: string | null = null) => {
-    if (present) docs.push({ type, verified: true, expiresAt, source });
+    if (present) docs.push({ type, verified: false, expiresAt, source });
   };
   add("cipc_registration", p.registration_number, `Registration ${p.registration_number} in company profile`);
   add("csd_registration", p.csd_number, `CSD ${p.csd_number} in company profile`);

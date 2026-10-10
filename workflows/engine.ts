@@ -79,9 +79,25 @@ export class WorkflowEngine {
 
   /**
    * Called when a job crashed on every attempt. For task jobs the task is
-   * failed and the run blocked, so nothing is left silently RUNNING.
+   * failed and the run blocked; for other run jobs the run is blocked; a dead
+   * scan is marked failed. Nothing is left silently RUNNING.
    */
   async onJobDead(job: Job, error: string): Promise<void> {
+    if ((job.kind === "workflow.start" || job.kind === "approval.decided") && job.payload.workflow_run_id) {
+      await withTx(this.pool, async (c) => {
+        const run = await db.lockRun(c, String(job.payload.workflow_run_id));
+        if (!run || !["PENDING", "RUNNING", "WAITING_APPROVAL"].includes(run.status)) return;
+        await this.blockRun(c, run, `System error: ${error}`.slice(0, 1000), null);
+      });
+      return;
+    }
+    if (job.kind === "discovery.run" && job.payload.discovery_run_id) {
+      await this.pool.query(
+        `update public.discovery_runs set status = 'FAILED', error = $2, completed_at = now() where id = $1 and status in ('QUEUED', 'RUNNING')`,
+        [String(job.payload.discovery_run_id), `System error: ${error}`.slice(0, 1000)],
+      );
+      return;
+    }
     if (job.kind !== "task.run") return;
     await withTx(this.pool, async (c) => {
       const task = await db.lockTask(c, String(job.payload.task_id));
@@ -117,7 +133,10 @@ export class WorkflowEngine {
         payload: { workflow_key: def.key, version: def.version, steps: def.steps.map((s) => s.key) },
       });
       await db.audit(c, run.organisation_id, "workflow.started", "workflow_run", run.id, { workflow_key: def.key }, run.correlation_id);
-      await this.scheduleStep(c, run, def, getStep(def, def.firstStep), { tender_id: run.tender_id }, null);
+      // A bid prepared again (rerun_bid) starts at the step named in its options.
+      const startStep = (run.options as { start_step?: string } | null)?.start_step;
+      const first = startStep && def.steps.some((s) => s.key === startStep) ? startStep : def.firstStep;
+      await this.scheduleStep(c, run, def, getStep(def, first), { tender_id: run.tender_id }, null);
     });
     return { status: "completed" };
   }
@@ -348,7 +367,7 @@ export class WorkflowEngine {
           tender: granted.has("PUBLIC_TENDER_DATA") ? db.toTenderSnapshot(tender) : null,
           company: granted.has("COMPANY_PROFILE") ? await db.getCompanyProfile(c, run.organisation_id) : null,
           documents: await db.getCompanyDocuments(c, run.organisation_id, [...granted]),
-          previousOutputs: await db.getPreviousOutputs(c, run.id),
+          previousOutputs: await db.getPreviousOutputs(c, run),
           granted,
           now: this.now(),
           simulationStepMs: this.opts.simulationStepMs,
@@ -407,7 +426,11 @@ export class WorkflowEngine {
                   completed_at = now(), error = null where id = $1`,
           [task.id, JSON.stringify(result.output), result.summary.slice(0, 200)],
         );
-        if (result.cost) await db.recordCost(c, current, result.cost);
+        if (result.cost) {
+          // Rule-based steps on a real tender are not simulated work: record them as $0 rules, not simulation.
+          const cost = !run.is_simulation && result.cost.provider === "simulation" ? { ...result.cost, provider: "rules", isSimulated: false } : result.cost;
+          await db.recordCost(c, current, cost);
+        }
         await db.emitEvent(c, {
           organisationId: task.organisation_id,
           type: "AGENT_COMPLETED_TASK",
@@ -553,7 +576,11 @@ export class WorkflowEngine {
         run.organisation_id,
         "SUBMISSION_ACTION_REQUIRED",
         "WARNING",
-        "Physical submission required",
+        tender.submission_method === "PHYSICAL"
+          ? "Deliver the bid by hand"
+          : tender.submission_method === "EMAIL"
+            ? "Email the approved bid"
+            : "Upload the approved bid",
         String(output.receipt_note),
         `/tenders/${run.tender_id}`,
       );

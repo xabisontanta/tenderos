@@ -203,6 +203,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"autofill_tokens": {
+                  Row: {
+                    "created_at": string,"expires_at": string,"id": string,"label": string,"last_used_at": string | null,"organisation_id": string,"revoked_at": string | null,"token_hash": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"expires_at"?: string,"id"?: string,"label": string,"last_used_at"?: string | null,"organisation_id": string,"revoked_at"?: string | null,"token_hash": string,"user_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"expires_at"?: string,"id"?: string,"label"?: string,"last_used_at"?: string | null,"organisation_id"?: string,"revoked_at"?: string | null,"token_hash"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "autofill_tokens_organisation_id_fkey"
+      columns: ["organisation_id"]
+isOneToOne: false
+      referencedRelation: "organisations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "autofill_tokens_organisation_id_user_id_fkey"
+      columns: ["organisation_id","user_id"]
+isOneToOne: false
+      referencedRelation: "organisation_members"
+      referencedColumns: ["organisation_id","user_id"]
+    }
+                  ]
                 },"company_documents": {
                   Row: {
                     "archived_at": string | null,"created_at": string,"data_category": Database["public"]['Enums']["data_category"],"doc_type": string,"expires_at": string | null,"file_name": string,"id": string,"mime_type": string | null,"organisation_id": string,"size_bytes": number | null,"storage_path": string,"title": string,"uploaded_by": string | null,"verified": boolean,"verified_at": string | null,"verified_by": string | null
@@ -790,6 +816,16 @@ isOneToOne: false
             "archive_company_document":
 { Args: { "p_id": string }; Returns: undefined
                            },
+"autofill_document_download":
+{ Args: { "p_document_id": string,"p_token_id": string }; Returns: {
+              "file_name": string,"mime_type": string,"size_bytes": number,"storage_path": string
+            }[]
+                           },
+"autofill_documents":
+{ Args: { "p_token_id": string }; Returns: {
+              "created_at": string,"doc_type": string,"expires_at": string,"file_name": string,"id": string,"mime_type": string,"size_bytes": number,"title": string
+            }[]
+                           },
 "bootstrap_organisation":
 { Args: { "p_agents": Json,"p_departments": Json,"p_name": string,"p_slug": string,"p_user_id": string }; Returns: string
                            },
@@ -798,6 +834,12 @@ isOneToOne: false
                            },
 "connect_email_account":
 { Args: { "p_display_name": string,"p_from": string,"p_org": string,"p_provider": Database["public"]['Enums']["email_provider"],"p_secret": string,"p_smtp_host"?: string,"p_smtp_port"?: number,"p_smtp_username"?: string }; Returns: string
+                           },
+"create_autofill_token":
+{ Args: { "p_label"?: string,"p_org": string }; Returns: string
+                           },
+"dashboard_counts":
+{ Args: { "p_day_start": string,"p_month_start": string,"p_org": string }; Returns: Json
                            },
 "decide_approval":
 { Args: { "p_approval_id": string,"p_approve": boolean,"p_comments"?: string }; Returns: Database["public"]['Enums']["approval_status"]
@@ -818,6 +860,9 @@ isOneToOne: false
 "hit_rate_limit":
 { Args: { "p_action": string,"p_max"?: number,"p_window_seconds"?: number }; Returns: undefined
                            },
+"hit_rate_limit_key":
+{ Args: { "p_action": string,"p_key": string,"p_max"?: number,"p_window_seconds"?: number }; Returns: undefined
+                           },
 "mark_notifications_read":
 { Args: { "p_ids": (string)[] }; Returns: undefined
                            },
@@ -827,8 +872,19 @@ isOneToOne: false
 "register_company_document":
 { Args: { "p_doc_type": string,"p_expires_at"?: string,"p_org": string,"p_path": string,"p_title": string }; Returns: string
                            },
+"rerun_bid":
+{ Args: { "p_tender_id": string }; Returns: string
+                           },
+"resolve_autofill_token":
+{ Args: { "p_hash": string }; Returns: {
+              "organisation_id": string,"role": Database["public"]['Enums']["org_role"],"token_id": string,"user_id": string
+            }[]
+                           },
 "retry_task":
 { Args: { "p_task_id": string }; Returns: undefined
+                           },
+"revoke_autofill_token":
+{ Args: { "p_id": string }; Returns: undefined
                            },
 "set_agent_control":
 { Args: { "p_action": string,"p_agent_id": string,"p_reason"?: string }; Returns: Database["public"]['Enums']["agent_status"]

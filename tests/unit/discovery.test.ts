@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fetchOpenTenders, mapEtendersRow, provinceCode, saTime } from "@/agents/discovery/etenders";
-import { evaluateCompliance, isComplete, profileEvidence } from "@/agents/compliance/logic";
+import { documentEvidence, evaluateCompliance, isComplete, profileEvidence } from "@/agents/compliance/logic";
 import type { CompanyProfile } from "@/agents/runtime/types";
 import { etendersFetcher, etendersRow, futureSaLocal } from "../fixtures/etenders";
 
@@ -89,15 +89,36 @@ describe("compliance from the company profile", () => {
     website: null,
   };
 
-  it("passes when every mandatory item is in the profile", () => {
-    const items = evaluateCompliance({ closing_at: closing, sector: "Services: Professional" }, profileEvidence(profile), new Date());
-    expect(isComplete(items)).toBe(true);
-    expect(items.find((i) => i.key === "csd_registration")?.evidence).toContain("MAAA0123456");
+  const doc = (doc_type: string, expires_at: string | null = null, verified = true) => ({
+    id: `doc-${doc_type}`,
+    doc_type,
+    title: doc_type,
+    file_name: `${doc_type}.pdf`,
+    expires_at,
+    verified,
   });
 
-  it("blocks on an expired tax PIN and on missing CIDB grading for construction", () => {
-    const expired = { ...profile, tax_pin_expires_at: new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10) };
-    const items = evaluateCompliance({ closing_at: closing, sector: "Civil engineering" }, profileEvidence(expired), new Date());
+  it("never passes on typed-in profile facts alone", () => {
+    const items = evaluateCompliance({ closing_at: closing, sector: "Services: Professional" }, profileEvidence(profile), new Date());
+    expect(isComplete(items)).toBe(false);
+    const csd = items.find((i) => i.key === "csd_registration")!;
+    expect(csd.status).toBe("REQUIRES_CONFIRMATION");
+    expect(csd.evidence).toContain("MAAA0123456");
+    expect(csd.evidence).toContain("upload the document");
+  });
+
+  it("passes when every mandatory document is uploaded and verified, and prefers the upload over the profile", () => {
+    const tcs = new Date(Date.now() + 200 * 86_400_000).toISOString().slice(0, 10);
+    const uploads = documentEvidence([doc("cipc_registration"), doc("csd_registration"), doc("tax_compliance", tcs), doc("sbd_declarations")]);
+    const items = evaluateCompliance({ closing_at: closing, sector: "Services: Professional" }, [...uploads, ...profileEvidence(profile)!], new Date());
+    expect(isComplete(items)).toBe(true);
+    expect(items.find((i) => i.key === "tax_compliance")?.document_id).toBe("doc-tax_compliance");
+  });
+
+  it("blocks on an expired tax document and on missing CIDB grading for construction", () => {
+    const soon = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+    const uploads = documentEvidence([doc("cipc_registration"), doc("csd_registration"), doc("tax_compliance", soon), doc("sbd_declarations")]);
+    const items = evaluateCompliance({ closing_at: closing, sector: "Civil engineering" }, uploads, new Date());
     expect(items.find((i) => i.key === "tax_compliance")?.status).toBe("EXPIRED");
     expect(items.find((i) => i.key === "cidb_grading")?.status).toBe("MISSING_INFORMATION");
     expect(isComplete(items)).toBe(false);

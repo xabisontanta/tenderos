@@ -1,6 +1,7 @@
 import type { TenderSnapshot } from "@/agents/runtime/types";
 import { hoursUntil } from "@/lib/domain/time";
 import type { QualificationFactor, QualificationOutput } from "./schema";
+import { formatSast } from "@/lib/format";
 
 /** Minimum hours before closing needed to prepare a compliant bid. */
 export const MIN_PREPARATION_HOURS = 48;
@@ -22,7 +23,7 @@ export function assessQualification(t: TenderSnapshot, now: Date, company: Compa
   const hours = hoursUntil(t.closing_at, now)!;
 
   if (hours <= 0) {
-    f.push({ key: "deadline", label: "Closing date", result: "FAIL", hard_disqualifier: true, evidence: `Closed at ${t.closing_at}` });
+    f.push({ key: "deadline", label: "Closing date", result: "FAIL", hard_disqualifier: true, evidence: `Closed at ${formatSast(t.closing_at)}` });
   } else if (hours < MIN_PREPARATION_HOURS) {
     f.push({
       key: "deadline",
@@ -51,10 +52,16 @@ export function assessQualification(t: TenderSnapshot, now: Date, company: Compa
         label: "Compulsory briefing",
         result: "FAIL",
         hard_disqualifier: true,
-        evidence: `Compulsory briefing was held at ${t.briefing_at}; attendance cannot be confirmed`,
+        evidence: `Compulsory briefing was held at ${formatSast(t.briefing_at)}; attendance cannot be confirmed`,
       });
     } else {
-      f.push({ key: "briefing", label: "Compulsory briefing", result: "WARN", hard_disqualifier: false, evidence: `Attendance required at ${t.briefing_at}` });
+      f.push({
+        key: "briefing",
+        label: "Compulsory briefing",
+        result: "WARN",
+        hard_disqualifier: false,
+        evidence: `Attendance required at ${formatSast(t.briefing_at)}`,
+      });
     }
   }
 

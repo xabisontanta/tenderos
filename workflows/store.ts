@@ -168,12 +168,18 @@ export async function getCompanyDocuments(c: PoolClient, organisationId: string,
   return rows;
 }
 
-export async function getPreviousOutputs(c: PoolClient, runId: string): Promise<Record<string, unknown>> {
+/**
+ * Outputs of the steps already completed in this run. A run started again at
+ * a later step (rerun_bid) also sees the earlier run's outputs for the steps
+ * it skipped; its own outputs win.
+ */
+export async function getPreviousOutputs(c: PoolClient, run: Pick<RunRow, "id" | "options">): Promise<Record<string, unknown>> {
+  const resumeFrom = (run.options as { resume_from?: string } | null)?.resume_from ?? null;
   const { rows } = await c.query<{ step_key: string; output: unknown }>(
     `select distinct on (step_key) step_key, output from public.tasks
-      where workflow_run_id = $1 and status = 'COMPLETED' and step_key is not null
-      order by step_key, completed_at desc`,
-    [runId],
+      where workflow_run_id = any ($1::uuid[]) and status = 'COMPLETED' and step_key is not null
+      order by step_key, (workflow_run_id = $2) desc, completed_at desc`,
+    [resumeFrom ? [run.id, resumeFrom] : [run.id], run.id],
   );
   return Object.fromEntries(rows.map((r) => [r.step_key, r.output]));
 }
@@ -412,7 +418,7 @@ export async function recordCost(c: PoolClient, task: TaskRow, cost: CostRecord)
 export async function spendToday(c: PoolClient, organisationId: string): Promise<number> {
   const { rows } = await c.query<{ total: number | null }>(
     `select coalesce(sum(cost_usd), 0) as total from public.cost_usage
-      where organisation_id = $1 and created_at >= date_trunc('day', now())`,
+      where organisation_id = $1 and created_at >= date_trunc('day', now() at time zone 'Africa/Johannesburg') at time zone 'Africa/Johannesburg'`,
     [organisationId],
   );
   return Number(rows[0]?.total ?? 0);

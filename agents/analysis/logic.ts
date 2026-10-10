@@ -1,5 +1,6 @@
 import type { TenderSnapshot } from "@/agents/runtime/types";
 import type { AnalysisOutput, Requirement } from "./schema";
+import { formatSast } from "@/lib/format";
 
 /**
  * Extracts requirements from the structured tender record only. Every
@@ -15,7 +16,7 @@ export function extractRecordRequirements(t: TenderSnapshot): Pick<AnalysisOutpu
   reqs.push({
     id: "closing",
     category: "DEADLINE",
-    text: `Submission closes ${t.closing_at}`,
+    text: `Submission closes ${formatSast(t.closing_at)}`,
     mandatory: true,
     status: "EXTRACTED",
     source: rec("closing_at"),
@@ -26,7 +27,7 @@ export function extractRecordRequirements(t: TenderSnapshot): Pick<AnalysisOutpu
       id: "briefing",
       category: "BRIEFING",
       text: t.briefing_at
-        ? `Compulsory briefing at ${t.briefing_at}${t.briefing_location ? `, ${t.briefing_location}` : ""}`
+        ? `Compulsory briefing at ${formatSast(t.briefing_at)}${t.briefing_location ? `, ${t.briefing_location}` : ""}`
         : "Compulsory briefing: date not recorded",
       mandatory: true,
       status: t.briefing_at ? "EXTRACTED" : "MISSING_INFORMATION",
@@ -38,7 +39,7 @@ export function extractRecordRequirements(t: TenderSnapshot): Pick<AnalysisOutpu
     reqs.push({
       id: "questions",
       category: "DEADLINE",
-      text: `Questions close ${t.questions_deadline_at}`,
+      text: `Questions close ${formatSast(t.questions_deadline_at)}`,
       mandatory: false,
       status: "EXTRACTED",
       source: rec("questions_deadline_at"),

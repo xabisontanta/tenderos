@@ -92,6 +92,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
               status={tender.status as TenderStatus}
               isSimulation={tender.is_simulation}
               activeRunId={activeRun?.id ?? null}
+              activeRunStatus={activeRun?.status ?? null}
               simulationEnabled={ctx.settings.simulation_mode}
               killSwitch={ctx.settings.kill_switch}
             />

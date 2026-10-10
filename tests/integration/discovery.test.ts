@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPool, type Pool } from "@/lib/db/pool";
 import { createLogger } from "@/lib/log";
 import { Worker } from "@/workflows/worker";
+import { DOCUMENT_BUCKET } from "@/lib/domain/documents";
 import { bootstrapOrg, createUser, drainOrg, env, type TestUser } from "./helpers";
 import { etendersFetcher, etendersRow, futureSaLocal } from "../fixtures/etenders";
 
@@ -75,7 +76,7 @@ describe("province discovery", () => {
     expect(events.map((e) => e.event_type)).toEqual(expect.arrayContaining(["DISCOVERY_STARTED", "TENDER_DISCOVERED", "DISCOVERY_COMPLETED"]));
   });
 
-  it("resumes blocked runs when the company profile is filled in, then stops for approval and hands over the pack", async () => {
+  it("stays blocked on typed-in profile facts, resumes once documents are uploaded, then stops for approval and hands over the pack", async () => {
     const { error } = await owner.client.from("company_profiles").insert({
       organisation_id: orgId,
       legal_name: "Scout Test Trading (Pty) Ltd",
@@ -87,6 +88,22 @@ describe("province discovery", () => {
       authorised_signatory: "A. Director",
     });
     expect(error).toBeNull();
+    await drainOrg(worker(), pool, orgId);
+    const { data: stillBlocked } = await owner.client.from("tenders").select("status").eq("reference_number", "GT-OPEN-1").single();
+    expect(stillBlocked!.status).toBe("MISSING_INFORMATION");
+
+    const tcs = new Date(Date.now() + 300 * 86_400_000).toISOString().slice(0, 10);
+    for (const [type, expires] of [
+      ["cipc_registration", undefined],
+      ["csd_registration", undefined],
+      ["tax_compliance", tcs],
+      ["sbd_declarations", undefined],
+    ] as const) {
+      const path = `${orgId}/${type}/doc.pdf`;
+      expect((await owner.client.storage.from(DOCUMENT_BUCKET).upload(path, new Blob(["%PDF-1.4\n"], { type: "application/pdf" }))).error).toBeNull();
+      const reg = await owner.client.rpc("register_company_document", { p_org: orgId, p_doc_type: type, p_title: type, p_path: path, p_expires_at: expires });
+      expect(reg.error).toBeNull();
+    }
     await drainOrg(worker(), pool, orgId);
 
     const { data: run } = await owner.client.from("workflow_runs").select("id, status, workflow_key").eq("organisation_id", orgId).single();
@@ -127,6 +144,18 @@ describe("province discovery", () => {
     await drainOrg(worker(), pool, orgId);
     const { data: run } = await owner.client.from("discovery_runs").select("matched, created_tenders").eq("id", runId!).single();
     expect(run).toEqual({ matched: 3, created_tenders: 1 });
+  });
+
+  it("refreshes a stored tender when eTenders moves its closing date", async () => {
+    const moved = rows.map((r) => (r.tender_No === "KZN-OPEN-1" ? { ...r, closing_Date: futureSaLocal(30) } : r));
+    const { data: before } = await owner.client.from("tenders").select("id, closing_at").eq("reference_number", "KZN-OPEN-1").single();
+    await owner.client.rpc("start_discovery", { p_org: orgId, p_provinces: ["GAUTENG", "KWAZULU_NATAL"] });
+    await drainOrg(worker(moved), pool, orgId);
+    const { data: after } = await owner.client.from("tenders").select("id, closing_at").eq("reference_number", "KZN-OPEN-1").single();
+    expect(after!.id).toBe(before!.id);
+    expect(new Date(after!.closing_at).getTime()).toBe(new Date(moved.find((r) => r.tender_No === "KZN-OPEN-1")!.closing_Date + "+02:00").getTime());
+    const { rows: ev } = await pool.query(`select summary from public.agent_events where tender_id = $1 and event_type = 'TENDER_UPDATED'`, [after!.id]);
+    expect(ev[0]?.summary).toMatch(/Closing date changed on eTenders/);
   });
 
   it("records a failed scan when the portal is down", async () => {

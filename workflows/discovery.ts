@@ -1,7 +1,7 @@
 import type { Pool } from "@/lib/db/pool";
 import { withTx } from "@/lib/db/pool";
 import type { Logger } from "@/lib/log";
-import { provinceLabel } from "@/lib/format";
+import { formatSast, provinceLabel } from "@/lib/format";
 import { fetchOpenTenders, mapEtendersRow, type DiscoveredTender, type Fetcher } from "@/agents/discovery/etenders";
 import { MIN_PREPARATION_HOURS } from "@/agents/qualification/logic";
 import type { JobOutcome } from "./engine";
@@ -110,8 +110,31 @@ export async function runDiscovery(pool: Pool, runId: string, attempts: number, 
     pool,
     async (c) => {
       let created = 0;
+      let refreshed = 0;
       const createdIds: string[] = [];
+      // Tenders already on file: the same portal row (refresh it) or the same
+      // reference number entered another way (leave it alone).
+      const { rows: existing } = await c.query<{
+        id: string;
+        source_id: string | null;
+        source_ref: string | null;
+        reference_number: string | null;
+        closing_at: string;
+        status: string;
+      }>(
+        `select id, source_id, source_ref, reference_number, closing_at, status from public.tenders
+          where organisation_id = $1 and ((source_id = $2 and source_ref = any ($3)) or reference_number = any ($4))`,
+        [run.organisation_id, sourceId, found.map((t) => t.source_ref), found.flatMap((t) => (t.reference_number ? [t.reference_number] : []))],
+      );
+      const bySourceRef = new Map(existing.filter((e) => e.source_id === sourceId && e.source_ref).map((e) => [e.source_ref!, e]));
+      const byReference = new Map(existing.filter((e) => e.reference_number).map((e) => [e.reference_number!, e]));
       for (const t of found) {
+        const prev = bySourceRef.get(t.source_ref);
+        if (prev) {
+          if (!FROZEN_STATUSES.has(prev.status) && (await refreshTender(c, prev, t, scout.id, taskId))) refreshed++;
+          continue;
+        }
+        if (t.reference_number && byReference.has(t.reference_number)) continue;
         const { rows } = await c.query<{ id: string }>(
           `insert into public.tenders (organisation_id, source_id, source_ref, reference_number, title, issuing_organisation, description,
              province, sector, published_at, closing_at, briefing_at, briefing_compulsory, briefing_location, submission_method,
@@ -146,7 +169,7 @@ export async function runDiscovery(pool: Pool, runId: string, attempts: number, 
           await db.emitEvent(c, {
             organisationId: run.organisation_id,
             type: "TENDER_DISCOVERED",
-            summary: `${scout.display_name} found "${t.title.slice(0, 160)}" (${provinceLabel(t.province)}, closes ${t.closing_at.slice(0, 10)})`,
+            summary: `${scout.display_name} found "${t.title.slice(0, 160)}" (${provinceLabel(t.province)}, closes ${formatSast(t.closing_at)})`,
             agentId: scout.id,
             tenderId: rows[0].id,
             taskId,
@@ -156,8 +179,8 @@ export async function runDiscovery(pool: Pool, runId: string, attempts: number, 
       }
       await c.query(`update public.tasks set status = 'COMPLETED', progress = 100, completed_at = now(), progress_message = $2, output = $3 where id = $1`, [
         taskId,
-        `${found.length} open tenders in scope, ${created} new`,
-        JSON.stringify({ scanned, matched: found.length, created, provinces: run.provinces, source: "etenders" }),
+        `${found.length} open tenders in scope, ${created} new${refreshed ? `, ${refreshed} updated` : ""}`,
+        JSON.stringify({ scanned, matched: found.length, created, refreshed, provinces: run.provinces, source: "etenders" }),
       ]);
       await c.query(`update public.discovery_runs set scanned = $2, matched = $3, created_tenders = $4 where id = $1`, [
         run.id,
@@ -260,4 +283,59 @@ async function failScan(pool: Pool, run: RunRow, scout: { id: string; display_na
     await db.refreshAgent(c, scout.id);
     await db.notifyMembers(c, run.organisation_id, "DISCOVERY_FAILED", "ERROR", "Tender scan failed", message.slice(0, 2000), "/discover");
   });
+}
+
+/** Once a bid is in, the portal row no longer changes what the organisation must do. */
+const FROZEN_STATUSES = new Set(["SUBMITTED", "UNDER_EVALUATION", "AWARDED", "UNSUCCESSFUL", "CANCELLED", "ARCHIVED"]);
+
+/**
+ * Brings a stored tender in line with the portal (closing date extensions,
+ * briefing changes, new documents). A moved closing date also moves a pending
+ * approval's expiry and is reported. Returns true when anything changed.
+ */
+async function refreshTender(
+  c: Parameters<Parameters<typeof withTx>[1]>[0],
+  prev: { id: string; closing_at: string },
+  t: DiscoveredTender,
+  scoutId: string,
+  taskId: string,
+): Promise<boolean> {
+  const { rows } = await c.query<{ organisation_id: string }>(
+    `update public.tenders
+        set description = $2::text, closing_at = $3::timestamptz, briefing_at = $4::timestamptz, briefing_compulsory = $5::boolean,
+            briefing_location = $6::text, submission_method = $7::text::public.submission_method, submission_destination = $8::text,
+            source_url = $9::text, documents = $10::jsonb
+      where id = $1
+        and (description, closing_at, briefing_at, briefing_compulsory, briefing_location, submission_method::text,
+             submission_destination, source_url, documents)
+            is distinct from ($2::text, $3::timestamptz, $4::timestamptz, $5::boolean, $6::text, $7::text, $8::text, $9::text, $10::jsonb)
+      returning organisation_id`,
+    [
+      prev.id,
+      t.description,
+      t.closing_at,
+      t.briefing_at,
+      t.briefing_compulsory,
+      t.briefing_location,
+      t.submission_method,
+      t.submission_destination,
+      t.source_url,
+      JSON.stringify(t.documents),
+    ],
+  );
+  if (!rows[0]) return false;
+  if (new Date(prev.closing_at).getTime() !== new Date(t.closing_at).getTime()) {
+    await c.query(`update public.approvals set expires_at = $2 where tender_id = $1 and status = 'PENDING'`, [prev.id, t.closing_at]);
+    await db.emitEvent(c, {
+      organisationId: rows[0].organisation_id,
+      type: "TENDER_UPDATED",
+      severity: "WARNING",
+      summary: `Closing date changed on eTenders: now ${formatSast(t.closing_at)} (was ${formatSast(prev.closing_at)})`,
+      agentId: scoutId,
+      tenderId: prev.id,
+      taskId,
+      payload: { previous_closing_at: prev.closing_at, closing_at: t.closing_at },
+    });
+  }
+  return true;
 }

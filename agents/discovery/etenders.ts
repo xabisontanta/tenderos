@@ -183,11 +183,18 @@ export type Fetcher = (
   json(): Promise<unknown>;
 }>;
 
+const PAGE_TIMEOUT_MS = 30_000;
+
 /** Reads every currently published tender, page by page. */
 export async function* fetchOpenTenders(fetcher: Fetcher, signal?: AbortSignal): AsyncGenerator<{ rows: EtendersRow[]; total: number }> {
   for (let page = 0; page < MAX_PAGES; page++) {
     const url = `${ETENDERS_BASE}/Home/PaginatedTenderOpportunities?draw=${page + 1}&start=${page * PAGE_SIZE}&length=${PAGE_SIZE}&status=1`;
-    const res = await fetcher(url, { signal, headers: { accept: "application/json", "user-agent": "TenderOS tender discovery" } });
+    // A page that hangs must not hold the worker: give each request 30 seconds.
+    const timeout = AbortSignal.timeout(PAGE_TIMEOUT_MS);
+    const res = await fetcher(url, {
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      headers: { accept: "application/json", "user-agent": "TenderOS tender discovery" },
+    });
     if (!res.ok) throw new Error(`eTenders returned HTTP ${res.status}`);
     const body = pageSchema.parse(await res.json());
     const rows: EtendersRow[] = [];

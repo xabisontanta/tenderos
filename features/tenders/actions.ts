@@ -84,6 +84,16 @@ export async function startWorkflow(tenderId: string, options: { failStep?: stri
   return { ok: true, data: data as string };
 }
 
+/** Prepares a bid again after the approver sent it back or QA failed it, starting with a fresh compliance check. */
+export async function rerunBid(tenderId: string): Promise<ActionResult<string>> {
+  if (!uuid.safeParse(tenderId).success) return { ok: false, error: "Invalid tender" };
+  const supabase = await getServerSupabase();
+  const { data, error } = await supabase.rpc("rerun_bid", { p_tender_id: tenderId });
+  if (error) return { ok: false, error: toUserError(error, "Could not restart the bid") };
+  revalidatePath(`/tenders/${tenderId}`);
+  return { ok: true, data: data as string };
+}
+
 export async function cancelWorkflow(runId: string, reason: string): Promise<ActionResult> {
   if (!uuid.safeParse(runId).success) return { ok: false, error: "Invalid workflow" };
   const r = z.string().trim().min(3, "Give a reason").max(500).safeParse(reason);

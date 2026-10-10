@@ -159,7 +159,12 @@ export class Worker {
     const log = this.opts.logger.child({ job_id: job.id, kind: job.kind });
     let outcome: JobOutcome;
     try {
-      outcome = await this.engine.handle(job);
+      // A job claimed more often than allowed kept crashing its worker (the
+      // lock expired each time), so it never reported a failure. Give up on it.
+      outcome =
+        job.attempts > job.max_attempts
+          ? { status: "dead", error: `Gave up after ${job.max_attempts} attempts that never finished` }
+          : await this.engine.handle(job);
     } catch (err) {
       const message = (err as Error).message;
       log.error("job crashed", { error: message, attempts: job.attempts });
@@ -168,7 +173,7 @@ export class Worker {
           ? { status: "dead", error: message }
           : { status: "retry", runAt: new Date(Date.now() + backoffMs(job.attempts)), error: message };
     }
-    if (outcome.status === "dead" && job.kind === "task.run") {
+    if (outcome.status === "dead") {
       await this.engine.onJobDead(job, outcome.error).catch((err) => log.error("dead-letter handling failed", { error: (err as Error).message }));
     }
     await this.finish(job, outcome);

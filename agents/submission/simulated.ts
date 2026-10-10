@@ -1,6 +1,7 @@
 import type { AgentExecutor } from "@/agents/runtime/types";
 import { NonRetryableError } from "@/agents/runtime/types";
 import { SIMULATED_COST, simulateWork } from "@/agents/runtime/simulation";
+import { formatSast } from "@/lib/format";
 import { bidPackAttachments, packageHash } from "./logic";
 import { submissionOutputSchema, type SubmissionOutput } from "./schema";
 
@@ -34,10 +35,12 @@ export const submissionExecute: AgentExecutor<SubmissionOutput> = {
         : "";
       const where =
         t.submission_method === "ELECTRONIC_PORTAL"
-          ? "upload it on eTenders (eSubmission)"
-          : t.submission_destination
-            ? `deliver it to ${t.submission_destination}`
-            : "deliver it as the tender documents instruct";
+          ? "upload it on the tender portal"
+          : t.submission_method === "EMAIL" && t.submission_destination
+            ? `email it to ${t.submission_destination} (you can send it from the tender page)`
+            : t.submission_destination
+              ? `deliver it to ${t.submission_destination}`
+              : "deliver it as the tender documents instruct";
       return {
         output: {
           status: "ACTION_REQUIRED",
@@ -46,13 +49,18 @@ export const submissionExecute: AgentExecutor<SubmissionOutput> = {
           destination: t.submission_destination,
           verified: { approval: true, deadline: true, reference: Boolean(t.reference_number) },
           simulated: false,
-          receipt_note: `Bid pack approved. Sign the declarations, ${where} before ${t.closing_at}, then record the receipt.${docs}`,
+          receipt_note: `Bid pack approved. Sign the declarations, ${where} before ${formatSast(t.closing_at)}, then record the delivery.${docs}`,
           attachments,
         },
         summary: "Approved bid pack ready for delivery",
         events: [
           { type: "SUBMISSION_STARTED", summary: "Submission checks passed" },
-          { type: "SUBMISSION_FAILED", severity: "WARNING", summary: "Bid pack ready: a person must sign and deliver it", payload: { action_required: true } },
+          {
+            type: "SUBMISSION_ACTION_REQUIRED",
+            severity: "WARNING",
+            summary: "Bid pack ready: a person must sign and deliver it",
+            payload: { action_required: true },
+          },
         ],
         cost: SIMULATED_COST,
       };
@@ -76,7 +84,12 @@ export const submissionExecute: AgentExecutor<SubmissionOutput> = {
       events: [
         { type: "SUBMISSION_STARTED", summary: "Submission checks passed" },
         physical
-          ? { type: "SUBMISSION_FAILED", severity: "WARNING", summary: "Physical submission needs a person to deliver it", payload: { action_required: true } }
+          ? {
+              type: "SUBMISSION_ACTION_REQUIRED",
+              severity: "WARNING",
+              summary: "Physical submission needs a person to deliver it",
+              payload: { action_required: true },
+            }
           : { type: "SUBMISSION_COMPLETED", summary: "Simulated submission completed", payload: { simulated: true, package_hash: hash } },
       ],
       cost: SIMULATED_COST,

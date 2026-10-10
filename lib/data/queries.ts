@@ -2,6 +2,7 @@ import "server-only";
 
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
+import type { TenderStatus } from "@/lib/domain/tender-state";
 
 type T = Database["public"]["Tables"];
 export type AgentRow = T["agents"]["Row"];
@@ -118,11 +119,9 @@ export async function getDashboardData(orgId: string) {
   const monthStart = new Date(Date.UTC(saNow.getUTCFullYear(), saNow.getUTCMonth(), 1) - SA_OFFSET);
   const in14 = new Date(now.getTime() + 14 * 86_400_000).toISOString();
 
-  const [tenders, agents, costToday, costMonth, upcoming, runs] = await Promise.all([
-    supabase.from("tenders").select("status").eq("organisation_id", orgId),
+  const [counts, agents, upcoming, runs] = await Promise.all([
+    supabase.rpc("dashboard_counts", { p_org: orgId, p_day_start: dayStart.toISOString(), p_month_start: monthStart.toISOString() }),
     supabase.from("agents").select("status").eq("organisation_id", orgId),
-    supabase.from("cost_usage").select("cost_usd").eq("organisation_id", orgId).gte("created_at", dayStart.toISOString()),
-    supabase.from("cost_usage").select("cost_usd").eq("organisation_id", orgId).gte("created_at", monthStart.toISOString()),
     supabase
       .from("tenders")
       .select(TENDER_SUMMARY_COLS)
@@ -141,14 +140,16 @@ export async function getDashboardData(orgId: string) {
       .limit(8),
   ]);
 
+  if (counts.error) throw new Error(counts.error.message);
+  const totals = counts.data as { tenders: Record<string, number>; cost_today: number; cost_month: number };
+  const byStatus = totals.tenders ?? {};
+  const tally = (statuses: TenderStatus[]) => statuses.reduce((n, s) => n + Number(byStatus[s] ?? 0), 0);
   const count = <S extends string>(rows: { status: S }[] | null, statuses: S[]) => (rows ?? []).filter((r) => statuses.includes(r.status)).length;
-  const t = tenders.data ?? [];
   const a = agents.data ?? [];
-  const sum = (rows: { cost_usd: number }[] | null) => (rows ?? []).reduce((s, r) => s + Number(r.cost_usd), 0);
 
   return {
     tenders: {
-      active: count(t, [
+      active: tally([
         "INGESTING",
         "ANALYSING",
         "QUALIFYING",
@@ -164,8 +165,8 @@ export async function getDashboardData(orgId: string) {
         "SUBMITTING",
         "SUBMISSION_FAILED",
       ]),
-      new: count(t, ["DISCOVERED"]),
-      qualified: count(t, [
+      new: tally(["DISCOVERED"]),
+      qualified: tally([
         "QUALIFIED",
         "COMPLIANCE_REVIEW",
         "MISSING_INFORMATION",
@@ -177,12 +178,12 @@ export async function getDashboardData(orgId: string) {
         "APPROVED",
         "SUBMITTING",
       ]),
-      preparing: count(t, ["COMPLIANCE_REVIEW", "MISSING_INFORMATION", "PREPARING_BID", "PRICING", "QUALITY_ASSURANCE", "QA_FAILED"]),
-      awaitingApproval: count(t, ["READY_FOR_APPROVAL"]),
-      submitted: count(t, ["SUBMITTED", "UNDER_EVALUATION", "CLARIFICATION"]),
-      won: count(t, ["AWARDED"]),
-      lost: count(t, ["UNSUCCESSFUL"]),
-      total: t.length,
+      preparing: tally(["COMPLIANCE_REVIEW", "MISSING_INFORMATION", "PREPARING_BID", "PRICING", "QUALITY_ASSURANCE", "QA_FAILED"]),
+      awaitingApproval: tally(["READY_FOR_APPROVAL"]),
+      submitted: tally(["SUBMITTED", "UNDER_EVALUATION", "CLARIFICATION"]),
+      won: tally(["AWARDED"]),
+      lost: tally(["UNSUCCESSFUL"]),
+      total: Object.values(byStatus).reduce((n, v) => n + Number(v), 0),
     },
     agents: {
       active: count(a, ["RUNNING", "QUEUED", "WAITING", "NEEDS_APPROVAL"]),
@@ -191,7 +192,7 @@ export async function getDashboardData(orgId: string) {
       blocked: count(a, ["BLOCKED", "PAUSED", "DISABLED"]),
       total: a.length,
     },
-    spend: { today: sum(costToday.data), month: sum(costMonth.data) },
+    spend: { today: Number(totals.cost_today ?? 0), month: Number(totals.cost_month ?? 0) },
     upcoming: (upcoming.data ?? []) as TenderSummary[],
     runs: runs.data ?? [],
     dayStart: dayStart.toISOString(),

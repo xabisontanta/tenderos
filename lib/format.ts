@@ -10,6 +10,19 @@ export function formatDate(iso: string | null | undefined): string {
   return new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeZone: TZ }).format(new Date(iso));
 }
 
+/** A closing date as South Africans read it, e.g. "10 Oct 2026, 11:00 SAST". Used in agent output text. */
+export function formatSast(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${new Intl.DateTimeFormat("en-ZA", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: TZ }).format(d)} SAST`;
+}
+
+/** The last instant a document dated YYYY-MM-DD is valid: the end of that day in South Africa (UTC+2, no DST). */
+export function endOfDaySast(date: string): number {
+  return Date.parse(`${date.slice(0, 10)}T23:59:59.999+02:00`);
+}
+
 export function formatTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   return new Intl.DateTimeFormat("en-ZA", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: TZ }).format(new Date(iso));

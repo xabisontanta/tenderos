@@ -61,8 +61,12 @@ only facts present in the portal row, deduplicates on the portal id, and, when
 `max_auto_workflows_per_scan` tenders that still leave 48 hours to bid.
 
 `tender_bid` uses the same plan as `simulated_bid` on real tenders. Compliance
-gaps block it at `MISSING_INFORMATION`; saving the company profile re-queues
-blocked compliance tasks. After approval the Submission Officer hands over a
+gaps block it at `MISSING_INFORMATION`; saving the company profile or adding a
+verified document re-queues blocked compliance tasks. A bid the approver sent
+back (`PREPARING_BID`) or QA failed (`QA_FAILED`) can be prepared again with
+`rerun_bid`: a new run that starts at compliance and reuses the earlier run's
+analysis and qualification (`options.resume_from`). Real runs are not paced
+and their rule-based steps are recorded as $0 `rules` cost, not simulation. After approval the Submission Officer hands over a
 verified pack and delivery instructions. TenderOS never submits a bid itself.
 
 ## 3. Responsibility boundaries
@@ -97,7 +101,9 @@ verified pack and delivery instructions. TenderOS never submits a bid itself.
   60-second download link on click through `document_download`, which audits
   the access. Never embed signed URLs in rendered pages.
 - Compliance treats a document as evidence only when it is verified and in
-  date at closing, and records its `document_id`. The Submission Officer's
+  date at closing (a document dated D is valid to the end of D in South
+  Africa), and records its `document_id`. Company profile entries are never
+  evidence on their own; they leave the item `REQUIRES_CONFIRMATION`. The Submission Officer's
   bid pack lists those documents as `attachments`. Verifying or adding a
   verified document re-queues blocked compliance tasks.
 - Browser users read through RLS (`private.is_org_member`) and write only

@@ -57,11 +57,15 @@ Choose provinces on **Discover**. The Tender Scout reads every published
 tender on National Treasury eTenders, keeps the ones in those provinces and
 hands each to the Tender Director, who runs analysis, qualification,
 compliance, proposal, pricing and QA without anyone pressing a button. Scans
-repeat every morning. Fill in **Company** (CIPC, CSD, tax PIN, B-BBEE,
-signatory) so compliance can pass; tenders stopped at compliance resume when
-you save it. You approve each finished bid, then sign and deliver it: the
-portal does not accept automated submissions and the declarations are yours
-to sign.
+repeat every morning, and tenders already on file are updated when eTenders
+changes them (a moved closing date is flagged). Fill in **Company** and upload
+your CIPC, CSD, tax compliance and signed SBD documents on **Documents**:
+compliance only passes on uploaded, verified, in-date documents, never on
+typed-in numbers alone. Tenders stopped at compliance resume when you add or
+verify a document. You approve each finished bid, then sign and deliver it:
+the portal does not accept automated submissions and the declarations are
+yours to sign. If you send a bid back, or QA fails it, **Prepare bid again**
+re-checks compliance and runs proposal, pricing and QA once more.
 
 ## Company documents
 
