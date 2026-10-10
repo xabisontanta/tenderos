@@ -22,7 +22,14 @@ export function AuthForm({ mode, next }: { mode: "login" | "signup"; next?: stri
         <Input id="email" name="email" type="email" autoComplete="email" required />
       </div>
       <div className="grid gap-1.5">
-        <Label htmlFor="password">Password</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="password">Password</Label>
+          {mode === "login" && (
+            <Link className="text-[11px] text-primary hover:underline" href="/forgot-password">
+              Forgot password?
+            </Link>
+          )}
+        </div>
         <Input id="password" name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required />
         {mode === "signup" && <p className="text-[11px] text-muted-foreground">At least 12 characters, with a letter and a number.</p>}
       </div>

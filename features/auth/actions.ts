@@ -59,8 +59,39 @@ export async function signUp(_: FormState, formData: FormData): Promise<FormStat
     options: { data: { full_name: parsed.data.fullName }, emailRedirectTo: `${origin}/auth/callback` },
   });
   if (error) return { error: error.status === 429 ? "Too many attempts. Wait a moment and try again." : "Could not create the account" };
-  if (!data.session) return { message: "Check your email to confirm your account, then sign in." };
+  // Supabase sends nothing when the email is already registered and still
+  // reports success, so the message covers both cases without revealing which.
+  if (!data.session)
+    return {
+      message: "Check your email to confirm your account. No email? This address may already have an account: sign in or reset your password.",
+    };
   redirect("/onboarding");
+}
+
+const emailSchema = z.object({ email: z.string().trim().toLowerCase().email("Enter a valid email address").max(254) });
+
+export async function requestPasswordReset(_: FormState, formData: FormData): Promise<FormState> {
+  const parsed = emailSchema.safeParse({ email: formData.get("email") });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const supabase = await getServerSupabase();
+  const origin = (await headers()).get("origin") ?? process.env.APP_URL ?? "";
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+    redirectTo: `${origin}/auth/callback?next=/reset-password`,
+  });
+  if (error?.status === 429) return { error: "Too many attempts. Wait a moment and try again." };
+  // Same answer whether or not the account exists.
+  return { message: "If an account exists for that email, a reset link is on its way." };
+}
+
+const newPasswordSchema = z.object({ password: signUpSchema.shape.password });
+
+export async function updatePassword(_: FormState, formData: FormData): Promise<FormState> {
+  const parsed = newPasswordSchema.safeParse({ password: formData.get("password") });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const supabase = await getServerSupabase();
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  if (error) return { error: "Could not update the password. Open the reset link again." };
+  redirect("/");
 }
 
 const orgSchema = z.object({ name: z.string().trim().min(2, "Enter your company name").max(120) });
