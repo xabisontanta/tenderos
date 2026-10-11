@@ -1,5 +1,14 @@
 import type { DataCategory } from "@/agents/registry";
+import { RESTRICTED_DOCUMENT_CATEGORIES } from "@/lib/domain/documents";
 import { PermissionDeniedError, type AgentExecutor } from "./types";
+
+/**
+ * Categories that may never appear in a model prompt, whatever an agent is
+ * granted: director personal data, bank details and proof of address. They
+ * are the same categories only owners and admins may open in the vault, so
+ * adding a restricted document category blocks it from prompts too.
+ */
+export const PROMPT_PROHIBITED_CATEGORIES: readonly DataCategory[] = RESTRICTED_DOCUMENT_CATEGORIES;
 
 /**
  * Least-privilege gate: an executor runs only if the agent holds every data
