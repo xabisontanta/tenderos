@@ -176,7 +176,14 @@ export class Worker {
     if (outcome.status === "dead") {
       await this.engine.onJobDead(job, outcome.error).catch((err) => log.error("dead-letter handling failed", { error: (err as Error).message }));
     }
-    await this.finish(job, outcome);
+    try {
+      await this.finish(job, outcome);
+    } catch (err) {
+      // A database blip here must not take the worker down. The job stays
+      // locked and is reclaimed when its lock expires, like a crashed worker's.
+      log.error("could not record job outcome", { error: (err as Error).message, outcome: outcome.status });
+      return;
+    }
     this.processed++;
     log.debug("job finished", { outcome: outcome.status });
   }

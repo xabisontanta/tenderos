@@ -40,6 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# agent worktrees (isolated working copies used during parallel builds)
+/.claude/worktrees/
+
 # local supabase
 supabase/.branches
 supabase/.temp
