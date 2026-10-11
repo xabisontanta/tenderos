@@ -68,4 +68,10 @@ describe("requireContext", () => {
     h.tables.organisation_members = { data: null, error: null };
     await expect(requireContext()).rejects.toThrow("NEXT_REDIRECT:/onboarding");
   });
+
+  it("reports a membership lookup that failed instead of treating it as having no organisation", async () => {
+    // Sending a member of an organisation to onboarding on an error would invite a second organisation.
+    h.tables.organisation_members = { data: null, error: { code: "PGRST116", message: "multiple rows" } };
+    await expect(requireContext()).rejects.toThrow(/organisation/i);
+  });
 });

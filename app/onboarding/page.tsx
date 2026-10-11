@@ -14,7 +14,9 @@ export default async function OnboardingPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   if ((await pendingLegalAcceptances(supabase)).length > 0) redirect("/legal/accept?next=/onboarding");
-  const { data: membership } = await supabase.from("organisation_members").select("organisation_id").eq("user_id", user.id).limit(1).maybeSingle();
+  const { data: membership, error } = await supabase.from("organisation_members").select("organisation_id").eq("user_id", user.id).maybeSingle();
+  // Not "no organisation": a failed lookup must not offer to create another.
+  if (error) throw new Error("Could not load your organisation");
   if (membership) redirect("/");
 
   return (

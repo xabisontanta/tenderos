@@ -109,6 +109,22 @@ warning that never blocks the account.
 - Consent records are deleted with the account (`on delete cascade`). Whether
   proof of consent must outlive the account is an open point for the attorney.
 
+### One organisation per user
+
+A person belongs to at most one organisation (product decision; consultants
+serving several clients are not supported yet). A unique index on
+`organisation_members(user_id)` enforces it, whichever code path adds a
+membership. `bootstrap_organisation` still takes a per-user advisory lock, so
+simultaneous sign-ups queue instead of failing noisily; a lost race rolls the
+whole call back (no stray organisation or agents) and returns the same
+"User already belongs to an organisation" error. `requireContext` reads the single
+membership and reports a failed lookup as an error instead of sending the person
+to onboarding to create another organisation.
+
+The migration (019) refuses to run while any user has several memberships; it does not
+pick one. If that ever fires on a real database, decide with the customer which
+organisation each listed user stays in, remove the other memberships, and run it again.
+
 ### Abuse controls: rate limits and CAPTCHA
 
 Sign-in, sign-up, password reset and resending a confirmation email are

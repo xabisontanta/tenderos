@@ -31,12 +31,15 @@ export const requireContext = cache(async (): Promise<AppContext> => {
   // Terms or privacy notice published since this user last accepted, or never accepted.
   if ((await pendingLegalAcceptances(supabase)).length > 0) redirect("/legal/accept");
 
-  const { data: membership } = await supabase
+  // A user belongs to at most one organisation (unique index organisation_members_user_uq),
+  // so this is not "the first of several". A failed lookup must not look like "no organisation":
+  // that would send a member of one to create another.
+  const { data: membership, error: membershipError } = await supabase
     .from("organisation_members")
     .select("role, organisations(id, name, slug)")
     .eq("user_id", user.id)
-    .limit(1)
     .maybeSingle();
+  if (membershipError) throw new Error("Could not load your organisation");
   if (!membership?.organisations) redirect("/onboarding");
 
   const org = membership.organisations as unknown as AppContext["organisation"];
