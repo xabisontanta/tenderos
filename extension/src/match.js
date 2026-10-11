@@ -105,6 +105,8 @@ export const REASON_TEXT = /** @type {Record<string, string>} */ ({
   date_format: "Date format unclear. Enter the date yourself.",
   not_mobile: "Your TenderOS number is not a cellphone number. Fill it in yourself.",
   download_failed: "Could not download the document from TenderOS. Attach it yourself.",
+  doc_revoked: "This document is no longer available in TenderOS (it was removed, expired or is not verified). Attach it yourself.",
+  rate_limited: "TenderOS asked the helper to slow down. Wait a minute, then press Fill this page again.",
   too_large: "Too large to attach automatically. Attach it yourself.",
   changed: "The page changed before the helper could fill this.",
 });
