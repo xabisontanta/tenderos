@@ -154,5 +154,6 @@ only. Never commit real values.
 - `docs/database.md`: schema, state machine, queue, RLS
 - `docs/security.md`: security architecture
 - `docs/roadmap.md`: phases and the milestone 1 definition
+- `docs/production-readiness.md`: audit findings, launch blockers and the phased plan to production
 - `docs/local-development.md`: local setup, deployment, troubleshooting
 - `docs/adr/`: architecture decisions
