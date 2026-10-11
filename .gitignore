@@ -47,3 +47,6 @@ supabase/.temp
 /test-results/
 /playwright-report/
 !.env.example
+
+# built browser helper (npm run build:extension)
+/extension/dist/
