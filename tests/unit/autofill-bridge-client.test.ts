@@ -10,11 +10,11 @@ type Listener = (event: { source: unknown; origin: string; data: unknown }) => v
 
 function fakeWindow() {
   const listeners = new Set<Listener>();
-  const sent: Array<{ message: Record<string, any>; target: string }> = [];
+  const sent: Array<{ message: Record<string, unknown>; target: string }> = [];
   const win = {
     addEventListener: (_t: "message", fn: Listener) => listeners.add(fn),
     removeEventListener: (_t: "message", fn: Listener) => listeners.delete(fn),
-    postMessage: (message: Record<string, any>, target: string) => sent.push({ message, target }),
+    postMessage: (message: unknown, target: string) => sent.push({ message: message as Record<string, unknown>, target }),
   };
   const deliver = (data: unknown, over: Partial<{ source: unknown; origin: string }> = {}) => {
     for (const l of [...listeners]) l({ source: win, origin: ORIGIN, data, ...over });
