@@ -4,6 +4,7 @@ import type { Logger } from "@/lib/log";
 import { getExecutor } from "@/agents";
 import { getAgentDefinition } from "@/agents/registry";
 import { authoriseExecutor } from "@/agents/runtime/permissions";
+import { createToolGate } from "@/agents/runtime/tool-access";
 import { NonRetryableError, type AgentContext, type AgentResult, type SimulationOptions } from "@/agents/runtime/types";
 import { backoffMs, shouldRetry } from "./retry";
 import { WORKFLOWS, getStep, type StepResolution, type WorkflowDefinition } from "./definitions/simulated-bid";
@@ -252,7 +253,7 @@ export class WorkflowEngine {
           agent: db.AgentRow;
           step: PlanStep;
           def: WorkflowDefinition;
-          ctxData: Omit<AgentContext, "progress" | "signal">;
+          ctxData: Omit<AgentContext, "progress" | "signal" | "tools">;
         };
 
     const prepared = await withTx<Prepared>(this.pool, async (c) => {
@@ -386,6 +387,26 @@ export class WorkflowEngine {
     const ctx: AgentContext = {
       ...ctxData,
       signal: controller.signal,
+      // AGENTS.md section 5: a tool that is not on the agent's stored allow-list is refused and logged as a WARNING.
+      tools: createToolGate({
+        agent: agent.slug,
+        allowedTools: agent.allowed_tools,
+        onRefused: async (r) => {
+          log.warn("tool refused", { tool: r.tool, reason: r.reason });
+          await this.emitOutsideTx({
+            organisationId: task.organisation_id,
+            type: "TOOL_REFUSED",
+            severity: "WARNING",
+            summary: `${agent.display_name} was refused tool "${r.tool}"${r.reason === "NOT_ON_ALLOWED_LIST" ? ": not on its allowed tools" : ": switched off for this organisation"}`,
+            agentId: agent.id,
+            tenderId: run.tender_id,
+            taskId: task.id,
+            runId: run.id,
+            correlationId: run.correlation_id,
+            payload: { tool: r.tool, reason: r.reason },
+          });
+        },
+      }),
       progress: async (percent, message) => {
         const t = Date.now();
         if (t - lastProgressAt < (this.opts.progressThrottleMs ?? 250) && percent < 100) return;
@@ -468,6 +489,16 @@ export class WorkflowEngine {
     );
     log.info("task completed");
     return { status: "completed" };
+  }
+
+  /** Writes an event in its own transaction, for things that must be recorded even though the task then fails. */
+  private async emitOutsideTx(e: db.EventInput): Promise<void> {
+    const c = await this.pool.connect();
+    try {
+      await db.emitEvent(c, e);
+    } finally {
+      c.release();
+    }
   }
 
   private async applyResolution(
