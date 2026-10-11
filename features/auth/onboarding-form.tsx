@@ -1,24 +1,27 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { createOrganisation, type FormState } from "./actions";
+import { createOrganisation } from "./actions";
+import type { FormState } from "./form-state";
+import { Feedback, TextField, useFocusFirstError } from "./form-parts";
 
 export function OnboardingForm() {
   const [state, action, pending] = useActionState<FormState, FormData>(createOrganisation, {});
+  const form = useRef<HTMLFormElement>(null);
+  useFocusFirstError(form, state);
   return (
-    <form action={action} className="grid gap-4">
-      <div className="grid gap-1.5">
-        <Label htmlFor="name">Company name</Label>
-        <Input id="name" name="name" required minLength={2} maxLength={120} autoComplete="organization" />
-      </div>
-      {state.error && (
-        <p role="alert" className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-          {state.error}
-        </p>
-      )}
+    <form ref={form} action={action} className="grid gap-4" noValidate>
+      <TextField
+        id="name"
+        label="Company name"
+        required
+        maxLength={120}
+        autoComplete="organization"
+        defaultValue={state.values?.name}
+        error={state.fieldErrors?.name}
+      />
+      <Feedback state={state} />
       <Button type="submit" disabled={pending}>
         {pending ? "Setting up…" : "Create organisation"}
       </Button>

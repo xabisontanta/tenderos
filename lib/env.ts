@@ -49,6 +49,57 @@ export function appUrl(env: Env = process.env): string {
   return url.origin;
 }
 
+export type CaptchaMode = "off" | "app" | "supabase";
+
+export interface AuthEnv {
+  /** Key for the HMACs that stand in for IP addresses and emails in rate-limit keys. */
+  rateLimitSecret: string;
+  /** Lower-case name of the request header the platform sets to the client address, or null. */
+  trustedIpHeader: string | null;
+  captchaMode: CaptchaMode;
+  turnstileSiteKey: string | null;
+  turnstileSecretKey: string | null;
+}
+
+// Used only outside production so local runs need no setup. It protects nothing.
+const DEV_RATE_LIMIT_SECRET = "tenderos-dev-only-auth-rate-limit-secret";
+
+const blank = (v: string | undefined) => (v === undefined || v.trim() === "" ? undefined : v.trim());
+
+/**
+ * Abuse-control settings for sign-in, sign-up and password reset. Placeholders
+ * left blank in .env files count as unset. In production the HMAC secret and
+ * the trusted IP header are required, so a missing value fails loudly at the
+ * first auth request instead of silently running without per-address limits.
+ */
+export function authEnv(env: Env = process.env): AuthEnv {
+  const production = env.NODE_ENV === "production";
+
+  const secret = blank(env.AUTH_RATE_LIMIT_SECRET);
+  if (secret && secret.length < 32) throw new Error("AUTH_RATE_LIMIT_SECRET must be at least 32 characters (generate one with: openssl rand -hex 32)");
+  if (!secret && production) throw new Error("AUTH_RATE_LIMIT_SECRET is required in production (openssl rand -hex 32)");
+
+  const header = blank(env.TRUSTED_IP_HEADER)?.toLowerCase();
+  if (header && !/^[a-z0-9-]{1,60}$/.test(header)) throw new Error("TRUSTED_IP_HEADER must be a header name such as x-vercel-forwarded-for");
+  if (!header && production)
+    throw new Error("TRUSTED_IP_HEADER is required in production (x-vercel-forwarded-for on Vercel, cf-connecting-ip behind Cloudflare)");
+
+  const mode = blank(env.CAPTCHA_MODE) ?? "off";
+  if (mode !== "off" && mode !== "app" && mode !== "supabase") throw new Error("CAPTCHA_MODE must be off, app or supabase");
+  const siteKey = blank(env.TURNSTILE_SITE_KEY);
+  const secretKey = blank(env.TURNSTILE_SECRET_KEY);
+  if (mode !== "off" && !siteKey) throw new Error(`CAPTCHA_MODE=${mode} needs TURNSTILE_SITE_KEY`);
+  if (mode === "app" && !secretKey) throw new Error("CAPTCHA_MODE=app needs TURNSTILE_SECRET_KEY");
+
+  return {
+    rateLimitSecret: secret ?? DEV_RATE_LIMIT_SECRET,
+    trustedIpHeader: header ?? null,
+    captchaMode: mode,
+    turnstileSiteKey: siteKey ?? null,
+    turnstileSecretKey: secretKey ?? null,
+  };
+}
+
 const serverSchema = publicSchema.extend({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
 });
