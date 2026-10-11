@@ -1,4 +1,5 @@
 types/database.ts
+.claude/worktrees
 supabase/.temp
 .next
 playwright-report
