@@ -16,6 +16,7 @@
     "test:e2e": "playwright test",
     "worker": "tsx scripts/worker.ts",
     "build:edge-worker": "node scripts/build-edge-worker.mjs",
+    "build:email-assets": "tsx scripts/build-email-assets.ts",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
