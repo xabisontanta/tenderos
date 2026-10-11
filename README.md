@@ -28,7 +28,8 @@ npm run dev           # http://localhost:3000
 npm run worker        # in a second terminal: runs agent work
 ```
 
-Sign up, name your organisation, create a tender with "Simulation" ticked,
+Sign up, confirm your email (the message lands in the local mail catcher; see
+`docs/local-development.md`), name your organisation, create a tender with "Simulation" ticked,
 and press **Start simulated workflow**. Watch it in Office and Operations, then
 approve it on the Approvals page.
 

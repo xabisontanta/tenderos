@@ -161,8 +161,11 @@ enabled = true
 site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
-# A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# URLs Auth may redirect to after an emailed link (sign-up confirmation, password reset). The app
+# sends links built from APP_URL, so list every origin the app runs on locally: the dev server
+# (3000) and the end-to-end server (3100), under both 127.0.0.1 and localhost. Hosted projects
+# list the production origin in the dashboard instead (docs/auth.md).
+additional_redirect_urls = ["http://127.0.0.1:3000/**", "http://localhost:3000/**", "http://127.0.0.1:3100/**", "http://localhost:3100/**"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -197,8 +200,11 @@ password_requirements = "letters_digits"
 # rp_origins = ["http://127.0.0.1:3000"]
 
 [auth.rate_limit]
-# Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
-email_sent = 2
+# Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled, so it only
+# takes effect once a real SMTP server is set up below (the local mail catcher is not limited).
+# Sign-up confirmations, password resets and resends all count; the app's own per-address and
+# per-email limits (docs/auth.md) sit in front of this. Raise it with your provider's plan.
+email_sent = 100
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.
@@ -224,28 +230,33 @@ enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
-# If enabled, users need to confirm their email address before signing in.
-# Off locally so the end-to-end test can sign up without a mailbox. Hosted
-# projects must turn it on (Authentication > Sign In / Providers > Email).
-enable_confirmations = false
+# If enabled, users need to confirm their email address before signing in. On everywhere: a
+# registered address then looks the same as a new one at sign-up, and an address nobody has proved
+# they own cannot hold an account. The local mail catcher (Mailpit, [local_smtp]) receives the
+# message; the end-to-end test reads it through tests/e2e/helpers/mailbox.ts. Hosted projects set
+# the same in Authentication > Sign In / Providers > Email.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = true
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
-max_frequency = "1s"
+max_frequency = "60s"
 # Number of characters used in the email OTP.
 otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Use a production-ready SMTP server
+# Use a production-ready SMTP server. The built-in hosted mailer is capped at a few emails an hour
+# and is for trying things out only. Fill in SMTP_* and MAIL_FROM (.env.example) and uncomment to
+# send real mail from a local stack; for a hosted project enter the same values under
+# Authentication > Emails > SMTP Settings, or push this file with `supabase config push`.
 # [auth.email.smtp]
 # enabled = true
-# host = "smtp.sendgrid.net"
+# host = "env(SMTP_HOST)"
 # port = 587
-# user = "apikey"
-# pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
+# user = "env(SMTP_USER)"
+# pass = "env(SMTP_PASS)"
+# admin_email = "env(MAIL_FROM)"
+# sender_name = "TenderOS"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

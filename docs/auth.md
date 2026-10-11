@@ -31,6 +31,57 @@ another site.
   because behind a proxy the request URL can carry an internal origin and the
   browser would land on a host that does not hold its cookies.
 
+### Sign-up and email confirmation
+
+Email confirmation is on (`enable_confirmations = true` in `supabase/config.toml`;
+hosted projects set it in the dashboard). Nobody can sign in with an address
+they have not proved they own, and an address that is already registered looks
+exactly like a new one:
+
+- `signUp` (`features/auth/actions.ts`) returns one answer, "Check your email
+  to confirm your account. If you already have an account, sign in or reset your
+  password instead.", for a new address, for an address that already has an
+  account (Supabase returns an obfuscated user, or `user_already_exists`), and
+  for an address that was emailed in the last 60 seconds
+  (`over_email_send_rate_limit`). A unit test checks the returned states are equal.
+- `resendConfirmation` sends the confirmation again, limited per address and per
+  email (`auth.resend`), behind the CAPTCHA when one is on. It answers the same
+  whatever Supabase says. The sign-up and sign-in forms offer it.
+- Signing in with an unconfirmed address says so and offers the resend.
+  Supabase reports this only after the password was right, so it tells a stranger nothing.
+- Auth sends at most one confirmation per address every 60 seconds
+  (`max_frequency`).
+- A session comes back from `signUp` only when the server confirmed the address
+  itself (a local stack started without confirmations); the action then goes
+  straight to onboarding.
+
+#### The two link flavours
+
+| Route            | Link                                                                                       | Works in another browser?                                     |
+| ---------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `/auth/callback` | Supabase's own verify link, which comes back with a PKCE `code` (`{{ .ConfirmationURL }}`) | **No**: the verifier is stored only in the browser that asked |
+| `/auth/confirm`  | A link to the app carrying `token_hash` and `type`, verified with `verifyOtp`              | Yes                                                           |
+
+People open confirmation emails on their phone as often as not, so the email
+templates must use the `token_hash` form. Template contract (for whoever builds
+`supabase/templates`):
+
+- Confirm signup: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/onboarding`
+- Reset password: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password`
+- `type` must be one of `email`, `signup`, `recovery`, `email_change`; `next` is
+  optional, same-site paths only (anything else becomes `/`). Hash up to 512 characters.
+- `{{ .SiteURL }}` must equal `APP_URL` (set Site URL accordingly).
+
+An invalid, expired or already used link sends the visitor to
+`/login?error=link_invalid`, which explains what to do. Until the templates are
+switched, the default `{{ .ConfirmationURL }}` links keep working through
+`/auth/callback`, in the browser that signed up.
+
+Known limitation: a mail scanner that opens links before the person does (some
+corporate gateways) uses up a one-time link. The person then sees the "expired"
+message and can ask for a new one. If this shows up in support, put a confirm
+button between the link and `verifyOtp` (a page that POSTs the same fields).
+
 ### Abuse controls: rate limits and CAPTCHA
 
 Sign-in, sign-up, password reset and resending a confirmation email are
@@ -114,8 +165,17 @@ Local settings live in `supabase/config.toml`; a hosted project does not read
 that file, so each item below is set in the dashboard (or pushed with
 `supabase config push`).
 
+- [ ] Authentication > Sign In / Providers > Email: **Confirm email** on;
+      minimum password length 12, letters and digits required (the app checks the same).
 - [ ] Authentication > URL Configuration: Site URL is `APP_URL`; redirect URLs
-      include `<APP_URL>/auth/callback`.
+      include `<APP_URL>/auth/callback` and `<APP_URL>/auth/confirm`.
+- [ ] Authentication > Emails > SMTP Settings: a real SMTP server (provider,
+      verified sending domain with SPF, DKIM and DMARC; `MAIL_FROM` as sender).
+      The built-in hosted mailer allows only a few emails an hour and is not for customers.
+- [ ] Authentication > Rate Limits: emails sent per hour is above your
+      expected sign-ups plus resets (the config.toml value is 100).
+- [ ] Authentication > Emails > Templates: the confirm-signup and reset
+      templates link to `/auth/confirm` with `token_hash` (see above).
 - [ ] Authentication > Attack Protection: CAPTCHA protection on with Cloudflare
       Turnstile (needed for `CAPTCHA_MODE=supabase`; recommended either way, since
       it also covers direct calls to the Auth API).
@@ -129,9 +189,11 @@ that file, so each item below is set in the dashboard (or pushed with
 Checked on 2026-10-11 by reading the vendors' documentation (not by running a
 hosted project).
 
-| Assumption                                                               | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Source                                                                                     |
-| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Vercel overwrites `X-Forwarded-For` so a client cannot forge its address | **Verified.** Vercel documents that it overwrites `X-Forwarded-For` and does not forward external IPs, to prevent spoofing. `x-real-ip` equals it. `x-vercel-forwarded-for` equals it too but is not overwritten when another proxy sits in front of Vercel. Only Enterprise trusted proxies may pass a custom value.                                                                                                                                                         | vercel.com/docs/headers/request-headers                                                    |
-| Turnstile `siteverify` request and response shape                        | **Verified.** `POST https://challenges.cloudflare.com/turnstile/v0/siteverify` with `secret` and `response` (form or JSON; `remoteip` and `idempotency_key` optional). Response has `success`, `challenge_ts`, `hostname`, `error-codes`, `action`, `cdata`. A token is valid 300 seconds, is single-use (a replay fails with `timeout-or-duplicate`) and is at most 2048 characters. Cloudflare's published test keys return `action: "test"`, so the action is not checked. | developers.cloudflare.com/turnstile/get-started/server-side-validation, /reference/testing |
-| Turnstile with a nonce + `strict-dynamic` CSP                            | **Verified from docs, not run in a browser.** Cloudflare lists `challenges.cloudflare.com` for script-src and frame-src, says Turnstile propagates the nonce and works with `strict-dynamic`, and says connections to that origin must be allowed.                                                                                                                                                                                                                            | developers.cloudflare.com/turnstile/reference/content-security-policy                      |
-| PKCE confirmation links fail when opened in another browser              | **Verified.** The code verifier is stored only in the browser that started the flow, so the code exchange must happen there. The auth code lives 5 minutes and can be exchanged once.                                                                                                                                                                                                                                                                                         | supabase.com/docs/guides/auth/sessions/pkce-flow                                           |
+| Assumption                                                                               | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Source                                                                                     |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Vercel overwrites `X-Forwarded-For` so a client cannot forge its address                 | **Verified.** Vercel documents that it overwrites `X-Forwarded-For` and does not forward external IPs, to prevent spoofing. `x-real-ip` equals it. `x-vercel-forwarded-for` equals it too but is not overwritten when another proxy sits in front of Vercel. Only Enterprise trusted proxies may pass a custom value.                                                                                                                                                                                                                                                                                                                                                                                                                      | vercel.com/docs/headers/request-headers                                                    |
+| Turnstile `siteverify` request and response shape                                        | **Verified.** `POST https://challenges.cloudflare.com/turnstile/v0/siteverify` with `secret` and `response` (form or JSON; `remoteip` and `idempotency_key` optional). Response has `success`, `challenge_ts`, `hostname`, `error-codes`, `action`, `cdata`. A token is valid 300 seconds, is single-use (a replay fails with `timeout-or-duplicate`) and is at most 2048 characters. Cloudflare's published test keys return `action: "test"`, so the action is not checked.                                                                                                                                                                                                                                                              | developers.cloudflare.com/turnstile/get-started/server-side-validation, /reference/testing |
+| Turnstile with a nonce + `strict-dynamic` CSP                                            | **Verified from docs, not run in a browser.** Cloudflare lists `challenges.cloudflare.com` for script-src and frame-src, says Turnstile propagates the nonce and works with `strict-dynamic`, and says connections to that origin must be allowed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | developers.cloudflare.com/turnstile/reference/content-security-policy                      |
+| Sign-up for an existing address, with confirmations on, returns a fake user and no error | **UNVERIFIED by experiment.** The supabase-js reference only warns that "you may get back an error message that attempts to hide this information"; secondary sources describe an obfuscated user (empty `identities`, no session) with confirmations on and "User already registered" with them off, and say an unconfirmed address is re-sent the email. The local stack in use runs with confirmations off and its Auth container could not be recreated, so the confirmations-on path was never exercised. The app does not depend on which one Supabase picks: success with no session, `user_already_exists` and `over_email_send_rate_limit` all produce the same reply (unit-tested). Re-check on a staging project before launch. | supabase.com/docs/reference/javascript/auth-signup (partial)                               |
+| Unconfirmed address, resend, and `token_hash` links                                      | **Verified on the local stack** (`tests/integration/auth-confirmation.test.ts`): sign-in fails with `email_not_confirmed`; the resent email reaches the mail catcher with a verify link that confirms the address; a `token_hash` from `generateLink` verifies once in a client with no PKCE state, and a forged hash is refused. Auth treats magic-link and recovery hashes as interchangeable.                                                                                                                                                                                                                                                                                                                                           | local run                                                                                  |
+| PKCE confirmation links fail when opened in another browser                              | **Verified.** The code verifier is stored only in the browser that started the flow, so the code exchange must happen there. The auth code lives 5 minutes and can be exchanged once.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | supabase.com/docs/guides/auth/sessions/pkce-flow                                           |

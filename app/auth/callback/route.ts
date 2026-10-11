@@ -17,5 +17,7 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) return NextResponse.redirect(authRedirectUrl(target));
   }
-  return NextResponse.redirect(authRedirectUrl("/login"));
+  const failed = new URL(authRedirectUrl("/login"));
+  failed.searchParams.set("error", "link_invalid");
+  return NextResponse.redirect(failed);
 }

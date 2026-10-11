@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { pickLink, waitForMail } from "./helpers/mailbox";
 
 /**
  * The first milestone, driven through the browser: sign up, create an
@@ -16,11 +17,25 @@ test("simulated tender runs from creation to approved submission", async ({ page
   const consoleErrors: string[] = [];
   page.on("console", (m) => m.type() === "error" && consoleErrors.push(m.text()));
 
+  const email = `e2e-${stamp}@example.test`;
   await page.goto("/signup");
   await page.getByLabel("Full name").fill("E2E Operator");
-  await page.getByLabel("Email").fill(`e2e-${stamp}@example.test`);
+  await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(`Sup3r-secret-${stamp}`);
   await page.getByRole("button", { name: "Create account" }).click();
+
+  // With email confirmation on (supabase/config.toml, and every hosted project) the
+  // app asks the visitor to check their mailbox; the test reads that mailbox and opens
+  // the link. A stack that was started before confirmation was turned on signs the
+  // visitor in at once, and the wait ends on /onboarding.
+  const checkEmail = page.getByText(/check your email to confirm/i);
+  await Promise.race([page.waitForURL("**/onboarding"), checkEmail.waitFor()]);
+  if (!page.url().endsWith("/onboarding")) {
+    const mail = await waitForMail(email, { subject: /confirm/i });
+    const link = pickLink(mail, /\/auth\/(v1\/verify|confirm)/);
+    // Links to this app (the token_hash form) must open against the server under test.
+    await page.goto(new URL(link).pathname.startsWith("/auth/confirm") ? pickLink(mail, /\/auth\/confirm/, { origin: page.url() }) : link);
+  }
 
   await page.waitForURL("**/onboarding");
   await page.getByLabel("Company name").fill(`E2E Construction ${stamp}`);

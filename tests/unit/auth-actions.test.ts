@@ -7,6 +7,7 @@ const h = vi.hoisted(() => ({
   signUp: vi.fn(),
   signInWithPassword: vi.fn(),
   resetPasswordForEmail: vi.fn(),
+  resend: vi.fn(),
   rpc: vi.fn(),
 }));
 
@@ -18,12 +19,12 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({
   getServerSupabase: async () => ({
-    auth: { signUp: h.signUp, signInWithPassword: h.signInWithPassword, resetPasswordForEmail: h.resetPasswordForEmail },
+    auth: { signUp: h.signUp, signInWithPassword: h.signInWithPassword, resetPasswordForEmail: h.resetPasswordForEmail, resend: h.resend },
   }),
 }));
 vi.mock("@/lib/supabase/admin", () => ({ getAdminSupabase: () => ({ rpc: h.rpc }) }));
 
-const { signIn, signUp, requestPasswordReset } = await import("@/features/auth/actions");
+const { signIn, signUp, requestPasswordReset, resendConfirmation } = await import("@/features/auth/actions");
 
 function form(values: Record<string, string>) {
   const fd = new FormData();
@@ -51,6 +52,7 @@ beforeEach(() => {
   h.signUp.mockReset().mockResolvedValue({ data: { user: { id: "u1" }, session: null }, error: null });
   h.signInWithPassword.mockReset().mockResolvedValue({ data: {}, error: null });
   h.resetPasswordForEmail.mockReset().mockResolvedValue({ data: {}, error: null });
+  h.resend.mockReset().mockResolvedValue({ data: {}, error: null });
   h.rpc.mockReset().mockResolvedValue({ data: null, error: null });
 });
 
@@ -208,5 +210,111 @@ describe("form state", () => {
     const state = await requestPasswordReset({}, form({ email: "nope" }));
     expect(state.fieldErrors?.email).toBeTruthy();
     expect(state.values).toEqual({ email: "nope" });
+  });
+});
+
+describe("sign-up never reveals whether an address is registered", () => {
+  const outcomes: Array<[string, unknown]> = [
+    ["a new address (confirmation email sent)", { data: { user: { id: "new", identities: [{}] }, session: null }, error: null }],
+    ["an address already registered (Supabase returns an obfuscated user)", { data: { user: { id: "fake", identities: [] }, session: null }, error: null }],
+    [
+      "an address already registered (error from Supabase)",
+      { data: { user: null, session: null }, error: { status: 422, code: "user_already_exists", message: "User already registered" } },
+    ],
+    [
+      "an address that was just sent a confirmation",
+      { data: { user: null, session: null }, error: { status: 429, code: "over_email_send_rate_limit", message: "email rate limit exceeded" } },
+    ],
+  ];
+
+  it.each(outcomes)("gives one answer for %s", async (_name, response) => {
+    h.signUp.mockResolvedValue(response);
+    const state = await signUp({}, form(signUpForm));
+    expect(state.error).toBeUndefined();
+    expect(state.code).toBe("confirmation_sent");
+    expect(state.values).toEqual({ fullName: "Thandi Nkosi", email: "thandi@example.test" });
+    expect(state.message).toBe("Check your email to confirm your account. If you already have an account, sign in or reset your password instead.");
+  });
+
+  it("returns exactly the same state for every outcome", async () => {
+    const states = [];
+    for (const [, response] of outcomes) {
+      h.signUp.mockResolvedValue(response);
+      states.push(await signUp({}, form(signUpForm)));
+    }
+    for (const state of states) expect(state).toEqual(states[0]);
+  });
+
+  it("still tells the visitor about an unrelated failure", async () => {
+    h.signUp.mockResolvedValue({ data: { user: null, session: null }, error: { status: 500, code: "unexpected_failure", message: "boom" } });
+    expect((await signUp({}, form(signUpForm))).error).toBe("Could not create the account");
+    h.signUp.mockResolvedValue({ data: { user: null, session: null }, error: { status: 429, code: "over_request_rate_limit", message: "slow down" } });
+    expect((await signUp({}, form(signUpForm))).error).toMatch(/too many attempts/i);
+  });
+
+  it("goes straight to onboarding only when the server confirmed the address itself (development without confirmations)", async () => {
+    h.signUp.mockResolvedValue({ data: { user: { id: "u" }, session: { access_token: "x" } }, error: null });
+    await expect(signUp({}, form(signUpForm))).rejects.toThrow("NEXT_REDIRECT:/onboarding");
+  });
+});
+
+describe("sign-in with an unconfirmed address", () => {
+  it("says the address is not confirmed and offers to resend", async () => {
+    h.signInWithPassword.mockResolvedValue({ data: {}, error: { status: 400, code: "email_not_confirmed", message: "Email not confirmed" } });
+    const state = await signIn({}, form(signInForm));
+    expect(state.code).toBe("email_not_confirmed");
+    expect(state.error).toMatch(/confirm your email/i);
+    expect(state.values).toEqual({ email: "thandi@example.test" });
+  });
+});
+
+describe("resendConfirmation", () => {
+  const generic = "If that address is waiting for confirmation, a new link is on its way.";
+
+  it("asks Supabase to resend the signup email, with a link on APP_URL", async () => {
+    const state = await resendConfirmation({}, form({ email: "thandi@example.test" }));
+    expect(h.resend).toHaveBeenCalledWith({
+      type: "signup",
+      email: "thandi@example.test",
+      options: { emailRedirectTo: "https://app.tenderos.example/auth/callback?next=%2Fonboarding" },
+    });
+    expect(state.message).toBe(generic);
+  });
+
+  it("gives the same answer whatever Supabase says", async () => {
+    for (const error of [null, { status: 429, code: "over_email_send_rate_limit" }, { status: 400, code: "user_not_found" }, { status: 500, code: "x" }]) {
+      h.resend.mockResolvedValue({ data: {}, error });
+      expect(await resendConfirmation({}, form({ email: "thandi@example.test" }))).toEqual({
+        message: generic,
+        code: "confirmation_sent",
+        values: { email: "thandi@example.test" },
+      });
+    }
+  });
+
+  it("is limited per address and per email, under its own action name", async () => {
+    await resendConfirmation({}, form({ email: "thandi@example.test" }));
+    expect(h.rpc.mock.calls.map(([, args]) => args.p_action)).toEqual(["auth.resend", "auth.resend"]);
+    h.rpc.mockResolvedValue({ data: null, error: { code: "P0429", message: "Too many requests" } });
+    h.resend.mockClear();
+    const state = await resendConfirmation({}, form({ email: "thandi@example.test" }));
+    expect(state.error).toMatch(/too many attempts/i);
+    expect(h.resend).not.toHaveBeenCalled();
+  });
+
+  it("validates the email first", async () => {
+    const state = await resendConfirmation({}, form({ email: "nope" }));
+    expect(state.fieldErrors?.email).toBeTruthy();
+    expect(h.rpc).not.toHaveBeenCalled();
+    expect(h.resend).not.toHaveBeenCalled();
+  });
+
+  it("needs a CAPTCHA token when one is configured", async () => {
+    for (const [k, v] of Object.entries(turnstileEnv)) vi.stubEnv(k, v);
+    stubSiteverify();
+    expect((await resendConfirmation({}, form({ email: "thandi@example.test" }))).error).toMatch(/security check/i);
+    expect(h.resend).not.toHaveBeenCalled();
+    await resendConfirmation({}, form({ email: "thandi@example.test", "cf-turnstile-response": "tok" }));
+    expect(h.resend).toHaveBeenCalledTimes(1);
   });
 });

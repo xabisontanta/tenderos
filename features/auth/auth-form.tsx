@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useRef } from "react";
+import { useActionState, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { signIn, signUp } from "./actions";
+import { resendConfirmation, signIn, signUp } from "./actions";
 import type { FormState } from "./form-state";
 import { Feedback, TextField, useFocusFirstError } from "./form-parts";
 import { TurnstileField } from "./turnstile";
@@ -15,10 +15,15 @@ export interface CaptchaConfig {
 
 export function AuthForm({ mode, next, captcha }: { mode: "login" | "signup"; next?: string; captcha?: CaptchaConfig | null }) {
   const [state, action, pending] = useActionState<FormState, FormData>(mode === "login" ? signIn : signUp, {});
+  const [resent, resend, resending] = useActionState<FormState, FormData>(resendConfirmation, {});
   const form = useRef<HTMLFormElement>(null);
   useFocusFirstError(form, state);
+  useFocusFirstError(form, resent);
   const errors = state.fieldErrors ?? {};
   const values = state.values ?? {};
+  // A CAPTCHA token works once, so the widget needs a new one after either action.
+  const submissions = useMemo(() => [state, resent], [state, resent]);
+  const offerResend = state.code === "email_not_confirmed" || state.code === "confirmation_sent";
 
   return (
     <form ref={form} action={action} className="grid gap-4" noValidate>
@@ -41,9 +46,17 @@ export function AuthForm({ mode, next, captcha }: { mode: "login" | "signup"; ne
         }
       />
       {next && <input type="hidden" name="next" value={next} />}
-      {captcha && <TurnstileField siteKey={captcha.siteKey} resetKey={state} />}
+      {captcha && <TurnstileField siteKey={captcha.siteKey} resetKey={submissions} />}
       <Feedback state={state} />
-      <Button type="submit" disabled={pending}>
+      {offerResend && (
+        <div className="grid gap-2">
+          <Button type="submit" variant="outline" size="sm" formAction={resend} disabled={pending || resending}>
+            {resending ? "Sending…" : "Send the confirmation email again"}
+          </Button>
+          <Feedback state={resent} />
+        </div>
+      )}
+      <Button type="submit" disabled={pending || resending}>
         {pending ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
       </Button>
       <p className="text-center text-xs text-muted-foreground">

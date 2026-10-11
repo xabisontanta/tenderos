@@ -13,8 +13,8 @@ export interface FormState {
   /** First problem per field, keyed by the input's name. */
   fieldErrors?: Record<string, string>;
   values?: Record<string, string>;
-  /** Lets the form offer a next step, such as resending a confirmation email. */
-  code?: "email_not_confirmed";
+  /** Lets the form offer a next step: resending the confirmation email. */
+  code?: "email_not_confirmed" | "confirmation_sent";
 }
 
 /** First message per field from a zod error. */
