@@ -50,3 +50,16 @@ supabase/.temp
 /test-results/
 /playwright-report/
 !.env.example
+
+# generated email previews; a small representative set under emails/preview/screenshots is committed
+/emails/preview/index.html
+/emails/preview/frames/
+/emails/preview/screenshots/*
+!/emails/preview/screenshots/auth-confirmation.light.desktop.png
+!/emails/preview/screenshots/auth-confirmation.dark.desktop.png
+!/emails/preview/screenshots/auth-confirmation.light.mobile.png
+!/emails/preview/screenshots/auth-reauthentication.dark.mobile.png
+!/emails/preview/screenshots/team-invitation.light.desktop.png
+!/emails/preview/screenshots/bid-delivered.dark.desktop.png
+!/emails/preview/screenshots/closing-reminders.light.desktop.png
+!/emails/preview/screenshots/welcome.dark.mobile.png
