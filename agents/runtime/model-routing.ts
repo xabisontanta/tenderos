@@ -19,7 +19,7 @@ export interface RoutingInput {
 const ORDER: CostTier[] = ["LOW", "MID", "HIGH"];
 
 /** Model names come from configuration, never hardcoded, so they can change without a deploy. */
-export function configuredModels(env: NodeJS.ProcessEnv = process.env): Record<CostTier, string | undefined> {
+export function configuredModels(env: Record<string, string | undefined> = process.env): Record<CostTier, string | undefined> {
   return { LOW: env.AI_MODEL_LOW || undefined, MID: env.AI_MODEL_MID || undefined, HIGH: env.AI_MODEL_HIGH || undefined };
 }
 
