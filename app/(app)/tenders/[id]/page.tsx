@@ -23,6 +23,10 @@ import {
 } from "@/features/tenders/output-panels";
 import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
 import { BidDelivery, type DeliveryDocument } from "@/features/email/bid-delivery";
+import { ApplyWithTenderOS } from "@/features/autofill/apply-with-tenderos";
+import { isSensitiveDocType, resolvePortalUrl } from "@/lib/autofill/apply-plan";
+import { parsePreparedEvent, type PreparedSummary } from "@/lib/autofill/prepared";
+import type { AppContext } from "@/lib/data/context";
 import { getRecentEvents, type TaskSummary } from "@/lib/data/queries";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { formatDateTime, formatZar, humanize, provinceLabel, relativeTime } from "@/lib/format";
@@ -63,6 +67,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   const documentLinks = await bidPackLinks(supabase, output("compliance"));
   const awaitingDelivery = submission?.status === "ACTION_REQUIRED" && !submission.is_simulation && canAdminister(ctx.role);
   const delivery = awaitingDelivery ? await deliveryData(supabase, ctx.organisation.id, ctx.userId, tender, output("submission")) : null;
+  const apply = await applyData(supabase, ctx, tender, submission, output("submission"));
 
   return (
     <>
@@ -108,6 +113,9 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
 
       <div className="grid gap-4 xl:grid-cols-3 [&>*]:min-w-0">
         <div className="grid grid-cols-1 content-start gap-4 xl:col-span-2">
+          {apply && (
+            <ApplyWithTenderOS tenderId={tender.id} portalHost={apply.portalHost} sensitiveAvailable={apply.sensitiveAvailable} prepared={apply.prepared} />
+          )}
           <Tabs defaultValue="overview">
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -327,6 +335,46 @@ async function bidPackLinks(supabase: Awaited<ReturnType<typeof getServerSupabas
 }
 
 type Tender = { title: string; reference_number: string | null; issuing_organisation: string; closing_at: string; id: string };
+
+/**
+ * What "Apply with TenderOS" needs: shown only for an approved real bid that
+ * is delivered through a portal, before it closes, to members who may use the
+ * browser helper. The portal host is the one TenderOS will open; the last
+ * report from the helper ("Prepared by TenderOS at ...") comes from the tender's
+ * events.
+ */
+async function applyData(
+  supabase: Awaited<ReturnType<typeof getServerSupabase>>,
+  ctx: AppContext,
+  tender: Tender & { submission_method: string; submission_destination: string | null; source_url: string | null },
+  submission: { status: string; is_simulation: boolean } | null,
+  submissionOutput: unknown,
+): Promise<{ portalHost: string | null; sensitiveAvailable: boolean; prepared: PreparedSummary | null } | null> {
+  if (!submission || submission.status !== "ACTION_REQUIRED" || submission.is_simulation) return null;
+  if (tender.submission_method !== "ELECTRONIC_PORTAL" || !canOperate(ctx.role)) return null;
+  if (new Date(tender.closing_at).getTime() <= Date.now()) return null;
+
+  const portal = resolvePortalUrl(tender, { allowLocalhost: process.env.NODE_ENV !== "production" });
+  const attachmentIds = ((submissionOutput as { attachments?: Array<{ document_id: string }> } | null)?.attachments ?? []).map((a) => a.document_id);
+  const [{ data: event }, { data: docs }] = await Promise.all([
+    supabase
+      .from("agent_events")
+      .select("created_at,event_type,payload")
+      .eq("tender_id", tender.id)
+      .eq("event_type", "BID_FORM_PREPARED")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    canAdminister(ctx.role) && attachmentIds.length
+      ? supabase.from("company_documents").select("doc_type").in("id", attachmentIds).is("archived_at", null)
+      : Promise.resolve({ data: [] as Array<{ doc_type: string }> }),
+  ]);
+  return {
+    portalHost: portal.ok ? portal.host : null,
+    sensitiveAvailable: (docs ?? []).some((d) => isSensitiveDocType(d.doc_type)),
+    prepared: parsePreparedEvent(event),
+  };
+}
 
 /** Everything the delivery panel needs; the covering message uses only facts on file and leaves out what is missing. */
 async function deliveryData(supabase: Awaited<ReturnType<typeof getServerSupabase>>, orgId: string, userId: string, tender: Tender, submissionOutput: unknown) {
