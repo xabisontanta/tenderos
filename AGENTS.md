@@ -119,15 +119,27 @@ refusal as an `agent_events` row with severity `WARNING`.
 ### Browser helper (`extension/`)
 
 The browser helper is a person's tool, not an agent. It runs only when a
-member clicks **Fill this page** in their own browser, and it fills but never
-submits: it fills company details and attaches verified documents, and never
-clicks a submit, send or confirm button, ticks a declaration, enters a price
-or amount, or signs. Skip rules live in `extension/src/match.js` and are
-unit-tested; never relax them. It authenticates with a pairing code
-(`autofill_tokens`, stored as a SHA-256 hash, 30 days, revoked when the member
-leaves) through `/api/autofill/*`, which serves only the profile, the
-documents the member's role may read (section 4) and approved bids awaiting
-delivery, and audits every file download.
+member clicks **Apply with TenderOS** on a tender page or **Fill this page** in
+their own browser, and it fills but never submits: it fills company details and
+attaches verified documents, and never clicks a submit, send or confirm button,
+ticks a declaration, enters a price or amount, or signs. Skip rules live in
+`extension/src/match.js` and are unit-tested; never relax them. It
+authenticates with a pairing code (`autofill_tokens`, stored as a SHA-256 hash,
+30 days, revoked when the member leaves) through `/api/autofill/*`, which serves
+only the profile, the documents the member's role may read (section 4), approved
+bids awaiting delivery and, for one tender at a time, an apply plan (portal
+address, company facts, the approved bid pack documents), and audits every file
+download. Pairing is zero-copy: **Connect browser** creates the code and hands
+it to the helper over `window.postMessage` (versioned, origin- and
+nonce-checked, schema-validated); the code is never displayed, put in a URL or
+logged, and only the extension's background worker holds it. The helper fills a
+page only when its registrable domain is the tender's portal (otherwise the
+person confirms, naming both hosts), only over https, only in the top frame and
+same-origin frames, and reports just the host and counts back
+(`autofill_record_prepared`: audit log plus a tender event). Personal
+documents (director IDs, bank letters, proof of address) go only to owners and
+admins who tick the option. The production manifest has no wildcard or optional
+host permissions and no localhost (`npm run build:extension` enforces this).
 
 ## 6. Handoff conventions
 
