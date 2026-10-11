@@ -60,6 +60,17 @@ export class AiTransientError extends Error {
   }
 }
 
+/** The prompt is larger than the configured input limit. Split the material instead of sending it. */
+export class AiInputTooLargeError extends NonRetryableError {
+  constructor(
+    message: string,
+    readonly tokens: number,
+  ) {
+    super(message);
+    this.name = "AiInputTooLargeError";
+  }
+}
+
 /** A task or call would spend more than the configured per-task ceiling. */
 export class AiBudgetError extends NonRetryableError {
   constructor(message: string) {
