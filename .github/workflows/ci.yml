@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 20
     env:
       # Public placeholders so `next build` can compile; no real project is contacted.
-      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:56321
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
       APP_URL: http://localhost:3000
     steps:
