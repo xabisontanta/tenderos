@@ -288,6 +288,19 @@ describe("apply: the portal host is checked before anything is filled", () => {
     expect(states(w)[states(w).length - 1]).toBe("failed");
   });
 
+  it("does not fill a page that navigated to another site between the check and the scan", async () => {
+    const w = world();
+    w.deps.page.scan = async () => [{ frameId: 0, result: { origin: "https://phish.example.com", fields: FORM() } }];
+    await (
+      await start(w)
+    ).finished;
+    expect(w.fetched).toEqual([]);
+    expect(w.reports).toEqual([]);
+    expect(lastPanel(w).mode).toBe("error");
+    expect(lastPanel(w).headline).toMatch(/changed/i);
+    expect(states(w)[states(w).length - 1]).toBe("failed");
+  });
+
   it("does not trust a frame of another origin to be the portal", async () => {
     const w = world({ origin: "https://ads.example.com" });
     w.deps.page.scan = async () => [

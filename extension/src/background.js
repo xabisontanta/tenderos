@@ -170,7 +170,8 @@ function waitForLoad(tabId, timeoutMs) {
     const check = async () => {
       try {
         const tab = await chrome.tabs.get(tabId);
-        if (tab.status === "complete" && !/^(about:|chrome:\/\/newtab)/.test(tab.url || tab.pendingUrl || "")) finish({ url: tab.url });
+        // A fresh tab can briefly report "complete" for its blank starting page: wait for a real address.
+        if (tab.status === "complete" && tab.url && !/^(about:|chrome:\/\/newtab)/.test(tab.url)) finish({ url: tab.url });
       } catch {
         finish(null);
       }
@@ -410,6 +411,16 @@ async function fillActiveTab(tabId, submissionId, includeSensitiveRequested) {
       func: () => (globalThis.__tenderosHelper ? globalThis.__tenderosHelper.scan() : null),
     })
   ).map((r) => ({ frameId: r.frameId, result: r.result ?? null }));
+
+  // The tab's address was checked above; make sure the page that answered is still on that host.
+  const top = scans.find((s) => s.frameId === 0 && s.result);
+  let topHost = "";
+  try {
+    topHost = new URL(String(top?.result?.origin)).hostname;
+  } catch {
+    topHost = "";
+  }
+  if (topHost !== page.host) throw new HelperError("The page changed while the helper was getting ready, so nothing was filled. Press Fill this page again.");
 
   let summary;
   try {

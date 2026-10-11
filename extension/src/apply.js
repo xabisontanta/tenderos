@@ -224,6 +224,18 @@ export function createApplyController(deps) {
         );
       }
       const scans = await deps.page.scan(tabId);
+      // The address was checked before injecting; confirm the page that answered is still on that host
+      // (a portal can redirect at any moment). Nothing is downloaded or filled otherwise.
+      const top = scans.find((s) => s.frameId === 0 && s.result);
+      if (!top) throw new HelperError("The helper could not read this page, so nothing was filled. Press Fill this page again.");
+      let topHost = "";
+      try {
+        topHost = new URL(String(top.result?.origin)).hostname;
+      } catch {
+        topHost = "";
+      }
+      if (topHost !== page.host)
+        throw new HelperError("The page changed while the helper was getting ready, so nothing was filled. Press Fill this page again.");
       const summary = await runFill({
         scans,
         deps: {
