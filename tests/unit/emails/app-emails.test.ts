@@ -209,7 +209,8 @@ describe("welcome", () => {
     expect(fresh.html).toContain('href="https://app.example.co.za/company"');
     expect(fresh.html).not.toContain("&#10003;");
     expect(e.html).toContain("&#10003;");
-    expect(e.html).toContain("line-through");
+    expect(e.html).toMatch(/Done<\/span>/);
+    expect(e.html).not.toContain("line-through");
     expect(e.text).toContain("[x] ");
   });
   it("greets without a name when none is known", () => {

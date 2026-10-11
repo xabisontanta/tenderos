@@ -194,7 +194,7 @@ export interface StepItem {
 }
 
 export type Block =
-  | { type: "p"; text: Rich; muted?: boolean }
+  | { type: "p"; text: Rich; muted?: boolean; tight?: boolean }
   | { type: "button"; label: string; href: string; note?: Rich }
   | { type: "linkFallback"; href: string }
   | { type: "code"; code: string; caption?: string }
@@ -292,7 +292,8 @@ const MOBILE_RULES = `@media (max-width: 620px) {
   .btn-block{display:block!important;box-sizing:border-box!important;width:100%!important;text-align:center!important}
   .code{font-size:30px!important;letter-spacing:6px!important;padding-left:6px!important}
   .stack{display:block!important;width:100%!important;box-sizing:border-box!important}
-  .stack-pad{padding-top:2px!important}
+  .stack-label{padding-bottom:2px!important}
+  .stack-pad{padding-top:0!important;border-top:none!important}
   .hide-mobile{display:none!important}
 }`;
 
@@ -366,7 +367,7 @@ function row(inner: string, bottom = 18): string {
 function paragraph(b: Extract<Block, { type: "p" }>, ctx: RenderContext): string {
   const size = b.muted ? "14px;line-height:22px" : "16px;line-height:26px";
   const cls = b.muted ? "tx-muted" : "tx";
-  return row(`<p ${t(cls, `margin:0;font-family:${FONT};font-size:${size}`)}>${richHtml(b.text, ctx)}</p>`);
+  return row(`<p ${t(cls, `margin:0;font-family:${FONT};font-size:${size}`)}>${richHtml(b.text, ctx)}</p>`, b.tight ? 8 : 18);
 }
 
 function button(b: Extract<Block, { type: "button" }>, ctx: RenderContext): string {
@@ -427,8 +428,8 @@ function details(b: Extract<Block, { type: "details" }>, ctx: RenderContext): st
   const rows = b.rows
     .map(
       (r, i) =>
-        `<tr><td class="stack" width="34%" valign="top" ${t("tx-muted bd", `padding:11px 16px;${i ? "border-top:1px solid;" : ""}font-family:${FONT};font-size:13px;line-height:20px`)}>${escapeHtml(r.label)}</td>
-<td class="stack stack-pad" valign="top" ${t("tx bd", `padding:11px 16px;${i ? "border-top:1px solid;" : ""}font-family:${FONT};font-size:14px;line-height:20px;font-weight:500;word-break:break-word`)}>${richHtml(r.value, ctx)}</td></tr>`,
+        `<tr><td width="34%" valign="top" ${t("tx-muted bd", `padding:11px 16px;${i ? "border-top:1px solid;" : ""}font-family:${FONT};font-size:13px;line-height:20px`, "stack stack-label")}>${escapeHtml(r.label)}</td>
+<td valign="top" ${t("tx bd", `padding:11px 16px;${i ? "border-top:1px solid;" : ""}font-family:${FONT};font-size:14px;line-height:21px;word-break:break-word`, "stack stack-pad")}>${richHtml(r.value, ctx)}</td></tr>`,
     )
     .join("\n");
   return row(
@@ -457,7 +458,7 @@ function steps(b: Extract<Block, { type: "steps" }>, ctx: RenderContext): string
 <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0"><tr>
 <td width="46" valign="top" style="width:46px;padding-top:1px"><table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>${badge}</tr></table></td>
 <td valign="top">
-<p ${t(s.done ? "tx-muted" : "tx", `margin:0;font-family:${FONT};font-size:15px;line-height:22px;font-weight:600${s.done ? ";text-decoration:line-through" : ""}`)}>${escapeHtml(s.title)}</p>
+<p ${t(s.done ? "tx-muted" : "tx", `margin:0;font-family:${FONT};font-size:15px;line-height:22px;font-weight:600`)}>${escapeHtml(s.title)}${s.done ? ` <span ${t("n-success-fg", "font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase")}>&middot; Done</span>` : ""}</p>
 <p ${t("tx-muted", `margin:2px 0 0;font-family:${FONT};font-size:14px;line-height:22px`)}>${richHtml(s.body, ctx)}</p>${link}
 </td></tr></table></td></tr>`;
     })
@@ -497,7 +498,7 @@ function safety(b: Extract<Block, { type: "safety" }>, ctx: RenderContext): stri
   return `${divider()}${row(
     `<p ${t("tx", `margin:0;font-family:${FONT};font-size:14px;line-height:22px;font-weight:600`)}>${escapeHtml(b.title)}</p>
 <p ${t("tx-muted", `margin:3px 0 0;font-family:${FONT};font-size:14px;line-height:22px`)}>${richHtml(b.body, ctx)}</p>`,
-    30,
+    12,
   )}`;
 }
 
@@ -634,10 +635,11 @@ ${styleBlock()}
 <table role="presentation" width="600" class="container" border="0" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px">
 ${header(ctx)}
 <tr><td>
-<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" ${t("bg-card bd", "border:1px solid;border-radius:16px;border-collapse:separate;overflow:hidden")}>
+<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" ${t("bg-card bd", "border:1px solid;border-radius:16px;border-collapse:separate;overflow:hidden;box-shadow:0 1px 2px rgba(17,22,31,0.05),0 12px 32px rgba(17,22,31,0.07)")}>
 <tr><td height="4" style="height:4px;line-height:4px;font-size:0;border-radius:15px 15px 0 0;background-color:${GRADIENT.from};background-image:linear-gradient(90deg,${GRADIENT.from} 0%,${GRADIENT.to} 100%)">&nbsp;</td></tr>
 ${eyebrow(c, ctx)}
 ${body}
+<tr><td height="22" style="height:22px;font-size:0;line-height:0">&nbsp;</td></tr>
 </table>
 </td></tr>
 ${footer(c, ctx)}

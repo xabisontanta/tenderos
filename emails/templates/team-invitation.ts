@@ -61,7 +61,7 @@ export function renderTeamInvitation(input: TeamInvitationInput, options: AppEma
       {
         type: "details",
         rows: [
-          { label: "Organisation", value: org },
+          { label: "Organisation", value: { strong: org } },
           { label: "Your role", value: [{ strong: role.label }, `. ${role.summary}`] },
           { label: "Invited by", value: inviter },
           { label: "Invitation for", value: input.recipientEmail },

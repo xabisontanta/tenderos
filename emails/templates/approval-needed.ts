@@ -1,6 +1,6 @@
 import { contextFor, nowFor, renderApp, type AppEmail, type AppEmailOptions } from "../app";
 import { firstName, formatClosing, formatRemaining, plural, toDate } from "../format";
-import type { Block, EmailContent } from "../layout";
+import type { Block, EmailContent, Inline } from "../layout";
 
 export interface ApprovalNeededInput {
   recipientName?: string | null;
@@ -30,10 +30,10 @@ export function renderApprovalNeeded(input: ApprovalNeededInput, options: AppEma
   const name = firstName(input.recipientName);
   const issues = input.openIssues ?? 0;
 
-  const rows: Array<{ label: string; value: string }> = [{ label: "Tender", value: input.tenderTitle }];
+  const rows: Array<{ label: string; value: Inline }> = [{ label: "Tender", value: { strong: input.tenderTitle } }];
   if (input.referenceNumber) rows.push({ label: "Reference", value: input.referenceNumber });
   if (input.buyerName) rows.push({ label: "Buyer", value: input.buyerName });
-  rows.push({ label: "Closes", value: closed ? `${formatClosing(closing)} (closed)` : `${formatClosing(closing)}, ${formatRemaining(msLeft)}` });
+  rows.push({ label: "Closes", value: closed ? `${formatClosing(closing)} (closed)` : [{ strong: formatClosing(closing) }, `, ${formatRemaining(msLeft)}`] });
   if (input.submissionDestination) rows.push({ label: "Deliver to", value: input.submissionDestination });
 
   const notices: Block[] = [];
@@ -67,7 +67,7 @@ export function renderApprovalNeeded(input: ApprovalNeededInput, options: AppEma
     eyebrow: { label: "Approval needed", icon: "clipboard-check" },
     headline: closed ? "This bid can no longer be approved" : "A bid is waiting for your approval",
     blocks: [
-      ...(name ? [{ type: "p", text: `Hi ${name},` } as const] : []),
+      ...(name ? [{ type: "p", text: `Hi ${name},`, tight: true } as const] : []),
       {
         type: "p",
         text: ["The bid for ", { strong: input.tenderTitle }, " has been through quality review and is waiting for an owner or admin of ", { strong: input.organisationName }, " to approve or reject it."],

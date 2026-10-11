@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveBrand, unresolvedPlaceholders } from "@/emails/brand";
 import {
   CONTRAST_PAIRS,
+  LIGHT,
   appContext,
   contrastRatio,
   escapeHtml,
@@ -134,6 +135,71 @@ describe("renderEmail shell", () => {
     expect(text).toContain("Confirm email address: {{ .ConfirmationURL }}");
     expect(text).toContain("Didn't ask for this?");
     expect(text).not.toMatch(/<[a-z]/i);
+  });
+});
+
+/** One of every block, so structural rules are checked against all the markup the layout can emit. */
+const everyBlock: EmailContent = {
+  ...sample,
+  blocks: [
+    { type: "p", text: ["Text ", { strong: "bold" }, " ", { code: "code" }, " ", { link: { href: "https://app.example.co.za/x", text: "link" } }] },
+    { type: "p", text: "Muted", muted: true },
+    { type: "button", label: "Go", href: "https://app.example.co.za/go", note: "Note" },
+    { type: "linkFallback", href: "https://app.example.co.za/go" },
+    { type: "code", code: "123456", caption: "Caption" },
+    ...(["info", "success", "warning", "danger", "neutral"] as const).map((tone) => ({ type: "notice" as const, tone, title: tone, body: "Body" })),
+    { type: "details", rows: [{ label: "A", value: "1" }, { label: "B", value: { strong: "2" } }] },
+    { type: "list", items: ["One", "Two"] },
+    {
+      type: "steps",
+      items: [
+        { title: "Done step", body: "Body", done: true },
+        { title: "Open step", body: "Body", link: { href: "https://app.example.co.za/s", text: "Open" } },
+      ],
+    },
+    {
+      type: "tenders",
+      heading: "Closing soon",
+      tone: "warning",
+      items: [{ title: "Tender", href: "https://app.example.co.za/t", meta: ["Ref", "Buyer"], closes: "Fri, 16 Oct, 12:00 SAST", remaining: "Closes in 2 days", status: "Preparing bid" }],
+    },
+    { type: "divider" },
+    { type: "safety", title: "Careful", body: "Body" },
+  ],
+};
+
+describe("markup rules that only break in some clients", () => {
+  const { html } = renderEmail(everyBlock, appContext({ appUrl: "https://app.example.co.za", brand }));
+  // Outlook-only VML sits in conditional comments and has no dark-mode classes by design.
+  const visible = html.replace(/<!--\[if mso\]>[\s\S]*?<!\[endif\]-->/g, "");
+  const tags = visible.match(/<[a-z][^>]*>/gi) ?? [];
+
+  it("never gives an element two class attributes (the browser ignores the second, which silently drops the dark-mode override)", () => {
+    for (const tag of tags) expect((tag.match(/\sclass="/g) ?? []).length, tag).toBeLessThanOrEqual(1);
+  });
+
+  it("gives every element with a themed light colour a class that supplies its dark colour", () => {
+    const themed = [LIGHT.page, LIGHT.card, LIGHT.panel, LIGHT.text, LIGHT.muted, LIGHT.border, LIGHT.link, LIGHT.btn, LIGHT.tint];
+    for (const tag of tags) {
+      const style = tag.match(/\sstyle="([^"]*)"/)?.[1] ?? "";
+      const usesTheme = themed.some((hex) => new RegExp(`(?:color|background-color|border-color):${hex}`).test(style));
+      if (!usesTheme) continue;
+      expect(tag, "themed colour without a theme class").toMatch(/\sclass="[^"]*\b(bg-|tx|bd|btn-|n-)/);
+    }
+  });
+
+  it("stacks the label and value of a details row on mobile without a rule between them", () => {
+    expect(html).toMatch(/\.stack-pad\{[^}]*border-top:none!important/);
+  });
+
+  it("leaves room under the last block so the card never ends flush against a button", () => {
+    expect(html).toMatch(/<tr><td height="\d+"[^>]*>&nbsp;<\/td><\/tr>\n<\/table>\n<\/td><\/tr>\n\n?<tr><td align="center" class="px"/);
+  });
+
+  it("marks finished steps with a check and the word Done, not a strikethrough", () => {
+    expect(html).toContain("&#10003;");
+    expect(html).toMatch(/Done<\/span>/);
+    expect(html).not.toContain("line-through");
   });
 });
 

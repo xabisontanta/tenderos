@@ -50,7 +50,7 @@ export function renderClosingReminders(input: ClosingRemindersInput, options: Ap
   }).filter((g) => g.rows.length);
 
   const blocks: Block[] = [
-    ...(name ? [{ type: "p", text: `Hi ${name},` } as const] : []),
+    ...(name ? [{ type: "p", text: `Hi ${name},`, tight: true } as const] : []),
     { type: "p", text: ["Here is what closes soonest for ", { strong: input.organisationName }, ", earliest first."] },
     ...grouped.map(
       (g): Block => ({

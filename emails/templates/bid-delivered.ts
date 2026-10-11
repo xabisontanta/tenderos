@@ -38,10 +38,10 @@ export function renderBidDelivered(input: BidDeliveredInput, options: AppEmailOp
       ]
     : [{ strong: input.deliveredBy }, " recorded that the approved bid was delivered by hand or on the buyer's portal. TenderOS has recorded the delivery."];
 
-  const rows: Array<{ label: string; value: Inline | readonly Inline[] }> = [{ label: "Tender", value: input.tenderTitle }];
+  const rows: Array<{ label: string; value: Inline | readonly Inline[] }> = [{ label: "Tender", value: { strong: input.tenderTitle } }];
   if (input.referenceNumber) rows.push({ label: "Reference", value: input.referenceNumber });
   if (input.buyerName) rows.push({ label: "Buyer", value: input.buyerName });
-  if (email && input.deliveredTo) rows.push({ label: "Delivered to", value: input.deliveredTo });
+  if (email && input.deliveredTo) rows.push({ label: "Delivered to", value: { strong: input.deliveredTo } });
   if (email && input.fromAddress) rows.push({ label: "Sent from", value: input.fromAddress });
   rows.push({ label: input.method === "EMAIL" ? "Sent by" : "Recorded by", value: input.deliveredBy });
   rows.push({ label: "When", value: formatClosing(input.deliveredAt) });
@@ -49,7 +49,7 @@ export function renderBidDelivered(input: BidDeliveredInput, options: AppEmailOp
 
   const attachments = input.attachments ?? [];
   const blocks: Block[] = [
-    ...(name ? [{ type: "p", text: `Hi ${name},` } as const] : []),
+    ...(name ? [{ type: "p", text: `Hi ${name},`, tight: true } as const] : []),
     { type: "p", text: intro },
     { type: "details", rows },
   ];

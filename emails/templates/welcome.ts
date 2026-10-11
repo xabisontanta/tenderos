@@ -70,7 +70,7 @@ export function renderWelcome(input: WelcomeInput, options: AppEmailOptions): Ap
     eyebrow: { label: "Getting started", icon: "layout-dashboard" },
     headline: "Welcome to TenderOS",
     blocks: [
-      ...(name ? [{ type: "p", text: `Hi ${name},` } as const] : []),
+      ...(name ? [{ type: "p", text: `Hi ${name},`, tight: true } as const] : []),
       {
         type: "p",
         text: [
