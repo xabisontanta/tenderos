@@ -43,8 +43,33 @@ export function buildPrompt(parts: PromptPart[], granted: ReadonlySet<DataCatego
   });
 }
 
-/** Runtime check behind the type: blocks must come from buildPrompt, not from a cast. */
-export function assertApproved(blocks: readonly ApprovedBlock[]): void {
+declare const trustedBrand: unique symbol;
+
+/** Static instruction text written by us (task wording, repair requests). It carries no data category and no company or tender data. */
+export interface TrustedBlock {
+  readonly type: "trusted";
+  readonly label: string;
+  readonly category: null;
+  readonly text: string;
+  readonly chars: number;
+  readonly cache?: undefined;
+  readonly [trustedBrand]: true;
+}
+
+/**
+ * Wraps instruction text. Instructions must not interpolate tender or company
+ * data (that goes through buildPrompt with a category); this only guards
+ * against an identity number slipping in through a template.
+ */
+export function trusted(text: string, label = "instruction"): TrustedBlock {
+  if (findSaIdNumbers(text).length > 0) throw new PromptPolicyError(`Instruction "${label}" contains a personal identity number and was not sent`);
+  const block = Object.freeze({ type: "trusted" as const, label, category: null, text, chars: text.length }) as TrustedBlock;
+  approved.add(block);
+  return block;
+}
+
+/** Runtime check behind the type: blocks must come from buildPrompt or trusted, not from a cast. */
+export function assertApproved(blocks: readonly (ApprovedBlock | TrustedBlock)[]): void {
   for (const b of blocks) {
     if (!approved.has(b)) throw new PromptPolicyError("Prompt content did not pass the data policy (buildPrompt)");
   }
