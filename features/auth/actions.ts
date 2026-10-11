@@ -1,6 +1,5 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -8,6 +7,7 @@ import { getAdminSupabase } from "@/lib/supabase/admin";
 import { registryPayload, slugify } from "@/lib/org/bootstrap";
 import { toUserError } from "@/lib/actions";
 import { safeRedirectPath } from "@/lib/safe-redirect";
+import { authRedirectUrl } from "@/lib/auth/urls";
 
 export interface FormState {
   error?: string;
@@ -48,11 +48,10 @@ export async function signUp(_: FormState, formData: FormData): Promise<FormStat
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const supabase = await getServerSupabase();
-  const origin = (await headers()).get("origin") ?? process.env.APP_URL ?? "";
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
-    options: { data: { full_name: parsed.data.fullName }, emailRedirectTo: `${origin}/auth/callback` },
+    options: { data: { full_name: parsed.data.fullName }, emailRedirectTo: authRedirectUrl("/auth/callback", { next: "/onboarding" }) },
   });
   if (error) return { error: error.status === 429 ? "Too many attempts. Wait a moment and try again." : "Could not create the account" };
   // Supabase sends nothing when the email is already registered and still
@@ -70,9 +69,8 @@ export async function requestPasswordReset(_: FormState, formData: FormData): Pr
   const parsed = emailSchema.safeParse({ email: formData.get("email") });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const supabase = await getServerSupabase();
-  const origin = (await headers()).get("origin") ?? process.env.APP_URL ?? "";
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${origin}/auth/callback?next=/reset-password`,
+    redirectTo: authRedirectUrl("/auth/callback", { next: "/reset-password" }),
   });
   if (error?.status === 429) return { error: "Too many attempts. Wait a moment and try again." };
   // Same answer whether or not the account exists.

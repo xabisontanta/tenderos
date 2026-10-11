@@ -1,8 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
+import { authRedirectUrl } from "@/lib/auth/urls";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 
-/** Completes email confirmation and password-reset links by exchanging the code for a session. */
+/**
+ * Completes email confirmation and password-reset links by exchanging the code for a session.
+ * Redirects are built from APP_URL: behind a proxy the request URL can carry an
+ * internal origin, and the browser must land on the public one to keep its cookies.
+ */
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
@@ -10,7 +15,7 @@ export async function GET(request: NextRequest) {
   if (code) {
     const supabase = await getServerSupabase();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(new URL(target, url.origin));
+    if (!error) return NextResponse.redirect(authRedirectUrl(target));
   }
-  return NextResponse.redirect(new URL("/login", url.origin));
+  return NextResponse.redirect(authRedirectUrl("/login"));
 }
