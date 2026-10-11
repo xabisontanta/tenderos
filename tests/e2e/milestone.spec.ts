@@ -22,6 +22,9 @@ test("simulated tender runs from creation to approved submission", async ({ page
   await page.getByLabel("Full name").fill("E2E Operator");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(`Sup3r-secret-${stamp}`);
+  // Creating an account needs consent to the terms and privacy notice, which are public pages.
+  await expect(page.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
+  await page.getByRole("checkbox", { name: /I agree to the Terms of Service/ }).check();
   await page.getByRole("button", { name: "Create account" }).click();
 
   // With email confirmation on (supabase/config.toml, and every hosted project) the

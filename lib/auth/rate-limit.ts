@@ -99,10 +99,26 @@ export function clientIp(headers: Headers, env: Record<string, string | undefine
   return normaliseAddress(last);
 }
 
+const hmacHex = (label: string, value: string, secret: string) => createHmac("sha256", secret).update(`${label}:${value}`).digest("hex");
+
 /** HMAC-based limiter subject, shaped for public.hit_rate_limit_key: `auth_ip:<hex>` or `auth_email:<hex>`. */
 export function rateLimitKey(kind: "ip" | "email", value: string, secret: string): string {
-  const digest = createHmac("sha256", secret).update(`${kind}:${value}`).digest("hex");
-  return `auth_${kind}:${digest}`;
+  return `auth_${kind}:${hmacHex(kind, value, secret)}`;
+}
+
+/**
+ * Hash of the visitor's address to keep with a consent record (public.legal_acceptances.ip_hmac),
+ * or null when the address is unknown. It is keyed under the same secret but in its own namespace,
+ * so it cannot be matched against rate-limit keys, and it never contains the address. Misconfiguration
+ * yields null: recording where consent came from must not stop the consent itself.
+ */
+export function consentOriginHmac(headers: Headers, env: Record<string, string | undefined> = process.env): string | null {
+  try {
+    const ip = clientIp(headers, env);
+    return ip ? hmacHex("consent-ip", ip, authEnv(env).rateLimitSecret) : null;
+  } catch {
+    return null;
+  }
 }
 
 export type AuthLimitResult = { ok: true; captchaRequired: boolean } | { ok: false; reason: "limited" | "unavailable" };

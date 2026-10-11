@@ -82,6 +82,33 @@ corporate gateways) uses up a one-time link. The person then sees the "expired"
 message and can ask for a new one. If this shows up in support, put a confirm
 button between the link and `verifyOtp` (a page that POSTs the same fields).
 
+### Terms and privacy consent
+
+Creating an account needs the "I agree to the Terms of Service and have read the
+Privacy Notice" box. The sign-up sends the versions now in force
+(`lib/legal/versions.ts`) in the user metadata, together with an HMAC of the
+visitor's address (`consent_ip_hmac`, under `AUTH_RATE_LIMIT_SECRET` in its own
+namespace; never the address). The `private.handle_new_user` trigger records one
+row per document in `public.legal_acceptances` (user, kind, version, time, hash)
+**only if** the metadata names the versions marked `is_current` in
+`public.legal_documents`; anything else is ignored, and a failure there is a
+warning that never blocks the account.
+
+- A user with a missing or out-of-date acceptance is sent to `/legal/accept`
+  by `requireContext` (every signed-in page) and the onboarding page. Publishing
+  a new version therefore asks everyone again on their next visit. Browsers
+  cannot write acceptances; `accept_legal` (rate limited, current versions only)
+  is the only path besides the trigger.
+- `/terms` and `/privacy` are public. Their text is a **draft placeholder**,
+  written from the headings of `docs/legal/popia-overview.md`, with a visible
+  notice that it is unreviewed and not legal advice. Staging may show it;
+  production needs attorney-reviewed text and a named owner (plan decision 4).
+- To publish a new version: a migration that inserts the `legal_documents` row and
+  flips `is_current`, plus the new value in `lib/legal/versions.ts`. The legal
+  integration test fails if the two disagree.
+- Consent records are deleted with the account (`on delete cascade`). Whether
+  proof of consent must outlive the account is an open point for the attorney.
+
 ### Abuse controls: rate limits and CAPTCHA
 
 Sign-in, sign-up, password reset and resending a confirmation email are

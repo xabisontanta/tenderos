@@ -47,6 +47,37 @@ export function TextField({
   );
 }
 
+/**
+ * A checkbox with its label (which may hold links) and its error tied together for
+ * assistive technology. Named like the id, so it posts `on` when ticked.
+ */
+export function CheckboxField({ id, error, defaultChecked, children }: { id: string; error?: string; defaultChecked?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex items-start gap-2">
+        <input
+          id={id}
+          name={id}
+          type="checkbox"
+          defaultChecked={defaultChecked}
+          aria-required="true"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : undefined}
+          className="mt-0.5 size-4 shrink-0 cursor-pointer accent-emerald-500"
+        />
+        <Label htmlFor={id} className="cursor-pointer text-xs leading-relaxed font-normal">
+          {children}
+        </Label>
+      </div>
+      {error && (
+        <p id={`${id}-error`} className="text-[11px] text-red-300">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** The form-level error and success messages. The error takes focus when it appears. */
 export function Feedback({ state }: { state: FormState }) {
   return (

@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getServerSupabase } from "@/lib/supabase/server";
+import { pendingLegalAcceptances } from "@/lib/legal/status";
 import type { Database } from "@/types/database";
 
 export type OrgRole = Database["public"]["Enums"]["org_role"];
@@ -26,6 +27,9 @@ export const requireContext = cache(async (): Promise<AppContext> => {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Terms or privacy notice published since this user last accepted, or never accepted.
+  if ((await pendingLegalAcceptances(supabase)).length > 0) redirect("/legal/accept");
 
   const { data: membership } = await supabase
     .from("organisation_members")

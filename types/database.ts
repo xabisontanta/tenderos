@@ -487,6 +487,40 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"legal_acceptances": {
+                  Row: {
+                    "accepted_at": string,"id": number,"ip_hmac": string | null,"kind": string,"user_id": string,"version": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accepted_at"?: string,"id"?: never,"ip_hmac"?: string | null,"kind": string,"user_id": string,"version": string
+                  }
+                  Update: {
+                    "accepted_at"?: string,"id"?: never,"ip_hmac"?: string | null,"kind"?: string,"user_id"?: string,"version"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "legal_acceptances_document_fk"
+      columns: ["kind","version"]
+isOneToOne: false
+      referencedRelation: "legal_documents"
+      referencedColumns: ["kind","version"]
+    }
+                  ]
+                },"legal_documents": {
+                  Row: {
+                    "is_current": boolean,"kind": string,"published_at": string,"version": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "is_current"?: boolean,"kind": string,"published_at"?: string,"version": string
+                  }
+                  Update: {
+                    "is_current"?: boolean,"kind"?: string,"published_at"?: string,"version"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"notifications": {
                   Row: {
                     "body": string | null,"created_at": string,"id": string,"kind": string,"link": string | null,"organisation_id": string,"read_at": string | null,"severity": Database["public"]['Enums']["event_severity"],"title": string,"user_id": string
@@ -813,7 +847,10 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "archive_company_document":
+            "accept_legal":
+{ Args: { "p_ip_hmac"?: string,"p_privacy_version": string,"p_terms_version": string }; Returns: undefined
+                           },
+"archive_company_document":
 { Args: { "p_id": string }; Returns: undefined
                            },
 "autofill_document_download":
@@ -865,6 +902,11 @@ isOneToOne: false
                            },
 "mark_notifications_read":
 { Args: { "p_ids": (string)[] }; Returns: undefined
+                           },
+"pending_legal_acceptances":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "kind": string,"version": string
+            }[]
                            },
 "record_bid_delivery":
 { Args: { "p_note"?: string,"p_reference"?: string,"p_submission_id": string }; Returns: undefined

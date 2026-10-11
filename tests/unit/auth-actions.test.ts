@@ -25,6 +25,7 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/supabase/admin", () => ({ getAdminSupabase: () => ({ rpc: h.rpc }) }));
 
 const { signIn, signUp, requestPasswordReset, resendConfirmation } = await import("@/features/auth/actions");
+const { LEGAL_VERSIONS } = await import("@/lib/legal/versions");
 
 function form(values: Record<string, string>) {
   const fd = new FormData();
@@ -32,7 +33,7 @@ function form(values: Record<string, string>) {
   return fd;
 }
 
-const signUpForm = { fullName: "Thandi Nkosi", email: "thandi@example.test", password: "correct-horse-battery-9" };
+const signUpForm = { fullName: "Thandi Nkosi", email: "thandi@example.test", password: "correct-horse-battery-9", acceptTerms: "on" };
 const signInForm = { email: "thandi@example.test", password: "correct-horse-battery-9" };
 const turnstileEnv = { CAPTCHA_MODE: "app", TURNSTILE_SITE_KEY: "site", TURNSTILE_SECRET_KEY: "the-secret" };
 
@@ -232,7 +233,7 @@ describe("sign-up never reveals whether an address is registered", () => {
     const state = await signUp({}, form(signUpForm));
     expect(state.error).toBeUndefined();
     expect(state.code).toBe("confirmation_sent");
-    expect(state.values).toEqual({ fullName: "Thandi Nkosi", email: "thandi@example.test" });
+    expect(state.values).toEqual({ fullName: "Thandi Nkosi", email: "thandi@example.test", acceptTerms: "on" });
     expect(state.message).toBe("Check your email to confirm your account. If you already have an account, sign in or reset your password instead.");
   });
 
@@ -255,6 +256,44 @@ describe("sign-up never reveals whether an address is registered", () => {
   it("goes straight to onboarding only when the server confirmed the address itself (development without confirmations)", async () => {
     h.signUp.mockResolvedValue({ data: { user: { id: "u" }, session: { access_token: "x" } }, error: null });
     await expect(signUp({}, form(signUpForm))).rejects.toThrow("NEXT_REDIRECT:/onboarding");
+  });
+});
+
+describe("consent to the terms and privacy notice", () => {
+  const { acceptTerms: _on, ...withoutConsent } = signUpForm;
+
+  it("is required to create an account, and the visitor is told which field to fix", async () => {
+    const state = await signUp({}, form(withoutConsent));
+    expect(state.fieldErrors?.acceptTerms).toMatch(/terms/i);
+    expect(state.values).toEqual({ fullName: "Thandi Nkosi", email: "thandi@example.test" });
+    expect(h.rpc).not.toHaveBeenCalled();
+    expect(h.signUp).not.toHaveBeenCalled();
+  });
+
+  it("is kept ticked when another field needs fixing", async () => {
+    const state = await signUp({}, form({ ...signUpForm, password: "short" }));
+    expect(state.fieldErrors).toHaveProperty("password");
+    expect(state.fieldErrors).not.toHaveProperty("acceptTerms");
+    expect(state.values?.acceptTerms).toBe("on");
+  });
+
+  it("travels with the sign-up as the document versions accepted", async () => {
+    await signUp({}, form(signUpForm));
+    const data = h.signUp.mock.calls[0][0].options.data;
+    expect(data).toMatchObject({ full_name: "Thandi Nkosi", terms_version: LEGAL_VERSIONS.terms, privacy_version: LEGAL_VERSIONS.privacy });
+  });
+
+  it("records where it came from as an HMAC, never as an address", async () => {
+    await signUp({}, form(signUpForm));
+    const data = h.signUp.mock.calls[0][0].options.data;
+    expect(data.consent_ip_hmac).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(h.signUp.mock.calls)).not.toContain("41.0.0.9");
+  });
+
+  it("leaves the origin out when no address is known", async () => {
+    h.requestHeaders = {};
+    await signUp({}, form(signUpForm));
+    expect(h.signUp.mock.calls[0][0].options.data).not.toHaveProperty("consent_ip_hmac");
   });
 });
 

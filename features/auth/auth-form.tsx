@@ -5,8 +5,9 @@ import { useActionState, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { resendConfirmation, signIn, signUp } from "./actions";
 import type { FormState } from "./form-state";
-import { Feedback, TextField, useFocusFirstError } from "./form-parts";
+import { CheckboxField, Feedback, TextField, useFocusFirstError } from "./form-parts";
 import { TurnstileField } from "./turnstile";
+import { LEGAL_PATHS } from "@/lib/legal/versions";
 
 export interface CaptchaConfig {
   mode: "app" | "supabase";
@@ -45,6 +46,19 @@ export function AuthForm({ mode, next, captcha }: { mode: "login" | "signup"; ne
           ) : undefined
         }
       />
+      {mode === "signup" && (
+        <CheckboxField id="acceptTerms" error={errors.acceptTerms} defaultChecked={values.acceptTerms === "on"}>
+          I agree to the{" "}
+          <Link className="text-primary underline-offset-2 hover:underline" href={LEGAL_PATHS.terms} target="_blank" rel="noopener">
+            Terms of Service
+          </Link>{" "}
+          and have read the{" "}
+          <Link className="text-primary underline-offset-2 hover:underline" href={LEGAL_PATHS.privacy} target="_blank" rel="noopener">
+            Privacy Notice
+          </Link>
+          .
+        </CheckboxField>
+      )}
       {next && <input type="hidden" name="next" value={next} />}
       {captcha && <TurnstileField siteKey={captcha.siteKey} resetKey={submissions} />}
       <Feedback state={state} />

@@ -80,6 +80,11 @@ Integration tests cover role refusals and cross-tenant isolation.
   second layer but see one address for every visitor, because the calls come
   from the server. Details and the hosted-project checklist: `docs/auth.md`.
 - Auth emails link to `APP_URL`, never to a request header.
+- New accounts must confirm their email address (a registered address looks
+  like a new one at sign-up) and accept the terms and privacy notice; the
+  acceptance (document version, time, keyed hash of the network address) is a
+  database record that browsers cannot write. The texts are drafts until an
+  attorney reviews them.
 - Open-redirect protection on the `next` parameter (`lib/safe-redirect.ts`):
   only same-origin paths, no `//`, backslashes or control characters.
 - Passwords: at least 12 characters with letters and digits, checked in the

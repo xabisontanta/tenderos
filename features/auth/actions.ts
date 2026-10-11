@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -8,6 +9,8 @@ import { registryPayload, slugify } from "@/lib/org/bootstrap";
 import { rateLimit, toUserError } from "@/lib/actions";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import { authRedirectUrl } from "@/lib/auth/urls";
+import { consentOriginHmac } from "@/lib/auth/rate-limit";
+import { LEGAL_VERSIONS } from "@/lib/legal/versions";
 import { createLogger } from "@/lib/log";
 import { guardAuthAttempt } from "./guard";
 import { fieldErrorsOf, textOf, type FormState } from "./form-state";
@@ -47,31 +50,43 @@ export async function signIn(_: FormState, formData: FormData): Promise<FormStat
   redirect(safeRedirectPath(formData.get("next")));
 }
 
+const passwordField = z
+  .string()
+  .min(12, "Use at least 12 characters")
+  .max(200)
+  .regex(/[A-Za-z]/, "Include a letter")
+  .regex(/[0-9]/, "Include a number");
+
 const signUpSchema = z.object({
   fullName: z.string().trim().min(2, "Enter your name").max(120),
   email: emailField,
-  password: z
-    .string()
-    .min(12, "Use at least 12 characters")
-    .max(200)
-    .regex(/[A-Za-z]/, "Include a letter")
-    .regex(/[0-9]/, "Include a number"),
+  password: passwordField,
+  // The checkbox sends "on" when ticked and nothing when not.
+  acceptTerms: z.literal("on", { error: "Accept the Terms of Service and Privacy Notice to create an account" }),
 });
 
 export async function signUp(_: FormState, formData: FormData): Promise<FormState> {
-  const values = { fullName: textOf(formData.get("fullName")), email: textOf(formData.get("email")) };
-  const parsed = signUpSchema.safeParse({ ...values, password: formData.get("password") });
+  const accepted = formData.get("acceptTerms") === "on";
+  const values = { fullName: textOf(formData.get("fullName")), email: textOf(formData.get("email")), ...(accepted ? { acceptTerms: "on" } : {}) };
+  const parsed = signUpSchema.safeParse({ ...values, password: formData.get("password"), acceptTerms: formData.get("acceptTerms") });
   if (!parsed.success) return { fieldErrors: fieldErrorsOf(parsed.error), values };
 
   const guard = await guardAuthAttempt("signup", parsed.data.email, formData);
   if (!guard.ok) return { error: guard.error, values };
 
+  const consentOrigin = consentOriginHmac(await headers());
   const supabase = await getServerSupabase();
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
-      data: { full_name: parsed.data.fullName },
+      data: {
+        full_name: parsed.data.fullName,
+        // Read by the sign-up trigger, which records the acceptance only for the versions in force.
+        terms_version: LEGAL_VERSIONS.terms,
+        privacy_version: LEGAL_VERSIONS.privacy,
+        ...(consentOrigin ? { consent_ip_hmac: consentOrigin } : {}),
+      },
       emailRedirectTo: authRedirectUrl("/auth/callback", { next: "/onboarding" }),
       ...(guard.captchaToken ? { captchaToken: guard.captchaToken } : {}),
     },
@@ -137,7 +152,7 @@ export async function requestPasswordReset(_: FormState, formData: FormData): Pr
   return { message: "If an account exists for that email, a reset link is on its way." };
 }
 
-const newPasswordSchema = z.object({ password: signUpSchema.shape.password });
+const newPasswordSchema = z.object({ password: passwordField });
 
 export async function updatePassword(_: FormState, formData: FormData): Promise<FormState> {
   const parsed = newPasswordSchema.safeParse({ password: formData.get("password") });
