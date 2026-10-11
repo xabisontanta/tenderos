@@ -133,7 +133,10 @@ export function isSafeHref(href: string, opts: { allowLocalHttp?: boolean } = {}
 
 /** One line, no control characters, at most 78 characters (RFC 5322 recommended line length). */
 export function sanitizeSubject(subject: string, max = 78): string {
-  const oneLine = subject.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, " ").replace(/\s{2,}/g, " ").trim();
+  const oneLine = subject
+    .replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
   return oneLine.length <= max ? oneLine : `${oneLine.slice(0, max - 1).trimEnd()}…`;
 }
 
@@ -266,8 +269,14 @@ function darkRules(): string {
   for (const [name, defs] of Object.entries(THEMED)) {
     const decl = defs.map(([prop, , dark]) => `${prop}:${dark}!important`).join(";");
     all.push(`.${name}{${decl}}`);
-    const bgDecl = defs.filter(([p]) => p === "background-color").map(([p, , d]) => `${p}:${d}!important`).join(";");
-    const fgDecl = defs.filter(([p]) => p !== "background-color").map(([p, , d]) => `${p}:${d}!important`).join(";");
+    const bgDecl = defs
+      .filter(([p]) => p === "background-color")
+      .map(([p, , d]) => `${p}:${d}!important`)
+      .join(";");
+    const fgDecl = defs
+      .filter(([p]) => p !== "background-color")
+      .map(([p, , d]) => `${p}:${d}!important`)
+      .join(";");
     if (bgDecl) bg.push(`[data-ogsb] .${name}{${bgDecl}}`);
     if (fgDecl) fg.push(`[data-ogsc] .${name}{${fgDecl}}`);
   }
@@ -405,7 +414,9 @@ function linkFallback(b: Extract<Block, { type: "linkFallback" }>, ctx: RenderCo
 }
 
 function codeBox(b: Extract<Block, { type: "code" }>): string {
-  const caption = b.caption ? `<p ${t("tx-muted", `margin:10px 0 0;text-align:center;font-family:${FONT};font-size:13px;line-height:20px`)}>${escapeHtml(b.caption)}</p>` : "";
+  const caption = b.caption
+    ? `<p ${t("tx-muted", `margin:10px 0 0;text-align:center;font-family:${FONT};font-size:13px;line-height:20px`)}>${escapeHtml(b.caption)}</p>`
+    : "";
   return row(
     `<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0"><tr><td align="center" ${t("bg-panel bd tx", `border:1px solid;border-radius:12px;padding:20px 12px 20px 22px;font-family:${MONO};font-size:36px;line-height:44px;font-weight:700;letter-spacing:10px;text-align:center;-webkit-user-select:all;user-select:all`, "code")}>${escapeHtml(b.code)}</td></tr></table>${caption}`,
     22,
@@ -594,8 +605,10 @@ function eyebrow(c: EmailContent, ctx: RenderContext): string {
 
 function footer(c: EmailContent, ctx: RenderContext): string {
   const b = ctx.brand;
-  const link = (path: string, label: string) => `<a href="${escapeHtml(`${ctx.siteUrl}${path}`)}" target="_blank" ${t("tx-muted", "text-decoration:underline")}>${label}</a>`;
-  const muted = (inner: string, extra = "") => `<p ${t("tx-muted", `margin:0 0 8px;font-family:${FONT};font-size:12px;line-height:19px;text-align:center;${extra}`)}>${inner}</p>`;
+  const link = (path: string, label: string) =>
+    `<a href="${escapeHtml(`${ctx.siteUrl}${path}`)}" target="_blank" ${t("tx-muted", "text-decoration:underline")}>${label}</a>`;
+  const muted = (inner: string, extra = "") =>
+    `<p ${t("tx-muted", `margin:0 0 8px;font-family:${FONT};font-size:12px;line-height:19px;text-align:center;${extra}`)}>${inner}</p>`;
   return `<tr><td align="center" class="px" style="padding:26px 24px 0">
 ${muted(`<strong style="font-weight:600">${BRAND_NAME}</strong> &middot; ${BRAND_TAGLINE}`)}
 ${muted(`${link("/help", "Help")} &nbsp;&middot;&nbsp; ${link("/privacy", "Privacy")} &nbsp;&middot;&nbsp; ${link("/terms", "Terms")}`, "font-size:13px;")}
@@ -658,7 +671,10 @@ ${footer(c, ctx)}
     c.eyebrow.label.toUpperCase(),
     c.headline,
     "",
-    ...c.blocks.map(blockText).filter(Boolean).flatMap((s) => [s, ""]),
+    ...c.blocks
+      .map(blockText)
+      .filter(Boolean)
+      .flatMap((s) => [s, ""]),
     rule,
     `Help: ${ctx.siteUrl}/help`,
     `Privacy: ${ctx.siteUrl}/privacy`,

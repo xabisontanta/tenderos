@@ -21,7 +21,8 @@ export const AUTH_SAMPLE_VARS: Record<string, string> = {
   OldEmail: "thandi.mokoena@example.co.za",
   Token: "482915",
   TokenHash: "pkce_5b1e7a1f3c",
-  ConfirmationURL: "https://abcdefghijklmnop.supabase.co/auth/v1/verify?token=pkce_5b1e7a1f3c8d42e9a7d6&type=signup&redirect_to=https://app.example.co.za/auth/callback",
+  ConfirmationURL:
+    "https://abcdefghijklmnop.supabase.co/auth/v1/verify?token=pkce_5b1e7a1f3c8d42e9a7d6&type=signup&redirect_to=https://app.example.co.za/auth/callback",
   FactorType: "totp",
   Provider: "google",
   Phone: "+27 82 555 0142",
@@ -86,7 +87,13 @@ export interface PreviewEmail {
 }
 
 function preheaderOf(html: string): string {
-  return html.match(/<body[^>]*>\s*<div style="display:none[^"]*">([^<]*)<\/div>/)?.[1].replaceAll("&#39;", "'").replaceAll("&amp;", "&").trim() ?? "";
+  return (
+    html
+      .match(/<body[^>]*>\s*<div style="display:none[^"]*">([^<]*)<\/div>/)?.[1]
+      .replaceAll("&#39;", "'")
+      .replaceAll("&amp;", "&")
+      .trim() ?? ""
+  );
 }
 
 const AUTH_LABELS: Record<string, string> = {
@@ -139,7 +146,11 @@ export function previewEmails(opts: { now?: Date } = {}): PreviewEmail[] {
         options,
       ),
     ],
-    ["welcome", "Welcome and setup checklist", renderWelcome({ recipientName: "Thandi Mokoena", organisationName: "Mokoena Civil & Projects (Pty) Ltd", completed: ["profile"] }, options)],
+    [
+      "welcome",
+      "Welcome and setup checklist",
+      renderWelcome({ recipientName: "Thandi Mokoena", organisationName: "Mokoena Civil & Projects (Pty) Ltd", completed: ["profile"] }, options),
+    ],
     [
       "approval-needed",
       "Approval needed",
@@ -192,10 +203,42 @@ export function previewEmails(opts: { now?: Date } = {}): PreviewEmail[] {
           recipientName: "Thandi Mokoena",
           organisationName: "Mokoena Civil & Projects (Pty) Ltd",
           items: [
-            { title: "Road marking paint", referenceNumber: "RFQ 2026/114", buyerName: "City of Ekurhuleni", province: "Gauteng", closingAt: at(9), status: "READY_FOR_APPROVAL", url: `${PREVIEW_ORIGIN}/tenders/1` },
-            { title: "Borehole drilling and equipping, Mopani District", referenceNumber: "T 77/2026", buyerName: "Mopani District Municipality", province: "Limpopo", closingAt: at(51), status: "PREPARING_BID", url: `${PREVIEW_ORIGIN}/tenders/2` },
-            { title: "Security services for municipal buildings", referenceNumber: "SCM 12/2026", buyerName: "Msunduzi Municipality", province: "KwaZulu-Natal", closingAt: at(60), status: "MISSING_INFORMATION", url: `${PREVIEW_ORIGIN}/tenders/3` },
-            { title: "Supply of PPE", referenceNumber: null, buyerName: "Department of Health", province: "Western Cape", closingAt: at(24 * 6), status: "QUALIFIED", url: `${PREVIEW_ORIGIN}/tenders/4` },
+            {
+              title: "Road marking paint",
+              referenceNumber: "RFQ 2026/114",
+              buyerName: "City of Ekurhuleni",
+              province: "Gauteng",
+              closingAt: at(9),
+              status: "READY_FOR_APPROVAL",
+              url: `${PREVIEW_ORIGIN}/tenders/1`,
+            },
+            {
+              title: "Borehole drilling and equipping, Mopani District",
+              referenceNumber: "T 77/2026",
+              buyerName: "Mopani District Municipality",
+              province: "Limpopo",
+              closingAt: at(51),
+              status: "PREPARING_BID",
+              url: `${PREVIEW_ORIGIN}/tenders/2`,
+            },
+            {
+              title: "Security services for municipal buildings",
+              referenceNumber: "SCM 12/2026",
+              buyerName: "Msunduzi Municipality",
+              province: "KwaZulu-Natal",
+              closingAt: at(60),
+              status: "MISSING_INFORMATION",
+              url: `${PREVIEW_ORIGIN}/tenders/3`,
+            },
+            {
+              title: "Supply of PPE",
+              referenceNumber: null,
+              buyerName: "Department of Health",
+              province: "Western Cape",
+              closingAt: at(24 * 6),
+              status: "QUALIFIED",
+              url: `${PREVIEW_ORIGIN}/tenders/4`,
+            },
           ],
         },
         options,
@@ -205,8 +248,14 @@ export function previewEmails(opts: { now?: Date } = {}): PreviewEmail[] {
 
   return [
     ...auth,
-    ...app.map(
-      ([id, label, email]): PreviewEmail => ({ id, group: "Sent by TenderOS", label, subject: email.subject, preheader: preheaderOf(email.html), html: email.html, text: email.text }),
-    ),
+    ...app.map(([id, label, email]): PreviewEmail => ({
+      id,
+      group: "Sent by TenderOS",
+      label,
+      subject: email.subject,
+      preheader: preheaderOf(email.html),
+      html: email.html,
+      text: email.text,
+    })),
   ];
 }

@@ -14,7 +14,10 @@ export const confirmSignup = template("confirmation", "Confirm your email to ope
     },
     { type: "button", label: "Confirm email address", href: "{{ .ConfirmationURL }}", note: expiryNote() },
     { type: "linkFallback", href: "{{ .ConfirmationURL }}" },
-    safety("Didn't create a TenderOS account?", "You can ignore this email. The account stays unconfirmed and cannot be used to sign in. Someone may have typed your address by mistake."),
+    safety(
+      "Didn't create a TenderOS account?",
+      "You can ignore this email. The account stays unconfirmed and cannot be used to sign in. Someone may have typed your address by mistake.",
+    ),
   ],
   reason: "someone signed up for TenderOS with {{ .Email }}",
 }));

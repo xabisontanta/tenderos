@@ -28,10 +28,16 @@ const REQUIRED: Record<string, string[]> = {
 
 describe("the set of Supabase emails", () => {
   it("covers every authentication template and every security notification Supabase CLI 2.120 supports", () => {
-    expect(AUTH_TEMPLATES.filter((s) => s.kind === "template").map((s) => s.key).sort()).toEqual(
-      ["confirmation", "email_change", "invite", "magic_link", "reauthentication", "recovery"].sort(),
-    );
-    expect(AUTH_TEMPLATES.filter((s) => s.kind === "notification").map((s) => s.key).sort()).toEqual(
+    expect(
+      AUTH_TEMPLATES.filter((s) => s.kind === "template")
+        .map((s) => s.key)
+        .sort(),
+    ).toEqual(["confirmation", "email_change", "invite", "magic_link", "reauthentication", "recovery"].sort());
+    expect(
+      AUTH_TEMPLATES.filter((s) => s.kind === "notification")
+        .map((s) => s.key)
+        .sort(),
+    ).toEqual(
       ["email_changed", "identity_linked", "identity_unlinked", "mfa_factor_enrolled", "mfa_factor_unenrolled", "password_changed", "phone_changed"].sort(),
     );
   });

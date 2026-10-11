@@ -19,7 +19,12 @@ describe("public/email images", () => {
       [`mark-${theme}`, (s) => assetFile.mark(theme, s), MARK_SIZE, MARK_SIZE],
       [`lockup-${theme}`, (s) => assetFile.lockup(theme, s), LOCKUP_SIZE.width, LOCKUP_SIZE.height],
     ]),
-    ...(Object.keys(EMAIL_ICONS) as IconName[]).map((name): [string, (scale: 1 | 2) => string, number, number] => [`icon-${name}`, (s) => assetFile.icon(name, s), ICON_CHIP_SIZE, ICON_CHIP_SIZE]),
+    ...(Object.keys(EMAIL_ICONS) as IconName[]).map((name): [string, (scale: 1 | 2) => string, number, number] => [
+      `icon-${name}`,
+      (s) => assetFile.icon(name, s),
+      ICON_CHIP_SIZE,
+      ICON_CHIP_SIZE,
+    ]),
   ];
 
   it.each(entries)("%s exists at 1x and 2x with the size the templates declare and an alpha channel", (_name, file, width, height) => {

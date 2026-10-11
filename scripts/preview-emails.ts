@@ -82,7 +82,13 @@ ${e.text ? `<details><summary>Plain-text version</summary><pre>${escapeHtml(e.te
 function nav(): string {
   const groups = [...new Set(emails.map((e) => e.group))];
   return groups
-    .map((g) => `<h3>${g}</h3><ul>${emails.filter((e) => e.group === g).map((e) => `<li><a href="#${e.id}">${escapeHtml(e.label)}</a></li>`).join("")}</ul>`)
+    .map(
+      (g) =>
+        `<h3>${g}</h3><ul>${emails
+          .filter((e) => e.group === g)
+          .map((e) => `<li><a href="#${e.id}">${escapeHtml(e.label)}</a></li>`)
+          .join("")}</ul>`,
+    )
     .join("");
 }
 
@@ -123,7 +129,10 @@ async function screenshots() {
   const problems: string[] = [];
   try {
     for (const scheme of ["light", "dark"] as const) {
-      for (const [view, width] of [["desktop", 720], ["mobile", 375]] as const) {
+      for (const [view, width] of [
+        ["desktop", 720],
+        ["mobile", 375],
+      ] as const) {
         const context = await browser.newContext({ colorScheme: scheme, viewport: { width, height: 900 }, deviceScaleFactor: 1 });
         const page = await context.newPage();
         for (const e of emails) {
@@ -133,7 +142,9 @@ async function screenshots() {
           await page.screenshot({ path: file, fullPage: true });
           const report = await page.evaluate(() => ({
             overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-            broken: Array.from(document.images).filter((i) => !i.complete || i.naturalWidth === 0).map((i) => i.getAttribute("src")),
+            broken: Array.from(document.images)
+              .filter((i) => !i.complete || i.naturalWidth === 0)
+              .map((i) => i.getAttribute("src")),
           }));
           if (report.overflow > 0) problems.push(`${e.id} ${scheme} ${view}: overflows by ${report.overflow}px`);
           if (report.broken.length) problems.push(`${e.id} ${scheme} ${view}: broken images ${report.broken.join(", ")}`);

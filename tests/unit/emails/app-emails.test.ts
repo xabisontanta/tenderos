@@ -51,9 +51,33 @@ const reminders = {
   recipientName: "Thandi",
   organisationName: "Mokoena Civil & Projects (Pty) Ltd",
   items: [
-    { title: "Road marking paint", referenceNumber: "RFQ 2026/114", buyerName: "City of Ekurhuleni", province: "Gauteng", closingAt: "2026-10-12T16:00:00+02:00", status: "PREPARING_BID", url: "https://app.example.co.za/tenders/1" },
-    { title: "Borehole drilling, Limpopo", referenceNumber: "T 77/2026", buyerName: "Mopani District", province: "Limpopo", closingAt: "2026-10-14T11:00:00+02:00", status: "READY_FOR_APPROVAL", url: "https://app.example.co.za/tenders/2" },
-    { title: "Security services", referenceNumber: null, buyerName: null, province: null, closingAt: "2026-10-18T10:00:00+02:00", status: "QUALIFIED", url: "https://app.example.co.za/tenders/3" },
+    {
+      title: "Road marking paint",
+      referenceNumber: "RFQ 2026/114",
+      buyerName: "City of Ekurhuleni",
+      province: "Gauteng",
+      closingAt: "2026-10-12T16:00:00+02:00",
+      status: "PREPARING_BID",
+      url: "https://app.example.co.za/tenders/1",
+    },
+    {
+      title: "Borehole drilling, Limpopo",
+      referenceNumber: "T 77/2026",
+      buyerName: "Mopani District",
+      province: "Limpopo",
+      closingAt: "2026-10-14T11:00:00+02:00",
+      status: "READY_FOR_APPROVAL",
+      url: "https://app.example.co.za/tenders/2",
+    },
+    {
+      title: "Security services",
+      referenceNumber: null,
+      buyerName: null,
+      province: null,
+      closingAt: "2026-10-18T10:00:00+02:00",
+      status: "QUALIFIED",
+      url: "https://app.example.co.za/tenders/3",
+    },
   ],
 };
 
@@ -111,7 +135,10 @@ describe.each(cases)("%s", (_name, render) => {
 
 describe("HTML injection", () => {
   const evilInvitation = renderTeamInvitation({ ...invitation, inviterName: EVIL, organisationName: EVIL, recipientEmail: `${EVIL}@example.co.za` }, options);
-  const evilApproval = renderApprovalNeeded({ ...approval, recipientName: EVIL, organisationName: EVIL, tenderTitle: EVIL, referenceNumber: EVIL, buyerName: EVIL }, options);
+  const evilApproval = renderApprovalNeeded(
+    { ...approval, recipientName: EVIL, organisationName: EVIL, tenderTitle: EVIL, referenceNumber: EVIL, buyerName: EVIL },
+    options,
+  );
   const evilDelivered = renderBidDelivered(
     {
       ...delivered,
@@ -133,7 +160,17 @@ describe("HTML injection", () => {
     {
       recipientName: EVIL,
       organisationName: EVIL,
-      items: [{ title: EVIL, referenceNumber: EVIL, buyerName: EVIL, province: EVIL, closingAt: "2026-10-13T10:00:00+02:00", status: EVIL, url: "https://app.example.co.za/tenders/1" }],
+      items: [
+        {
+          title: EVIL,
+          referenceNumber: EVIL,
+          buyerName: EVIL,
+          province: EVIL,
+          closingAt: "2026-10-13T10:00:00+02:00",
+          status: EVIL,
+          url: "https://app.example.co.za/tenders/1",
+        },
+      ],
     },
     options,
   );
@@ -163,12 +200,7 @@ describe("HTML injection", () => {
     expect(e.subject).toMatch(/….* on TenderOS$/);
   });
 
-  it.each([
-    ["javascript:alert(1)"],
-    ["http://app.example.co.za/accept"],
-    ["//evil.example/accept"],
-    [""],
-  ])("refuses the accept link %s", (acceptUrl) => {
+  it.each([["javascript:alert(1)"], ["http://app.example.co.za/accept"], ["//evil.example/accept"], [""]])("refuses the accept link %s", (acceptUrl) => {
     expect(() => renderTeamInvitation({ ...invitation, acceptUrl }, options)).toThrow(/unsafe link/i);
   });
 
@@ -257,7 +289,10 @@ describe("bid delivered", () => {
     expect(e.html).toMatch(/ask the buyer to confirm/);
   });
   it("words a hand-delivered bid differently", () => {
-    const manual = renderBidDelivered({ ...delivered, method: "MANUAL", deliveredTo: null, fromAddress: null, attachments: [], providerReference: null }, options);
+    const manual = renderBidDelivered(
+      { ...delivered, method: "MANUAL", deliveredTo: null, fromAddress: null, attachments: [], providerReference: null },
+      options,
+    );
     expect(manual.html).toMatch(/recorded that the approved bid was delivered by hand or on the buyer&#39;s portal/);
     expect(manual.html).not.toMatch(/mailbox accepted/);
   });
@@ -290,7 +325,9 @@ describe("closing reminders", () => {
     expect(() => renderClosingReminders({ ...reminders, items: [past] }, options)).toThrow(/No upcoming/);
   });
   it("uses the singular and a plain subject for a single tender", () => {
-    expect(renderClosingReminders({ ...reminders, items: [reminders.items[1]] }, options).subject).toBe("1 tender closes this week: Borehole drilling, Limpopo");
+    expect(renderClosingReminders({ ...reminders, items: [reminders.items[1]] }, options).subject).toBe(
+      "1 tender closes this week: Borehole drilling, Limpopo",
+    );
   });
 });
 

@@ -66,7 +66,8 @@ export function renderWelcome(input: WelcomeInput, options: AppEmailOptions): Ap
 
   const content: EmailContent = {
     title: "Welcome to TenderOS",
-    preheader: left === STEPS.length ? "Five steps take you from an empty workspace to your first bid." : `${left} of ${STEPS.length} steps left before your first bid.`,
+    preheader:
+      left === STEPS.length ? "Five steps take you from an empty workspace to your first bid." : `${left} of ${STEPS.length} steps left before your first bid.`,
     eyebrow: { label: "Getting started", icon: "layout-dashboard" },
     headline: "Welcome to TenderOS",
     blocks: [

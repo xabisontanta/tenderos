@@ -11,7 +11,10 @@ export const recovery = template("recovery", "Reset your TenderOS password", ["E
     { type: "p", text: "Choose a new one with the button below. Pick a strong password that you do not use anywhere else." },
     { type: "button", label: "Choose a new password", href: "{{ .ConfirmationURL }}", note: expiryNote() },
     { type: "linkFallback", href: "{{ .ConfirmationURL }}" },
-    safety("Didn't ask for a password reset?", "You can ignore this email: your password has not changed. If these keep arriving, write to us at the address below."),
+    safety(
+      "Didn't ask for a password reset?",
+      "You can ignore this email: your password has not changed. If these keep arriving, write to us at the address below.",
+    ),
   ],
   reason: "a password reset was requested for {{ .Email }}",
 }));

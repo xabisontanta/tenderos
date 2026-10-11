@@ -38,8 +38,9 @@ describe("isSafeHref", () => {
   it.each(["https://app.example.co.za/a?b=1&c=2", "{{ .ConfirmationURL }}", "{{ .SiteURL }}/privacy", "mailto:help@example.co.za"])("accepts %s", (href) =>
     expect(isSafeHref(href)).toBe(true),
   );
-  it.each(["javascript:alert(1)", "data:text/html;base64,AAAA", "//evil.example", "http://evil.example/x", "ftp://x", "", "  https://x.example"])("rejects %s", (href) =>
-    expect(isSafeHref(href)).toBe(false),
+  it.each(["javascript:alert(1)", "data:text/html;base64,AAAA", "//evil.example", "http://evil.example/x", "ftp://x", "", "  https://x.example"])(
+    "rejects %s",
+    (href) => expect(isSafeHref(href)).toBe(false),
   );
   it("allows http only for local development hosts when asked", () => {
     expect(isSafeHref("http://localhost:3000/x")).toBe(false);
@@ -148,7 +149,13 @@ const everyBlock: EmailContent = {
     { type: "linkFallback", href: "https://app.example.co.za/go" },
     { type: "code", code: "123456", caption: "Caption" },
     ...(["info", "success", "warning", "danger", "neutral"] as const).map((tone) => ({ type: "notice" as const, tone, title: tone, body: "Body" })),
-    { type: "details", rows: [{ label: "A", value: "1" }, { label: "B", value: { strong: "2" } }] },
+    {
+      type: "details",
+      rows: [
+        { label: "A", value: "1" },
+        { label: "B", value: { strong: "2" } },
+      ],
+    },
     { type: "list", items: ["One", "Two"] },
     {
       type: "steps",
@@ -161,7 +168,16 @@ const everyBlock: EmailContent = {
       type: "tenders",
       heading: "Closing soon",
       tone: "warning",
-      items: [{ title: "Tender", href: "https://app.example.co.za/t", meta: ["Ref", "Buyer"], closes: "Fri, 16 Oct, 12:00 SAST", remaining: "Closes in 2 days", status: "Preparing bid" }],
+      items: [
+        {
+          title: "Tender",
+          href: "https://app.example.co.za/t",
+          meta: ["Ref", "Buyer"],
+          closes: "Fri, 16 Oct, 12:00 SAST",
+          remaining: "Closes in 2 days",
+          status: "Preparing bid",
+        },
+      ],
     },
     { type: "divider" },
     { type: "safety", title: "Careful", body: "Body" },
@@ -221,7 +237,9 @@ describe("renderEmail safety", () => {
     const { html } = renderEmail(content, appContext({ appUrl: "https://app.example.co.za", brand }));
     expect(html).not.toContain("<script>alert");
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
-    expect(() => renderEmail({ ...sample, blocks: [{ type: "button", label: "x", href: "javascript:alert(1)" }] }, supabaseContext(brand))).toThrow(/unsafe link/i);
+    expect(() => renderEmail({ ...sample, blocks: [{ type: "button", label: "x", href: "javascript:alert(1)" }] }, supabaseContext(brand))).toThrow(
+      /unsafe link/i,
+    );
   });
 });
 

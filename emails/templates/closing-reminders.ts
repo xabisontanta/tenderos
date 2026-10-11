@@ -52,23 +52,19 @@ export function renderClosingReminders(input: ClosingRemindersInput, options: Ap
   const blocks: Block[] = [
     ...(name ? [{ type: "p", text: `Hi ${name},`, tight: true } as const] : []),
     { type: "p", text: ["Here is what closes soonest for ", { strong: input.organisationName }, ", earliest first."] },
-    ...grouped.map(
-      (g): Block => ({
-        type: "tenders",
-        heading: g.heading,
-        tone: g.tone,
-        items: g.rows.map(
-          ({ item, closing }): TenderRow => ({
-            title: item.title,
-            href: item.url,
-            meta: [item.referenceNumber, item.buyerName, item.province].filter((v): v is string => Boolean(v)),
-            closes: formatClosingShort(closing),
-            remaining: `Closes ${formatRemaining(closing.getTime() - now.getTime())}`,
-            status: humanize(item.status),
-          }),
-        ),
-      }),
-    ),
+    ...grouped.map((g): Block => ({
+      type: "tenders",
+      heading: g.heading,
+      tone: g.tone,
+      items: g.rows.map(({ item, closing }): TenderRow => ({
+        title: item.title,
+        href: item.url,
+        meta: [item.referenceNumber, item.buyerName, item.province].filter((v): v is string => Boolean(v)),
+        closes: formatClosingShort(closing),
+        remaining: `Closes ${formatRemaining(closing.getTime() - now.getTime())}`,
+        status: humanize(item.status),
+      })),
+    })),
     { type: "p", muted: true, text: "Times are South African Standard Time (SAST). A bid has to be approved and delivered before its tender closes." },
     { type: "button", label: "Open your tenders", href: appLink(ctx, "/tenders") },
   ];

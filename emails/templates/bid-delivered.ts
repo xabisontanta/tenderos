@@ -48,11 +48,7 @@ export function renderBidDelivered(input: BidDeliveredInput, options: AppEmailOp
   if (input.providerReference) rows.push({ label: "Message ID", value: { code: bareMessageId(input.providerReference) } });
 
   const attachments = input.attachments ?? [];
-  const blocks: Block[] = [
-    ...(name ? [{ type: "p", text: `Hi ${name},`, tight: true } as const] : []),
-    { type: "p", text: intro },
-    { type: "details", rows },
-  ];
+  const blocks: Block[] = [...(name ? [{ type: "p", text: `Hi ${name},`, tight: true } as const] : []), { type: "p", text: intro }, { type: "details", rows }];
   if (attachments.length) {
     blocks.push({ type: "p", muted: true, text: [{ strong: `Attached (${attachments.length})` }] });
     blocks.push({ type: "list", items: attachments.map((a) => `${a.filename} · ${formatBytes(a.bytes)}`) });
@@ -76,7 +72,9 @@ export function renderBidDelivered(input: BidDeliveredInput, options: AppEmailOp
 
   const content: EmailContent = {
     title: `Bid delivered: ${input.tenderTitle}`,
-    preheader: email ? `${input.tenderTitle} was emailed${input.deliveredTo ? ` to ${input.deliveredTo}` : ""}. The delivery is recorded.` : `Delivery of ${input.tenderTitle} is recorded.`,
+    preheader: email
+      ? `${input.tenderTitle} was emailed${input.deliveredTo ? ` to ${input.deliveredTo}` : ""}. The delivery is recorded.`
+      : `Delivery of ${input.tenderTitle} is recorded.`,
     eyebrow: { label: "Bid delivered", icon: "send" },
     headline: "Bid delivered",
     blocks,

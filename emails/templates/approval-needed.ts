@@ -1,6 +1,6 @@
 import { contextFor, nowFor, renderApp, type AppEmail, type AppEmailOptions } from "../app";
 import { firstName, formatClosing, formatRemaining, plural, toDate } from "../format";
-import type { Block, EmailContent, Inline } from "../layout";
+import type { Block, EmailContent, Rich } from "../layout";
 
 export interface ApprovalNeededInput {
   recipientName?: string | null;
@@ -30,7 +30,7 @@ export function renderApprovalNeeded(input: ApprovalNeededInput, options: AppEma
   const name = firstName(input.recipientName);
   const issues = input.openIssues ?? 0;
 
-  const rows: Array<{ label: string; value: Inline }> = [{ label: "Tender", value: { strong: input.tenderTitle } }];
+  const rows: Array<{ label: string; value: Rich }> = [{ label: "Tender", value: { strong: input.tenderTitle } }];
   if (input.referenceNumber) rows.push({ label: "Reference", value: input.referenceNumber });
   if (input.buyerName) rows.push({ label: "Buyer", value: input.buyerName });
   rows.push({ label: "Closes", value: closed ? `${formatClosing(closing)} (closed)` : [{ strong: formatClosing(closing) }, `, ${formatRemaining(msLeft)}`] });
@@ -70,7 +70,13 @@ export function renderApprovalNeeded(input: ApprovalNeededInput, options: AppEma
       ...(name ? [{ type: "p", text: `Hi ${name},`, tight: true } as const] : []),
       {
         type: "p",
-        text: ["The bid for ", { strong: input.tenderTitle }, " has been through quality review and is waiting for an owner or admin of ", { strong: input.organisationName }, " to approve or reject it."],
+        text: [
+          "The bid for ",
+          { strong: input.tenderTitle },
+          " has been through quality review and is waiting for an owner or admin of ",
+          { strong: input.organisationName },
+          " to approve or reject it.",
+        ],
       },
       { type: "details", rows },
       ...notices,

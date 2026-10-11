@@ -10,7 +10,10 @@ export const magicLink = template("magic_link", "Your TenderOS sign-in link", ["
     { type: "p", text: ["Use the button below to sign in as ", { strong: "{{ .Email }}" }, ". No password is needed."] },
     { type: "button", label: "Sign in to TenderOS", href: "{{ .ConfirmationURL }}", note: expiryNote() },
     { type: "linkFallback", href: "{{ .ConfirmationURL }}" },
-    safety("Didn't ask to sign in?", "You can ignore this email: the link only works if someone opens it. If these keep arriving and you did not ask for them, write to us at the address below."),
+    safety(
+      "Didn't ask to sign in?",
+      "You can ignore this email: the link only works if someone opens it. If these keep arriving and you did not ask for them, write to us at the address below.",
+    ),
   ],
   reason: "a sign-in link was requested for {{ .Email }}",
 }));

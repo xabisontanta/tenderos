@@ -21,7 +21,12 @@ export const invite = template("invite", "You have been invited to TenderOS", ["
       ],
     },
     { type: "p", text: "Accept the invitation to set up your account and sign in." },
-    { type: "button", label: "Accept invitation", href: "{{ .ConfirmationURL }}", note: "The link works once. If it has expired, ask the person who invited you for a new invitation." },
+    {
+      type: "button",
+      label: "Accept invitation",
+      href: "{{ .ConfirmationURL }}",
+      note: "The link works once. If it has expired, ask the person who invited you for a new invitation.",
+    },
     { type: "linkFallback", href: "{{ .ConfirmationURL }}" },
     safety("Weren't expecting this?", "Ignore this email and no account is set up. If you know who sent it and think it was a mistake, let them know."),
   ],
