@@ -5,6 +5,8 @@
  *
  *   npm run build:emails            write the files
  *   npm run build:emails -- --check fail if a committed file is out of date
+ *   npm run build:emails -- --management-api   print the JSON body that applies the
+ *                                   templates to a hosted project (see docs/email.md)
  *
  * Environment (all optional):
  *   EMAIL_LEGAL_NAME, EMAIL_LEGAL_ADDRESS, EMAIL_REGISTRATION_NUMBER,
@@ -15,7 +17,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { resolveBrand, unresolvedPlaceholders } from "../emails/brand";
-import { buildAuthTemplates } from "../emails/build";
+import { buildAuthTemplates, managementApiPayload } from "../emails/build";
 
 const check = process.argv.includes("--check");
 const outDir = path.resolve("supabase/templates");
@@ -38,6 +40,13 @@ if (missing.length) {
 }
 
 const templates = buildAuthTemplates(brand, { assetBase });
+
+if (process.argv.includes("--management-api")) {
+  // For hosted projects: writes the PATCH body for /v1/projects/{ref}/config/auth to stdout. Sends nothing.
+  process.stdout.write(`${JSON.stringify(managementApiPayload(templates), null, 2)}\n`);
+  process.exit(0);
+}
+
 let stale = 0;
 if (!check) mkdirSync(outDir, { recursive: true });
 for (const t of templates) {
