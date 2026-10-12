@@ -2,7 +2,7 @@ import type { AgentExecutor, DomainEvent } from "@/agents/runtime/types";
 import { NonRetryableError } from "@/agents/runtime/types";
 import { RULES_COST, requireAi } from "@/agents/runtime/ai/context";
 import { MAX_PDF_BASE64_CHARS, chunkDocument, prepareDocument, renderChunk, type PreparedDocument } from "@/agents/runtime/ai/documents";
-import { AiInputTooLargeError } from "@/agents/runtime/ai/errors";
+import { AiBudgetError, AiInputTooLargeError, AiRequestError } from "@/agents/runtime/ai/errors";
 import { SourceIndex } from "@/agents/runtime/ai/guardrails/citations";
 import { buildPrompt, type PromptPart } from "@/agents/runtime/ai/guardrails/data-policy";
 import { detectInjection, wrapUntrusted } from "@/agents/runtime/ai/guardrails/text";
@@ -95,14 +95,21 @@ export const tenderAnalysisReal: AgentExecutor<AnalysisOutput> = {
     const t = ctx.tender;
     if (!t) throw new NonRetryableError("Tender data unavailable");
 
-    const raw = await ctx.tools.run("tender.documents.read", () => ai.documents.listTenderDocuments(t.id, { signal: ctx.signal }));
-    const docs = raw.map(prepareDocument);
+    // The source may also say which documents it knew of but did not hand over (a file that failed to fetch, a Word file, a
+    // document left out of a large pack): each becomes a gap, so the analysis never looks more complete than it was.
+    const read = await ctx.tools.run("tender.documents.read", async () => {
+      if (ai.documents.readTenderDocuments) return ai.documents.readTenderDocuments(t.id, { signal: ctx.signal });
+      return { documents: await ai.documents.listTenderDocuments(t.id, { signal: ctx.signal }), gaps: [] as string[] };
+    });
+    const docs = read.documents.map(prepareDocument);
+    const sourceGaps = read.gaps.map((g) => g.trim().slice(0, MAX_GAP_CHARS)).filter(Boolean);
     await ctx.progress(10, `Read ${docs.length} tender document${docs.length === 1 ? "" : "s"}`);
 
     if (docs.length === 0) {
       const base = extractRecordRequirements(t);
       base.gaps[base.gaps.length - 1] =
         "No tender documents were available to read, so forms, evaluation criteria and mandatory conditions have not been extracted";
+      base.gaps.push(...sourceGaps.filter((g) => !base.gaps.includes(g)));
       return {
         output: { requirements: base.requirements, gaps: base.gaps, documents_analysed: 0, simulated: false, ai_generated: false },
         summary: "No tender documents available; only the tender record was analysed",
@@ -111,7 +118,7 @@ export const tenderAnalysisReal: AgentExecutor<AnalysisOutput> = {
     }
 
     const base = extractRecordRequirements(t, { documentsRead: true });
-    const gaps = [...base.gaps];
+    const gaps = [...base.gaps, ...sourceGaps.filter((g) => !base.gaps.includes(g))];
     const titles = new Map(docs.map((d) => [d.id, d.title]));
 
     // Text that reads like a command to an AI system is reported, and any quote that contains it is distrusted.
@@ -185,9 +192,21 @@ export const tenderAnalysisReal: AgentExecutor<AnalysisOutput> = {
           if (gap && !gaps.includes(gap)) gaps.push(gap);
         }
       } catch (err) {
-        if (!(err instanceof AiInputTooLargeError)) throw err;
-        failure ??= err;
-        gaps.push(`${chunk.label.startsWith("Part") ? chunk.label : `"${chunk.doc.title}"`} was not analysed because it is too large to read in one request`);
+        const name = chunk.label.startsWith("Part") ? chunk.label : `"${chunk.doc.title}"`;
+        if (err instanceof AiInputTooLargeError) {
+          failure ??= err;
+          gaps.push(`${name} was not analysed because it is too large to read in one request`);
+        } else if (err instanceof AiRequestError && err.status === 400 && chunk.parts.some((p) => p.type === "pdf")) {
+          // The service refused this PDF (too many pages, damaged, protected). Say so and go on with the others.
+          failure ??= err;
+          gaps.push(`${name} was rejected by the AI service and was not analysed (it may have too many pages or be damaged)`);
+        } else if (err instanceof AiBudgetError && analysedDocs.size > 0) {
+          // What was read stays; the rest waits for a person, with the reason.
+          for (const rest of chunks.slice(i)) {
+            gaps.push(`${rest.label.startsWith("Part") ? rest.label : `"${rest.doc.title}"`} was not analysed because this task reached its AI cost ceiling`);
+          }
+          break;
+        } else throw err;
       }
     }
     if (analysedDocs.size === 0 && failure) throw failure;

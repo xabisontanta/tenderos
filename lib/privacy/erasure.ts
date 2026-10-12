@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { DOCUMENT_BUCKET } from "@/lib/domain/documents";
+import { TENDER_DOCUMENT_BUCKET } from "@/lib/tender-documents/storage";
 
 /**
  * POPIA erasure and data-subject access, run with the service role by an authorised person
@@ -41,14 +42,17 @@ export interface OrganisationErasure {
 const LIST_PAGE = 1000;
 const REMOVE_CHUNK = 100;
 
+/** Every bucket that holds files under an organisation's folder: the company vault and the fetched tender documents. */
+const ORGANISATION_BUCKETS = [DOCUMENT_BUCKET, TENDER_DOCUMENT_BUCKET] as const;
+
 /** Every object under a prefix, folders followed, so uploads that were never registered are found too. */
-export async function listFiles(admin: Admin, prefix: string): Promise<string[]> {
+export async function listFiles(admin: Admin, prefix: string, bucket: string = DOCUMENT_BUCKET): Promise<string[]> {
   const found: string[] = [];
   const folders = [prefix];
   while (folders.length) {
     const folder = folders.pop()!;
     for (let offset = 0; ; offset += LIST_PAGE) {
-      const { data, error } = await admin.storage.from(DOCUMENT_BUCKET).list(folder, { limit: LIST_PAGE, offset });
+      const { data, error } = await admin.storage.from(bucket).list(folder, { limit: LIST_PAGE, offset });
       if (error) throw new Error(`Could not list stored files: ${error.message}`);
       for (const entry of data ?? []) {
         // Folders come back without an id.
@@ -61,9 +65,9 @@ export async function listFiles(admin: Admin, prefix: string): Promise<string[]>
   return found;
 }
 
-async function removeFiles(admin: Admin, paths: string[]): Promise<void> {
+async function removeFiles(admin: Admin, paths: string[], bucket: string): Promise<void> {
   for (let i = 0; i < paths.length; i += REMOVE_CHUNK) {
-    const { error } = await admin.storage.from(DOCUMENT_BUCKET).remove(paths.slice(i, i + REMOVE_CHUNK));
+    const { error } = await admin.storage.from(bucket).remove(paths.slice(i, i + REMOVE_CHUNK));
     if (error) throw new Error(`Could not remove stored files: ${error.message}`);
   }
 }
@@ -73,11 +77,15 @@ async function removeFiles(admin: Admin, paths: string[]): Promise<void> {
  * run again, whereas the other order could leave files nobody can find.
  */
 export async function eraseOrganisation(admin: Admin, organisationId: string, options: ErasureOptions = {}): Promise<OrganisationErasure> {
-  const paths = await listFiles(admin, organisationId);
-  await removeFiles(admin, paths);
+  let removed = 0;
+  for (const bucket of ORGANISATION_BUCKETS) {
+    const paths = await listFiles(admin, organisationId, bucket);
+    await removeFiles(admin, paths, bucket);
+    removed += paths.length;
+  }
   const { data, error } = await admin.rpc("erase_organisation", { p_org: organisationId, p_reference: options.reference });
   if (error) throw new Error(`Could not erase the organisation: ${error.message}`);
-  return { ...(data as unknown as Omit<OrganisationErasure, "files_removed">), files_removed: paths.length };
+  return { ...(data as unknown as Omit<OrganisationErasure, "files_removed">), files_removed: removed };
 }
 
 /** Erases one person. Their uploads belong to the organisation and stay with it. */

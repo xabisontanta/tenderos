@@ -743,6 +743,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"tender_documents": {
+                  Row: {
+                    "attempts": number,"created_at": string,"error": string | null,"fetched_at": string | null,"file_name": string,"id": string,"mime_type": string | null,"organisation_id": string,"page_count": number | null,"sha256": string | null,"size_bytes": number | null,"source_url": string,"status": string,"storage_path": string | null,"tender_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attempts"?: number,"created_at"?: string,"error"?: string | null,"fetched_at"?: string | null,"file_name": string,"id"?: string,"mime_type"?: string | null,"organisation_id": string,"page_count"?: number | null,"sha256"?: string | null,"size_bytes"?: number | null,"source_url": string,"status"?: string,"storage_path"?: string | null,"tender_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "attempts"?: number,"created_at"?: string,"error"?: string | null,"fetched_at"?: string | null,"file_name"?: string,"id"?: string,"mime_type"?: string | null,"organisation_id"?: string,"page_count"?: number | null,"sha256"?: string | null,"size_bytes"?: number | null,"source_url"?: string,"status"?: string,"storage_path"?: string | null,"tender_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tender_documents_organisation_id_tender_id_fkey"
+      columns: ["organisation_id","tender_id"]
+isOneToOne: false
+      referencedRelation: "tenders"
+      referencedColumns: ["organisation_id","id"]
+    }
+                  ]
                 },"tender_sources": {
                   Row: {
                     "base_url": string | null,"config": NonNullable<Json>,"created_at": string,"enabled": boolean,"id": string,"kind": Database["public"]['Enums']["tender_source_kind"],"name": string,"organisation_id": string,"slug": string
@@ -947,6 +967,9 @@ isOneToOne: false
                            },
 "export_user_data":
 { Args: { "p_actor"?: string,"p_user_id": string }; Returns: Json
+                           },
+"fetch_tender_documents":
+{ Args: { "p_document_id"?: string,"p_tender_id": string }; Returns: number
                            },
 "hit_rate_limit":
 { Args: { "p_action": string,"p_max"?: number,"p_window_seconds"?: number }; Returns: undefined

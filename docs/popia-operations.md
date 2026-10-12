@@ -158,9 +158,11 @@ may already be gone, which is fine).
 ### Why storage is done by code, not SQL
 
 Supabase refuses direct deletes on `storage.objects`; only its Storage API removes a file. So
-`lib/privacy/erasure.ts` lists the organisation's folder (and every sub-folder), removes the files, and only then calls
+`lib/privacy/erasure.ts` lists the organisation's folder (and every sub-folder) in both buckets, `company-documents` and
+`tender-documents` (the tender documents TenderOS fetched from the portal), removes the files, and only then calls
 `erase_organisation`. A file left behind would be unreachable (the database no longer knows it) but would
-still be personal data, which is why files go first.
+still be personal data, which is why files go first. A tender document is public tender material, but it can carry a
+contact person's details. A tender deleted on its own leaves its fetched files until the organisation is erased.
 
 ## 5. Retention
 

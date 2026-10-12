@@ -11,6 +11,7 @@ import { HandoffList } from "@/features/operations/handoff-list";
 import { LiveRefresh } from "@/features/realtime/live-refresh";
 import { DeliveryDetails } from "@/features/tenders/delivery-details";
 import { TenderActions } from "@/features/tenders/tender-actions";
+import { TenderDocuments, type TenderDocumentRow } from "@/features/tenders/tender-documents";
 import { WorkflowTimeline } from "@/features/tenders/workflow-timeline";
 import {
   CompliancePanel,
@@ -45,7 +46,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   const { data: tender } = await supabase.from("tenders").select("*").eq("id", id).maybeSingle();
   if (!tender) notFound();
 
-  const [runs, history, approvals, handoffs, agents, submissions, events, costs] = await Promise.all([
+  const [runs, history, approvals, handoffs, agents, submissions, events, costs, tenderDocuments] = await Promise.all([
     supabase.from("workflow_runs").select("*").eq("tender_id", id).order("created_at", { ascending: false }),
     supabase.from("tender_status_history").select("*").eq("tender_id", id).order("created_at"),
     supabase.from("approvals").select("*").eq("tender_id", id).order("requested_at", { ascending: false }),
@@ -54,7 +55,14 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
     supabase.from("submission_records").select("*").eq("tender_id", id).order("created_at", { ascending: false }),
     getRecentEvents(ctx.organisation.id, { tenderId: id, limit: 100 }),
     supabase.from("cost_usage").select("cost_usd,is_simulated").eq("tender_id", id),
+    supabase
+      .from("tender_documents")
+      .select("id,file_name,status,error,size_bytes,page_count,fetched_at")
+      .eq("tender_id", id)
+      .order("created_at")
+      .order("file_name"),
   ]);
+  const listedDocuments = Array.isArray(tender.documents) ? tender.documents.length : 0;
 
   const latestRun = runs.data?.[0] ?? null;
   const activeRun = (runs.data ?? []).find((r) => ["PENDING", "RUNNING", "WAITING_APPROVAL", "BLOCKED"].includes(r.status)) ?? null;
@@ -128,6 +136,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="qualification">Qualification</TabsTrigger>
               <TabsTrigger value="requirements">Requirements</TabsTrigger>
+              <TabsTrigger value="documents">Documents</TabsTrigger>
               <TabsTrigger value="compliance">Compliance</TabsTrigger>
               <TabsTrigger value="proposal">Proposal</TabsTrigger>
               <TabsTrigger value="pricing">Pricing</TabsTrigger>
@@ -202,6 +211,22 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
                 </TabsContent>
                 <TabsContent value="requirements" className="mt-0">
                   <RequirementsPanel output={output("analysis")} />
+                </TabsContent>
+                <TabsContent value="documents" className="mt-0">
+                  {tenderDocuments.error ? (
+                    <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+                      The documents could not be loaded. Try again in a moment.
+                    </p>
+                  ) : (
+                    <TenderDocuments
+                      tenderId={tender.id}
+                      rows={(tenderDocuments.data ?? []) as TenderDocumentRow[]}
+                      listed={listedDocuments}
+                      canFetch={canOperate(ctx.role)}
+                      isSimulation={tender.is_simulation}
+                      aiEnabled={ctx.settings.ai_enabled}
+                    />
+                  )}
                 </TabsContent>
                 <TabsContent value="compliance" className="mt-0">
                   <CompliancePanel output={output("compliance")} links={documentLinks} />

@@ -303,6 +303,7 @@ describe("every privileged function, with the requirement on", () => {
       ["revoke_invitation", o, `select public.revoke_invitation($1)`, [invitationId]],
       ["set_ai_settings", a, `select public.set_ai_settings($1, true, false)`, [f.orgId]],
       ["set_ai_budget", a, `select public.set_ai_budget($1, 6)`, [f.orgId]],
+      ["fetch_tender_documents", p, `select public.fetch_tender_documents($1)`, [tender.id]],
     ];
 
     await requireMfa(f.orgId, true);

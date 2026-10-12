@@ -323,6 +323,14 @@ person to review.
   not only in server actions. A new state-changing RPC must call it; the
   hardening integration test lists them.
 - Secrets live in environment variables, never in the repo.
+- The worker fetches tender documents (`lib/tender-documents`, `docs/ai-agents.md`)
+  from links only discovery writes: https to the tender's own host or
+  `TENDER_DOCUMENT_HOSTS`, never to a private, loopback, link-local or metadata
+  address (resolved and checked here, connection pinned to the checked address),
+  redirects by hand on the same host only, 30 s, 25 MB, file type decided by the
+  bytes. Files sit in the private `tender-documents` bucket: members of the
+  organisation read, browsers cannot write, erasure removes them. Nothing from a
+  document or its link goes into a log line or an event.
 
 See `docs/security.md` for the full model.
 
@@ -336,8 +344,10 @@ See `docs/security.md` for the full model.
   `page` or `section`, and counts as `EXTRACTED` only if the quote is found in
   the text the model was given (after whitespace, case and quote-mark
   normalisation). Otherwise it is kept as `REQUIRES_CONFIRMATION` with the
-  reason (`agents/runtime/ai/guardrails/citations.ts`). A PDF without a text
-  layer can be read but nothing from it can be verified.
+  reason (`agents/runtime/ai/guardrails/citations.ts`). A PDF is read as a
+  document block with no extracted text, so nothing from it can be verified by
+  quote: every requirement taken from a fetched tender document is
+  `REQUIRES_CONFIRMATION`.
 - Tender and company text reaches a model only inside content-hashed
   `UNTRUSTED_DATA` markers, and every system prompt says it is data, not
   instructions. Text that reads like a command to an AI system is reported

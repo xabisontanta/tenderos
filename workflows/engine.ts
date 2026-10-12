@@ -9,7 +9,7 @@ import { NonRetryableError, type AgentContext, type AgentResult, type CostRecord
 import { createAnthropicClient } from "@/agents/runtime/ai/anthropic";
 import type { AiClient } from "@/agents/runtime/ai/client";
 import { loadAiConfig, resolveAiEnabled, resolveModel, resolveWebResearchEnabled, withTaskCostCeiling, type AiConfig } from "@/agents/runtime/ai/config";
-import { NO_DOCUMENTS, type DocumentSource } from "@/agents/runtime/ai/documents";
+import type { DocumentSource } from "@/agents/runtime/ai/documents";
 import { createAiRuntime, type AiRuntime } from "@/agents/runtime/ai/runtime";
 import { backoffMs, shouldRetry } from "./retry";
 import { WORKFLOWS, getStep, type StepResolution, type WorkflowDefinition } from "./definitions/simulated-bid";
@@ -17,6 +17,9 @@ import type { PlanStep } from "./definitions/plan";
 import * as db from "./store";
 import { runDiscovery } from "./discovery";
 import { maxInvalidRatioFromEnv, type Fetcher } from "@/agents/discovery/etenders";
+import { ingestTenderDocuments, productionIngestDeps, type IngestDeps } from "@/lib/tender-documents/ingest";
+import { createTenderDocumentSource } from "@/lib/tender-documents/source";
+import { createSupabaseStorage, type DocumentStorage } from "@/lib/tender-documents/storage";
 
 export interface Job {
   id: number;
@@ -44,6 +47,17 @@ export interface EngineOptions {
   /** Share of the portal's rows a scan may fail to read before it fails (default: DISCOVERY_MAX_INVALID_PCT, else 20 percent). */
   discovery?: { maxInvalidRatio?: number };
   ai?: EngineAiOptions;
+  /** Tender document fetching (the `tender.documents.fetch` job and the Tender Analyst's documents). Tests inject fakes. */
+  documents?: EngineDocumentOptions;
+}
+
+export interface EngineDocumentOptions {
+  /** Downloads one document. Defaults to the hardened HTTPS fetcher. */
+  fetch?: IngestDeps["fetch"];
+  /** The private tender-documents bucket. Defaults to Supabase Storage with the service role key from the environment. */
+  storage?: DocumentStorage;
+  /** Hosts documents may come from besides the tender's own. Defaults to TENDER_DOCUMENT_HOSTS. */
+  allowedHosts?: readonly string[];
 }
 
 /** Wiring for AI execution. Everything defaults to production behaviour; tests inject fakes. */
@@ -52,7 +66,7 @@ export interface EngineAiOptions {
   env?: Record<string, string | undefined>;
   /** Model client. Defaults to the Anthropic client built from the environment. */
   client?: AiClient;
-  /** Where tender documents come from. Defaults to none until document ingestion lands. */
+  /** Where the Tender Analyst reads tender documents from. Defaults to the organisation's fetched PDFs (lib/tender-documents/source.ts). */
   documents?: DocumentSource;
 }
 
@@ -88,6 +102,8 @@ export class WorkflowEngine {
           now: this.now,
           maxInvalidRatio: this.opts.discovery?.maxInvalidRatio ?? maxInvalidRatioFromEnv(process.env),
         });
+      case "tender.documents.fetch":
+        return this.fetchTenderDocuments(job);
       case "approval.decided":
         return this.approvalDecided(String(job.payload.approval_id));
       case "agents.refresh":
@@ -118,6 +134,14 @@ export class WorkflowEngine {
       );
       return;
     }
+    if (job.kind === "tender.documents.fetch" && job.payload.tender_id) {
+      // Nothing should stay "waiting" for a job that will never run again: show the reason on the documents.
+      await this.pool.query(`update public.tender_documents set status = 'FAILED', error = $2 where tender_id = $1 and status = 'PENDING'`, [
+        String(job.payload.tender_id),
+        `The fetch stopped: ${error}`.slice(0, 500),
+      ]);
+      return;
+    }
     if (job.kind !== "task.run") return;
     await withTx(this.pool, async (c) => {
       const task = await db.lockTask(c, String(job.payload.task_id));
@@ -131,6 +155,23 @@ export class WorkflowEngine {
   }
 
   // -------------------------------------------------------------------------
+  private ingestDeps(): IngestDeps {
+    const o = this.opts.documents;
+    const storage = o?.storage ?? createSupabaseStorage(this.opts.ai?.env ?? process.env);
+    const base = o?.fetch ? { fetch: o.fetch, storage, logger: this.opts.logger } : productionIngestDeps(this.opts.logger, storage);
+    return o?.allowedHosts ? { ...base, allowedHosts: o.allowedHosts } : base;
+  }
+
+  /** Fetches a tender's pending documents. Per-document outcomes are recorded on the rows; the job only decides whether to come back. */
+  private async fetchTenderDocuments(job: Job): Promise<JobOutcome> {
+    const res = await ingestTenderDocuments(this.pool, String(job.payload.tender_id), this.ingestDeps());
+    const later = (ms: number) => new Date(this.now().getTime() + ms);
+    if (res.busy) return { status: "defer", runAt: later(5_000), reason: "Another run is fetching this tender's documents" };
+    if (res.retrying > 0) return { status: "retry", runAt: later(backoffMs(job.attempts)), error: "Some documents will be tried again" };
+    if (res.remaining > 0) return { status: "defer", runAt: later(2_000), reason: "More documents to fetch" };
+    return { status: "completed" };
+  }
+
   private definition(run: db.RunRow): WorkflowDefinition {
     const def = WORKFLOWS[run.workflow_key];
     if (!def) throw new NonRetryableError(`Unknown workflow ${run.workflow_key}`);
@@ -464,7 +505,7 @@ export class WorkflowEngine {
           config: aiSetup.config,
           agent: { slug: agent.slug as AiRuntime["agent"]["slug"], tier: agent.model_tier, modelOverride: agent.model_override },
           logger: log,
-          documents: this.opts.ai?.documents ?? NO_DOCUMENTS,
+          documents: this.opts.ai?.documents ?? createTenderDocumentSource({ pool: this.pool, ingest: this.ingestDeps() }),
           signal: controller.signal,
           webResearchEnabled: aiSetup.webResearch,
         });

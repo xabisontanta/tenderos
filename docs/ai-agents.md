@@ -106,10 +106,12 @@ How the API is called, and why:
 **Job.** Read the tender documents and list what a bidder must do and provide.
 
 **Input.** The tender record and the documents from a `DocumentSource` (text per
-page, plain text, or a PDF). Real downloading and text extraction come with
-document ingestion; until then the engine uses a source with no documents and
-the analyst reports that gap. Large documents are split into parts that each
-fit one request, and the tier moves up for big packs or high-value tenders.
+page, plain text, or a PDF). In production the source is the tender's fetched
+PDFs (see "Tender documents" below), each sent as a PDF document block; the
+source also hands over one gap sentence per document it knew of but did not
+give (a file that failed, a Word file, a document left out of a large pack).
+Large documents are split into parts that each fit one request, and the tier
+moves up for big packs or high-value tenders.
 
 **Output.** `requirements` (category, text, mandatory, status, and for document
 items the `quote`, `page` or `section`, `quote_verified`, optional `date_iso`
@@ -124,8 +126,10 @@ including each bill-of-quantities line. The tender-record requirements stay.
   given and it has a page or section. Otherwise it is kept as
   `REQUIRES_CONFIRMATION` with the reason, counted in a gap, and reported in an
   `AI_CITATIONS_DOWNGRADED` event. A wrong page is corrected to the real one.
-- A PDF with no text layer is read, but every item from it is
-  `REQUIRES_CONFIRMATION`, because there is no text to check a quote against.
+- A PDF is read as a document block, with no extracted text, so every item from
+  it is `REQUIRES_CONFIRMATION`: there is no text to check a quote against.
+  Fetched tender documents are all in this position until text extraction is
+  added (it needs a PDF library, which this release does not have).
 - Dates are compared with the tender record and with each other. A conflict is
   reported and every involved item (and the record's own requirement) goes to
   `REQUIRES_CONFIRMATION`; the analyst never picks a date.
@@ -135,9 +139,51 @@ including each bill-of-quantities line. The tender-record requirements stay.
   line is never trusted.
 
 **Failure.** A refusal, an output that fails validation after one repair, a
-budget stop or a refused tool fails the task without a retry. A part that is
-too large is reported as a gap and the rest is analysed; if nothing can be read
-the task fails.
+budget stop before anything was read or a refused tool fails the task without a
+retry. A part that is too large, a PDF the service rejects (too many pages,
+damaged) and a document that would take the task past its cost ceiling are
+reported as gaps and the rest is analysed; if nothing can be read the task
+fails.
+
+### Tender documents (`lib/tender-documents/`)
+
+The eTenders feed lists each tender's documents (`tenders.documents`). A worker job
+`tender.documents.fetch` downloads them into the private `tender-documents` bucket
+(`<organisation_id>/<tender_id>/<sha256>.pdf`) and records each on
+`tender_documents` with a status: `PENDING`, `DOWNLOADED`, `FAILED`,
+`UNSUPPORTED` (Word, Excel, zip and other types, password-protected PDFs, a copy
+of a file already held), `TOO_LARGE`. The tender page has a Documents tab with
+the status of each and Fetch / Retry.
+
+- **When.** Discovery queues the job when it stores or refreshes a tender that
+  has document links, only for organisations that have AI assistance on (a scan
+  can store hundreds of tenders and the files are of no use without AI). A
+  person with the operator role or above can always press **Fetch documents**
+  (`fetch_tender_documents`: rate limited, audited, second factor when required).
+  The Tender Analyst also makes sure its tender's documents are fetched before it
+  reads them, once per tender at a time (an advisory lock), so a bid that starts
+  right after a scan does not read an empty pack.
+- **The fetcher** (`fetcher.ts`, `policy.ts`, `transport.ts`) takes https links
+  only, to the tender's own host or `TENDER_DOCUMENT_HOSTS` (default
+  `www.etenders.gov.za`); no credentials, ports or address literals; resolves the
+  name itself and refuses any private, loopback, link-local, metadata or
+  reserved address (`lib/security/public-address.ts`, shared with the SMTP
+  host check); connects to the checked address; follows redirects by hand, same
+  host and https only, checking again on every hop; sends no cookies and refuses
+  compression; one 30 s deadline; stops at 25 MB. Only discovery writes
+  `tenders.documents`, so a member cannot make the worker fetch an arbitrary URL.
+- **Content** is decided by the bytes, not the name (`sniff.ts`): a file named
+  `.pdf` that is an HTML error page is `FAILED`, not stored. Only PDFs are stored
+  and read. Document text and links never reach the log or an event; the stored
+  error is a sentence that does not repeat the URL.
+- **What the Analyst gets** (`source.ts`, `select.ts`): the tender's `DOWNLOADED`
+  PDFs as PDF blocks, up to 8 documents and 40 MB per tender, in a fixed order
+  (invitation and bid documents, then scope and price schedules, then the rest,
+  then drawings and photos; ties by file name, then id). A PDF over 18 MB or
+  with more than 100 pages is not sent. Every document not read, whatever the
+  reason, is a gap in the analysis.
+- **Erasure.** Erasing an organisation removes its folder in both buckets before
+  the rows go (`lib/privacy/erasure.ts`).
 
 ### Qualification Agent
 
@@ -240,7 +286,9 @@ LOW-tier agent is moved to MID for it. No workflow step calls it yet.
   markers, no tools that change anything, a person approving every submission)
   carry the weight.
 - Figure grounding catches invented numbers, not invented words.
-- A PDF without a text layer cannot be verified until ingestion extracts text.
+- A PDF cannot be verified until text is extracted from it, so every requirement
+  taken from a fetched tender document is `REQUIRES_CONFIRMATION` and QA counts
+  it as an open issue until a person has confirmed it.
 
 ## Failure behaviour
 
@@ -342,6 +390,10 @@ quotes from the same constants (so they cannot drift), and add it to
 - The Edge worker loads the SDK through `npm:@anthropic-ai/sdk` (pinned to the
   installed version by `scripts/build-edge-worker.mjs`). Rebuild with
   `npm run build:edge-worker` after changing the SDK version.
-- Not built yet: document download and text extraction, proposal and pricing
-  editing screens, ZAR cost display, monthly and per-tender budgets, and a
-  workflow step that calls web research.
+- Not built yet: text extraction from PDFs (so quotes can be verified), reading
+  Word, Excel and zip files, proposal and pricing editing screens, ZAR cost
+  display, monthly and per-tender budgets, and a workflow step that calls web
+  research.
+- A document the portal lists but TenderOS could not fetch shows on the tender's
+  Documents tab with the reason; the job's own failures show in the worker log
+  (`tender document not fetched`, with the reason and no link).

@@ -93,6 +93,29 @@ nobody invites an owner. The token travels in an httpOnly SameSite=Lax cookie an
   decrypts, for the member who connected the mailbox. SMTP hosts must resolve
   to public addresses and connections require TLS 1.2 or later.
 
+## Tender documents (outbound fetching)
+
+The worker downloads the files a tender portal lists, so it makes requests to addresses it did not choose. What
+limits that (`lib/tender-documents`, `tests/unit/tender-document-fetcher.test.ts`):
+
+- Links come only from discovery (`tenders.documents` cannot be written from a browser), and are re-checked at fetch
+  time: https, a named host that is the tender's own source host or in `TENDER_DOCUMENT_HOSTS` (default
+  `www.etenders.gov.za`), no credentials, no explicit port, no address literal.
+- The name is resolved by the worker and every address must be public (`lib/security/public-address.ts`: private,
+  loopback, link-local and cloud-metadata, shared, documentation, multicast and reserved ranges, IPv4 inside IPv6
+  included). The TLS connection is pinned to the checked address and the connected peer is checked again, so a name
+  that changes its answer cannot move the request inside the network. Redirects are followed by hand, same host over
+  https only, with every check repeated; at most three.
+- No cookies, credentials or compression are sent; one 30 s deadline covers the whole download; the body stops at
+  25 MB whatever the headers claim.
+- The bytes decide the file type, not the name (`sniff.ts`). Only PDFs are stored. Stored under
+  `<organisation_id>/<tender_id>/<sha256>.pdf` in the private `tender-documents` bucket: members of the organisation
+  read (a function checks that a downloaded row exists), nobody writes from a browser, the service role writes.
+- Neither the link, nor its query, nor the server's words reach a log line, an event or a stored error.
+- Not covered: the fetcher trusts the portal's own TLS certificate chain like any browser would, and a hostile
+  document is handled as untrusted data by the AI layer, not scanned for malware (files are stored, never opened or
+  executed by TenderOS, and only PDFs are sent on).
+
 ## Web hardening
 
 - Content-Security-Policy with a per-request nonce and `strict-dynamic`;

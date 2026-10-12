@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { canAdminister, requireContext } from "@/lib/data/context";
+import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
 import { toUserError, type ActionResult } from "@/lib/actions";
 import { tenderInputSchema } from "./schema";
 import { deliveryChangeSchema } from "@/lib/domain/delivery-lock";
@@ -83,6 +83,23 @@ export async function startWorkflow(tenderId: string, options: { failStep?: stri
   if (error) return { ok: false, error: toUserError(error, "Could not start the workflow") };
   revalidatePath(`/tenders/${tenderId}`);
   return { ok: true, data: data as string };
+}
+
+/**
+ * "Fetch documents" and "Retry" on the tender page: lists the documents the portal shows for the tender and queues the worker
+ * to download them (all that failed, or one). Returns how many are now waiting. The database checks the role, the rate limit
+ * and the authenticator requirement; what gets fetched, from where, is decided by the worker (lib/tender-documents).
+ */
+export async function fetchTenderDocuments(tenderId: string, documentId?: string): Promise<ActionResult<{ waiting: number }>> {
+  if (!uuid.safeParse(tenderId).success) return { ok: false, error: "Invalid tender" };
+  if (documentId !== undefined && !uuid.safeParse(documentId).success) return { ok: false, error: "Invalid document" };
+  const ctx = await requireContext();
+  if (!canOperate(ctx.role)) return { ok: false, error: "You do not have permission to fetch documents" };
+  const supabase = await getServerSupabase();
+  const { data, error } = await supabase.rpc("fetch_tender_documents", { p_tender_id: tenderId, ...(documentId ? { p_document_id: documentId } : {}) });
+  if (error) return { ok: false, error: toUserError(error, "Could not fetch the documents") };
+  revalidatePath(`/tenders/${tenderId}`);
+  return { ok: true, data: { waiting: Number(data ?? 0) } };
 }
 
 /** Prepares a bid again after the approver sent it back or QA failed it, starting with a fresh compliance check. */
