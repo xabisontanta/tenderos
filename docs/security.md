@@ -28,9 +28,35 @@ append-only record of every consequential action.
 | Open director IDs, bank letters, proof of address                                   | ✓     | ✓     |          |        |
 | Connect a sending mailbox, email or record a bid                                    | ✓     | ✓     |          |        |
 | Change a bid's delivery details after it went for approval (withdraws the approval) | ✓     | ✓     |          |        |
+| Change operators' and viewers' roles, remove operators and viewers                  | ✓     | ✓     |          |        |
+| Make someone an owner or an admin, change or remove an owner or an admin            | ✓     |       |          |        |
+| Leave the organisation (never the last owner)                                       | ✓     | ✓     | ✓        | ✓      |
+| Invite operators and viewers, resend or withdraw their invitations                  | ✓     | ✓     |          |        |
+| Invite admins, resend or withdraw their invitations                                 | ✓     |       |          |        |
 
 The UI hides controls a role cannot use, but the RPC is the enforcement point.
 Integration tests cover role refusals and cross-tenant isolation.
+
+### Team management
+
+`change_member_role`, `remove_member` and `list_members` (migration 060) are the only ways to change
+membership from a browser; `organisation_members` has no write grant. Both writers are rate limited and audited
+(`member.role_changed`, `member.removed`). An admin can step another admin down or remove one, but only an owner
+can make anyone an owner or an admin, and nobody but an owner touches an owner. An organisation always keeps an
+owner: the functions check it under an advisory lock and a lock on the owners' rows, so two owners demoting each
+other at once cannot leave none, and a trigger (`organisation_members_keep_owner`) refuses every other path
+(direct SQL, a user deletion) unless the organisation row is already gone or the POPIA erasure functions are
+running (`app.erasure`). Ownership is transferred by making the new person an owner and then stepping down.
+Removing a member revokes their browser pairing codes and disconnects their mailboxes (the credential in
+Vault goes with the mailbox row); dropping from admin to operator or viewer disconnects the mailboxes too, since
+only owners and admins connect one. Email addresses come from `auth.users` through `list_members` and are sent
+to owners and admins only.
+
+Invitations (migration 061, flow in `docs/auth.md`): the token is random (256 bits), stored only as a SHA-256 hash that
+browsers cannot select, shown to the inviter once, valid for 7 days and bound to one address. Accepting needs the
+confirmed sign-in address to equal the invited one, so a leaked link is useless to anyone else. Only owners invite admins;
+nobody invites an owner. The token travels in an httpOnly SameSite=Lax cookie and never in logs. Limits are inside the RPCs:
+20 invitations an hour per person, 50 pending per organisation, 5 a day to any one address.
 
 ## Agents
 
@@ -94,6 +120,12 @@ Integration tests cover role refusals and cross-tenant isolation.
   attorney reviews them.
 - Open-redirect protection on the `next` parameter (`lib/safe-redirect.ts`):
   only same-origin paths, no `//`, backslashes or control characters.
+- Multi-factor authentication: anyone can add an authenticator app (TOTP); a password-only session of someone who has one is
+  sent to `/mfa` before any other page. An owner can **require** one for the whole organisation: while that is on, approving, sending,
+  changing settings, managing the team, connecting mailboxes, pairing the browser helper and working with documents all need a
+  session that passed the challenge (`aal2`), enforced in the database (`private.require_aal2`, SQLSTATE P0403, no-op for the worker)
+  and again in the server actions that run as the service role. Directors' IDs, bank letters and proof of address also need it
+  to be read. A lost authenticator is reset by support, never by the app (`docs/auth.md`, "Lost device").
 - Passwords: at least 12 characters with letters and digits, checked in the
   app and by Supabase Auth. Hosted projects must also require email
   confirmation and secure password change (Authentication settings).
@@ -124,6 +156,5 @@ a person or an organisation, exporting their data and handling a breach are in
 
 - Malware scanning of uploaded documents.
 - Removing unregistered uploads (files uploaded but never recorded).
-- MFA for owners and admins, invitations and member management.
 - Sentry error reporting (`SENTRY_DSN`) and alerting.
 - Signed webhooks using `WORKFLOW_SECRET`.

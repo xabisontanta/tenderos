@@ -90,14 +90,62 @@ describe("database hardening", () => {
       "accept_legal",
       "complete_onboarding",
       "change_tender_delivery",
+      "change_member_role",
+      "remove_member",
+      "create_invitation",
+      "resend_invitation",
+      "revoke_invitation",
+      "accept_invitation",
     ];
     const { rows } = await pool.query(`select proname, prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = any($1)`, [fns]);
     expect(rows.map((r) => r.proname).sort()).toEqual([...fns].sort());
     for (const r of rows) expect(r.prosrc, r.proname).toContain("hit_rate_limit(");
   });
 
+  it("makes every privileged RPC ask for a second factor when the organisation requires one", async () => {
+    // Each is re-created whole in migration 063 with `perform private.require_aal2(...)` after its role check. A later
+    // migration that replaces one of them from an older copy would drop the line, and this fails.
+    const fns = [
+      "set_kill_switch",
+      "set_agent_control",
+      "decide_approval",
+      "set_watched_provinces",
+      "set_watched_methods",
+      "register_company_document",
+      "verify_company_document",
+      "archive_company_document",
+      "document_download",
+      "connect_email_account",
+      "disconnect_email_account",
+      "record_bid_delivery",
+      "rerun_bid",
+      "change_tender_delivery",
+      "create_autofill_token",
+      "change_member_role",
+      "remove_member",
+      "create_invitation",
+      "revoke_invitation",
+      "resend_invitation",
+    ];
+    const { rows } = await pool.query(`select proname, prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = any($1)`, [fns]);
+    expect(rows.map((r) => r.proname).sort()).toEqual([...fns].sort());
+    for (const r of rows) expect(r.prosrc, r.proname).toContain("require_aal2(");
+    // set_require_mfa asks for aal2 itself, in both directions (private.require_aal2 only acts while the switch is on).
+    const { rows: sw } = await pool.query(`select prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = 'set_require_mfa'`);
+    expect(sw[0].prosrc).toContain("'aal2'");
+    expect(sw[0].prosrc).toContain("P0403");
+    expect(sw[0].prosrc).toContain("hit_rate_limit(");
+    const { rows: gate } = await pool.query(`select proname, prosrc from pg_proc where pronamespace = 'private'::regnamespace and proname = any($1)`, [
+      ["can_read_document", "require_aal2", "aal2_ok"],
+    ]);
+    const src = Object.fromEntries(gate.map((r) => [r.proname, r.prosrc as string]));
+    expect(src.can_read_document).toContain("aal2_ok(");
+    expect(src.require_aal2).toContain("P0403");
+    expect(src.aal2_ok).toContain("auth.uid() is null");
+  });
+
   it("limits the service-role RPCs that export or erase personal data, and keeps browsers out of them", async () => {
-    const fns = ["erase_user", "erase_organisation", "export_user_data", "export_organisation_data"];
+    const fns = ["erase_user", "erase_organisation", "export_user_data", "export_organisation_data", "reset_user_mfa"];
     const { rows } = await pool.query(
       `select proname, prosrc, has_function_privilege('authenticated', oid, 'execute') as browser, has_function_privilege('anon', oid, 'execute') as anon,
               has_function_privilege('service_role', oid, 'execute') as service

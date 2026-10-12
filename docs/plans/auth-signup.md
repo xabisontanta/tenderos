@@ -131,3 +131,20 @@ PKCE cross-browser failure; MFA availability on the hosted plan; no built-in
 recovery codes; `aal` claim refresh after verify; Cloudflare siteverify shape
 and token single-use; Vercel client-IP header semantics. Verify each against
 official docs or against the local stack, and record the result.
+
+## Status of S7 to S10 (2026-10-12)
+
+Built on `production-readiness`, one commit each. Where the code differs from the plan above:
+
+- **Migrations** are `060` (members), `061` (invitations), `062` (`reset_user_mfa`, the lost-device runbook, not in the plan) and `063`
+  (aal2), not 021 to 023. The invitation and aal2 migrations re-create the functions they touch whole.
+- **S7.** Any member can leave (`remove_member` on themselves), so someone invited elsewhere is never stuck. Only owners hand out the admin
+  role, as only owners invite admins. Dropping below admin disconnects a member's mailboxes.
+- **S8.** The invite link is handled by a route handler, `app/(auth)/invite/[token]/route.ts` (a page cannot set a cookie), which sets the
+  cookie and redirects to the page `/invite`. The inviter is shown the link once, so an invitation survives a failed email. Invitations are
+  covered by erasure (a trigger on `auth.users`), the exports and a 30-day purge. The platform mailer is `lib/email/platform.ts`.
+- **S9.** Recovery codes: the plan assumed Supabase has none; the installed client has an experimental API for them, which is not used
+  (`docs/auth.md`). Nothing that needs a TOTP-enabled Auth server could be run here; `tests/integration/mfa.test.ts` and the TOTP end-to-end
+  test skip themselves on a stack without it.
+- **S10.** `has_org_role` is unchanged. `set_require_mfa` needs aal2 in both directions. `resend_invitation` is gated too, and so is
+  `connectSmtp`.

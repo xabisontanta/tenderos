@@ -6,6 +6,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { getAdminSupabase } from "@/lib/supabase/admin";
 import { hashAutofillToken } from "@/lib/autofill/format";
 import { canOperate, requireContext } from "@/lib/data/context";
+import { requireAal2 } from "@/lib/auth/require-aal2";
 import { toUserError, type ActionResult } from "@/lib/actions";
 
 const labelSchema = z.string().trim().max(60, "Keep the name under 60 characters");
@@ -17,6 +18,8 @@ const labelSchema = z.string().trim().max(60, "Keep the name under 60 characters
 export async function createAutofillToken(label: string): Promise<ActionResult<{ token: string }>> {
   const ctx = await requireContext();
   if (!canOperate(ctx.role)) return { ok: false, error: "Only owners, admins and operators can pair the browser helper" };
+  const verify = await requireAal2(ctx);
+  if (verify) return { ok: false, error: verify };
   const parsed = labelSchema.safeParse(label ?? "");
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
   const supabase = await getServerSupabase();
@@ -36,6 +39,8 @@ export async function createAutofillToken(label: string): Promise<ActionResult<{
 export async function createBrowserPairing(label: string): Promise<ActionResult<{ token: string; tokenId: string }>> {
   const ctx = await requireContext();
   if (!canOperate(ctx.role)) return { ok: false, error: "Only owners, admins and operators can pair the browser helper" };
+  const verify = await requireAal2(ctx);
+  if (verify) return { ok: false, error: verify };
   const parsed = labelSchema.safeParse(label ?? "");
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
   const supabase = await getServerSupabase();

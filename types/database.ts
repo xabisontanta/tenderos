@@ -199,14 +199,14 @@ isOneToOne: false
                   ]
                 },"autofill_tokens": {
                   Row: {
-                    "created_at": string,"expires_at": string,"id": string,"label": string,"last_used_at": string | null,"organisation_id": string,"revoked_at": string | null,"token_hash": string,"user_id": string
+                    "created_aal": string | null,"created_at": string,"expires_at": string,"id": string,"label": string,"last_used_at": string | null,"organisation_id": string,"revoked_at": string | null,"token_hash": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"expires_at"?: string,"id"?: string,"label": string,"last_used_at"?: string | null,"organisation_id": string,"revoked_at"?: string | null,"token_hash": string,"user_id": string
+                    "created_aal"?: string | null,"created_at"?: string,"expires_at"?: string,"id"?: string,"label": string,"last_used_at"?: string | null,"organisation_id": string,"revoked_at"?: string | null,"token_hash": string,"user_id": string
                   }
                   Update: {
-                    "created_at"?: string,"expires_at"?: string,"id"?: string,"label"?: string,"last_used_at"?: string | null,"organisation_id"?: string,"revoked_at"?: string | null,"token_hash"?: string,"user_id"?: string
+                    "created_aal"?: string | null,"created_at"?: string,"expires_at"?: string,"id"?: string,"label"?: string,"last_used_at"?: string | null,"organisation_id"?: string,"revoked_at"?: string | null,"token_hash"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -535,6 +535,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"organisation_invitations": {
+                  Row: {
+                    "accepted_at": string | null,"accepted_by": string | null,"created_at": string,"email": string,"expires_at": string,"id": string,"invited_by": string | null,"organisation_id": string,"revoked_at": string | null,"role": Database["public"]['Enums']["org_role"],"token_hash": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accepted_at"?: string | null,"accepted_by"?: string | null,"created_at"?: string,"email": string,"expires_at"?: string,"id"?: string,"invited_by"?: string | null,"organisation_id": string,"revoked_at"?: string | null,"role": Database["public"]['Enums']["org_role"],"token_hash": string
+                  }
+                  Update: {
+                    "accepted_at"?: string | null,"accepted_by"?: string | null,"created_at"?: string,"email"?: string,"expires_at"?: string,"id"?: string,"invited_by"?: string | null,"organisation_id"?: string,"revoked_at"?: string | null,"role"?: Database["public"]['Enums']["org_role"],"token_hash"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "organisation_invitations_organisation_id_fkey"
+      columns: ["organisation_id"]
+isOneToOne: false
+      referencedRelation: "organisations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"organisation_members": {
                   Row: {
                     "created_at": string,"organisation_id": string,"role": Database["public"]['Enums']["org_role"],"user_id": string
@@ -623,14 +643,14 @@ isOneToOne: false
                   ]
                 },"system_settings": {
                   Row: {
-                    "audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"onboarding_completed_at": string | null,"organisation_id": string,"per_tender_budget_usd": number,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_methods": (string)[],"watched_provinces": (string)[]
+                    "audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"onboarding_completed_at": string | null,"organisation_id": string,"per_tender_budget_usd": number,"require_mfa": boolean,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_methods": (string)[],"watched_provinces": (string)[]
                   }
                   ComputedFields: never
                   Insert: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id": string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
+                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id": string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Update: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id"?: string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
+                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id"?: string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Relationships: [
                     {
@@ -841,7 +861,10 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "accept_legal":
+            "accept_invitation":
+{ Args: { "p_token": string }; Returns: string
+                           },
+"accept_legal":
 { Args: { "p_ip_hmac"?: string,"p_privacy_version": string,"p_terms_version": string }; Returns: undefined
                            },
 "agent_usage_totals":
@@ -869,6 +892,9 @@ isOneToOne: false
 "cancel_workflow":
 { Args: { "p_reason": string,"p_run_id": string }; Returns: undefined
                            },
+"change_member_role":
+{ Args: { "p_org": string,"p_role": Database["public"]['Enums']["org_role"],"p_user": string }; Returns: undefined
+                           },
 "change_tender_delivery":
 { Args: { "p_changes": Json,"p_reason": string,"p_tender_id": string }; Returns: Json
                            },
@@ -880,6 +906,11 @@ isOneToOne: false
                            },
 "create_autofill_token":
 { Args: { "p_label"?: string,"p_org": string }; Returns: string
+                           },
+"create_invitation":
+{ Args: { "p_email": string,"p_org": string,"p_role": Database["public"]['Enums']["org_role"] }; Returns: {
+              "expires_at": string,"invitation_id": string,"token": string
+            }[]
                            },
 "dashboard_counts":
 { Args: { "p_day_start": string,"p_month_start": string,"p_org": string }; Returns: Json
@@ -918,6 +949,16 @@ isOneToOne: false
 "hit_rate_limit_key":
 { Args: { "p_action": string,"p_key": string,"p_max"?: number,"p_window_seconds"?: number }; Returns: undefined
                            },
+"invitation_preview":
+{ Args: { "p_token": string }; Returns: {
+              "email": string,"expires_at": string,"invitation_id": string,"organisation_id": string,"organisation_name": string,"role": Database["public"]['Enums']["org_role"]
+            }[]
+                           },
+"list_members":
+{ Args: { "p_org": string }; Returns: {
+              "email": string,"full_name": string,"joined_at": string,"role": Database["public"]['Enums']["org_role"],"user_id": string
+            }[]
+                           },
 "mark_notifications_read":
 { Args: { "p_ids": (string)[] }; Returns: undefined
                            },
@@ -932,8 +973,19 @@ isOneToOne: false
 "register_company_document":
 { Args: { "p_doc_type": string,"p_expires_at"?: string,"p_org": string,"p_path": string,"p_title": string }; Returns: string
                            },
+"remove_member":
+{ Args: { "p_org": string,"p_user": string }; Returns: undefined
+                           },
 "rerun_bid":
 { Args: { "p_tender_id": string }; Returns: string
+                           },
+"resend_invitation":
+{ Args: { "p_id": string }; Returns: {
+              "expires_at": string,"invitation_id": string,"token": string
+            }[]
+                           },
+"reset_user_mfa":
+{ Args: { "p_reference"?: string,"p_user_id": string }; Returns: Json
                            },
 "resolve_autofill_token":
 { Args: { "p_hash": string }; Returns: {
@@ -946,11 +998,17 @@ isOneToOne: false
 "revoke_autofill_token":
 { Args: { "p_id": string }; Returns: undefined
                            },
+"revoke_invitation":
+{ Args: { "p_id": string }; Returns: undefined
+                           },
 "set_agent_control":
 { Args: { "p_action": string,"p_agent_id": string,"p_reason"?: string }; Returns: Database["public"]['Enums']["agent_status"]
                            },
 "set_kill_switch":
 { Args: { "p_engaged": boolean,"p_org": string,"p_reason": string }; Returns: undefined
+                           },
+"set_require_mfa":
+{ Args: { "p_on": boolean,"p_org": string }; Returns: undefined
                            },
 "set_watched_methods":
 { Args: { "p_methods": (string)[],"p_org": string }; Returns: undefined

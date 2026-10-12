@@ -17,6 +17,9 @@ its operator, and the responsible party for the account data of the people who s
 | **Request handler**                   | A named engineer with the service-role key. Runs the commands below. Never acts without a ticket. |
 | **Organisation owner**                | Downloads their own organisation's data from Settings, Your data. Can ask for erasure.            |
 
+The same people, with the same identity checks (section 1), also handle a **lost authenticator** (`npm run popia -- reset-mfa`, the
+runbook and who may approve it are in `docs/auth.md`, "Lost device").
+
 Only the request handler has the service-role key. The commands refuse to run without it, and
 `erase_user`, `erase_organisation`, `export_user_data` and `export_organisation_data` are not callable by
 any signed-in user (an integration test checks the grants).
@@ -52,7 +55,7 @@ npm run popia -- export-user <user-id> --by <your-user-id> --out REQ-2026-014.js
 The result has these sections: `subject` (sign-in details), `profile`, `membership`, `consents` (which
 document versions were accepted and when), `mailboxes` (never the credential), `browser_helper_pairings`
 (never the code), `notifications`, `tenders_created`, `documents_uploaded` (details only, not the files),
-`emails_sent`, `approvals_decided` and `audit_entries` (what they did). Each list is capped (the `limits`
+`emails_sent`, `approvals_decided`, `invitations_received` (invitations addressed to their sign-in address, never the token), `invitations_sent` (a count) and `audit_entries` (what they did). Each list is capped (the `limits`
 section says at how many), and the export itself is written to the audit trail.
 
 - The file holds personal data. It is written with owner-only permissions. Send it through a secure
@@ -66,7 +69,8 @@ For an **organisation**, the owner presses **Download organisation data** in Set
 downloads an hour, audited), or the handler runs `npm run popia -- export-org <org-id> --out ...` when the
 owner cannot. The file holds the company profile, documents (details only), tenders, status history, workflow runs
 and their task outputs, approvals, submission records, mailboxes (no credentials), sent emails, discovery
-runs, the event stream and the audit log, and the members' names and roles (not their email addresses).
+runs, the event stream and the audit log, the members' names and roles (not their email addresses) and the
+invitations that have not been purged yet (the invited address, role and dates, never the token).
 
 ## 3. Correction
 
@@ -97,9 +101,11 @@ runs, the event stream and the audit log, and the members' names and roles (not 
   approval comments are replaced.
 - Writes one audit entry, `popia.user_erased`, holding a random pseudonym, your reference and counts. It
   holds no name, address or user id.
-- **Refuses** when the person is the only owner of an organisation that has other members (make someone else
-  an owner first; there is no screen for this yet, so update `organisation_members.role` by hand), and when
-  they are the only member (erase the organisation instead).
+- **Refuses** when the person is the only owner of an organisation that has other members (an owner of that
+  organisation makes someone else an owner first, in Settings, Team: change the role to Owner, which is the
+  ownership transfer; it never needs a database edit), and when they are the only member (erase the
+  organisation instead). A member who has already been removed in Settings, Team has no membership left and
+  can be erased directly; removing them revoked their browser pairing codes and disconnected their mailboxes.
 
 **An organisation** (`erase-org`)
 
@@ -161,16 +167,17 @@ still be personal data, which is why files go first.
 `private.run_retention_purge()` runs every day at 03:30 UTC (pg_cron job `tenderos-retention-purge`, created by
 migration `20261010000053`). Where pg_cron is missing, schedule `select private.run_retention_purge()` elsewhere.
 
-| Data                                    | Kept                                                                                                                  |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Completed jobs                          | 30 days                                                                                                               |
-| Dead (failed) jobs                      | Until their organisation is erased                                                                                    |
-| Agent events (the live activity stream) | 365 days                                                                                                              |
-| Notifications                           | 90 days                                                                                                               |
-| Audit log and cost records              | `system_settings.audit_retention_days` (default 2555 days, never below 365); an erased organisation keeps the default |
-| Rate-limit counters                     | 1 day (existing hourly sweep)                                                                                         |
-| Mailbox credentials with no mailbox     | Deleted by the daily purge; also deleted at once with their mailbox                                                   |
-| Everything else                         | Until the person or organisation is erased                                                                            |
+| Data                                             | Kept                                                                                                                                                 |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Completed jobs                                   | 30 days                                                                                                                                              |
+| Dead (failed) jobs                               | Until their organisation is erased                                                                                                                   |
+| Agent events (the live activity stream)          | 365 days                                                                                                                                             |
+| Notifications                                    | 90 days                                                                                                                                              |
+| Audit log and cost records                       | `system_settings.audit_retention_days` (default 2555 days, never below 365); an erased organisation keeps the default                                |
+| Rate-limit counters                              | 1 day (existing hourly sweep)                                                                                                                        |
+| Team invitations (they hold the invited address) | 30 days after accepted, withdrawn or expired (`private.purge_invitations`, daily 03:40 UTC); deleted at once with the account they were addressed to |
+| Mailbox credentials with no mailbox              | Deleted by the daily purge; also deleted at once with their mailbox                                                                                  |
+| Everything else                                  | Until the person or organisation is erased                                                                                                           |
 
 Each run that deleted anything writes a `retention.purged` audit entry with counts. The periods are
 decisions for the Information Officer: change them in the migration's function and update this table.

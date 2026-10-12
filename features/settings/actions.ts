@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getAdminSupabase } from "@/lib/supabase/admin";
 import { requireContext } from "@/lib/data/context";
+import { requireAal2 } from "@/lib/auth/require-aal2";
 import { rateLimit, toUserError, type ActionResult } from "@/lib/actions";
 import { createLogger } from "@/lib/log";
 import { exportOrganisationData as readOrganisationExport } from "@/lib/privacy/erasure";
@@ -31,6 +32,8 @@ export async function setKillSwitch(engaged: boolean, reason: string): Promise<A
 export async function exportOrganisationData(): Promise<ActionResult<{ filename: string; json: string }>> {
   const ctx = await requireContext();
   if (ctx.role !== "owner") return { ok: false, error: "Only the owner can download the organisation's data" };
+  const verify = await requireAal2(ctx);
+  if (verify) return { ok: false, error: verify };
   const supabase = await getServerSupabase();
   const limited = await rateLimit(supabase, "org.export", 3, 3600);
   if (limited) return { ok: false, error: limited };

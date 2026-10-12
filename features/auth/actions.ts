@@ -8,6 +8,7 @@ import { getAdminSupabase } from "@/lib/supabase/admin";
 import { registryPayload, slugify } from "@/lib/org/bootstrap";
 import { rateLimit, toUserError } from "@/lib/actions";
 import { safeRedirectPath } from "@/lib/safe-redirect";
+import { mfaRedirectPath, needsSecondFactor } from "@/lib/auth/mfa";
 import { authRedirectUrl } from "@/lib/auth/urls";
 import { consentOriginHmac } from "@/lib/auth/rate-limit";
 import { LEGAL_VERSIONS } from "@/lib/legal/versions";
@@ -47,7 +48,21 @@ export async function signIn(_: FormState, formData: FormData): Promise<FormStat
     return { error: "Confirm your email address first. We sent you a link when you signed up.", code: "email_not_confirmed", values };
   // Generic message: do not reveal whether the account exists.
   if (error) return { error: error.status === 429 ? TOO_MANY : "Invalid email or password", values };
-  redirect(safeRedirectPath(formData.get("next")));
+  // A password proves aal1. Someone who has set up an authenticator goes on to the challenge, carrying on to
+  // where they were headed afterwards. A failed lookup is not a failed sign-in: the middleware asks again.
+  const next = formData.get("next");
+  if (await mustChallenge(supabase)) redirect(mfaRedirectPath(next));
+  redirect(safeRedirectPath(next));
+}
+
+async function mustChallenge(supabase: Awaited<ReturnType<typeof getServerSupabase>>): Promise<boolean> {
+  try {
+    const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    return needsSecondFactor(data);
+  } catch (err) {
+    log.warn("could not read the assurance level after sign-in", { error: (err as Error).message });
+    return false;
+  }
 }
 
 const passwordField = z

@@ -5,6 +5,7 @@
  *   npm run popia -- export-org  <org-id>   [--by <operator-user-id>] [--out file.json]
  *   npm run popia -- erase-user  <user-id>  --ref <request-reference> --yes
  *   npm run popia -- erase-org   <org-id>   --ref <request-reference> --yes
+ *   npm run popia -- reset-mfa   <user-id>  --ref <request-reference> --yes   (a lost authenticator, docs/auth.md)
  *
  * Needs NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (environment or .env.local). Exports hold
  * personal data: they are written with owner-only permissions, never printed unless no --out is given,
@@ -14,12 +15,12 @@ import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import { writeFileSync } from "node:fs";
 import type { Database } from "@/types/database";
-import { eraseOrganisation, eraseUser, exportOrganisationData, exportUserData } from "@/lib/privacy/erasure";
+import { eraseOrganisation, eraseUser, exportOrganisationData, exportUserData, resetUserMfa } from "@/lib/privacy/erasure";
 
 config({ path: [".env.local", ".env"], quiet: true });
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const COMMANDS = ["export-user", "export-org", "erase-user", "erase-org"] as const;
+const COMMANDS = ["export-user", "export-org", "erase-user", "erase-org", "reset-mfa"] as const;
 
 function fail(message: string): never {
   console.error(message);
@@ -60,6 +61,12 @@ async function main() {
   const reference = option(rest, "--ref");
   if (!reference || !/^[A-Za-z0-9._:-]{1,64}$/.test(reference))
     fail("--ref is required: the request's reference (letters, digits and . _ : - only; no names or addresses).");
+  if (command === "reset-mfa") {
+    if (!rest.includes("--yes"))
+      fail("This removes the person's authenticators and signs them out everywhere. Run again with --yes once their identity is verified.");
+    console.log(JSON.stringify(await resetUserMfa(admin, id, { reference }), null, 2));
+    return;
+  }
   if (!rest.includes("--yes"))
     fail(`This permanently erases ${command === "erase-user" ? "the user" : "the organisation, its members and its files"}. Run again with --yes to proceed.`);
   const summary = command === "erase-user" ? await eraseUser(admin, id, { reference }) : await eraseOrganisation(admin, id, { reference });

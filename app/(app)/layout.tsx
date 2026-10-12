@@ -11,15 +11,20 @@ import { ConnectionIndicator } from "@/features/realtime/connection-indicator";
 import { NotificationsBell } from "@/features/notifications/notifications-bell";
 import { signOut } from "@/features/auth/actions";
 import { requireContext } from "@/lib/data/context";
+import { requireAal2 } from "@/lib/auth/require-aal2";
 import { getPendingApprovals, getUnreadNotifications, getWorkerHealth } from "@/lib/data/queries";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireContext();
-  const [notifications, approvals, worker] = await Promise.all([
+  const [notifications, approvals, worker, verifyMessage] = await Promise.all([
     getUnreadNotifications(ctx.userId),
     getPendingApprovals(ctx.organisation.id),
     getWorkerHealth(),
+    // Someone with an authenticator is sent to /mfa before they get here, so a session still below aal2 under a
+    // requirement means they have none: tell them what to do instead of letting every button fail one by one.
+    requireAal2(ctx),
   ]);
+  const mustVerify = verifyMessage !== null;
 
   return (
     <RealtimeProvider organisationId={ctx.organisation.id} userId={ctx.userId}>
@@ -65,6 +70,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 </form>
               </div>
             </header>
+            {mustVerify && (
+              <div
+                role="status"
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-200"
+              >
+                <span>
+                  Your organisation requires an authenticator app. Until you set one up you can read, but you cannot approve or send bids, change settings,
+                  manage the team or work with documents.
+                </span>
+                <Link href="/settings#security" className="font-medium underline underline-offset-2">
+                  Set one up
+                </Link>
+              </div>
+            )}
             <main id="main" className="flex-1 p-4 md:p-6">
               {children}
             </main>

@@ -94,6 +94,23 @@ export async function exportUserData(admin: Admin, userId: string, actor?: strin
   return data as unknown as Record<string, unknown>;
 }
 
+/** What reset_user_mfa returns: counts only. */
+export interface MfaReset {
+  factors_removed: number;
+  sessions_ended: number;
+  reference: string;
+}
+
+/**
+ * The lost-device runbook (docs/auth.md): removes a person's authenticators and ends all their sessions, so they
+ * sign in with their password and set up a new authenticator. Only after support has verified who they are.
+ */
+export async function resetUserMfa(admin: Admin, userId: string, options: { reference: string }): Promise<MfaReset> {
+  const { data, error } = await admin.rpc("reset_user_mfa", { p_user_id: userId, p_reference: options.reference });
+  if (error) throw new Error(`Could not reset the authenticator: ${error.message}`);
+  return data as unknown as MfaReset;
+}
+
 /** An organisation's data as JSON. Never includes credentials, token hashes or file contents. */
 export async function exportOrganisationData(admin: Admin, organisationId: string, actor?: string): Promise<Record<string, unknown>> {
   const { data, error } = await admin.rpc("export_organisation_data", { p_org: organisationId, p_actor: actor });

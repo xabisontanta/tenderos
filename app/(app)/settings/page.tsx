@@ -9,7 +9,11 @@ import { AutofillSettings } from "@/features/autofill/autofill-settings";
 import { googleConfig } from "@/lib/email/gmail";
 import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { formatDateTime, formatUsd, humanize } from "@/lib/format";
+import { formatUsd, humanize } from "@/lib/format";
+import { TeamMembers, type MemberRow } from "@/features/team/team-members";
+import { SecuritySettings, type FactorRow } from "@/features/security/security-settings";
+import { RequireMfaSwitch } from "@/features/security/require-mfa-switch";
+import { InvitationsPanel, type InvitationRow } from "@/features/team/invitations-panel";
 import { configuredModels } from "@/agents/runtime/model-routing";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -19,19 +23,22 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const s = ctx.settings;
   const supabase = await getServerSupabase();
-  const { data: members } = await supabase
-    .from("organisation_members")
-    .select("user_id,role,created_at")
-    .eq("organisation_id", ctx.organisation.id)
-    .order("created_at");
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id,full_name")
-    .in(
-      "id",
-      (members ?? []).map((m) => m.user_id),
-    );
-  const names = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.full_name]));
+  const { data: members, error: membersError } = await supabase.rpc("list_members", { p_org: ctx.organisation.id });
+  // Owners and admins see who has been invited (the table's policy hides it from everyone else).
+  const { data: invitations, error: invitationsError } = canAdminister(ctx.role)
+    ? await supabase
+        .from("organisation_invitations")
+        .select("id,email,role,created_at,expires_at")
+        .eq("organisation_id", ctx.organisation.id)
+        .is("accepted_at", null)
+        .is("revoked_at", null)
+        .order("created_at", { ascending: false })
+    : { data: [], error: null };
+  // The person's own authenticator apps (verified ones are on; an unverified one is a setup that was never finished).
+  const { data: factorList, error: factorsError } = await supabase.auth.mfa.listFactors();
+  const factors: FactorRow[] = (factorList?.all ?? [])
+    .filter((f) => f.factor_type === "totp")
+    .map((f) => ({ id: f.id, name: f.friendly_name?.trim() || "Authenticator app", verified: f.status === "verified", createdAt: f.created_at }));
   const { data: mailboxes } = await supabase
     .from("email_accounts")
     .select("id,user_id,provider,from_address,smtp_host,status,last_error")
@@ -53,12 +60,35 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Settings" description={ctx.organisation.name} />
       {sp.email === "connected" && <p className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">Gmail connected.</p>}
+      {sp.email === "verify" && (
+        <p role="alert" className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          Your organisation requires an authenticator for this. Verify with your authenticator (or set one up under Security), then connect Gmail again.
+        </p>
+      )}
       {sp.email === "failed" && (
         <p className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
           Gmail was not connected. Try again and allow TenderOS to send email.
         </p>
       )}
       <div className="grid gap-4 lg:grid-cols-2">
+        <Card id="security" className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Security</CardTitle>
+            <CardDescription>Protect your account with a second step when you sign in.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {factorsError ? (
+              <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+                Your authenticators could not be loaded. Try again in a moment.
+              </p>
+            ) : (
+              <div className="grid gap-4">
+                <SecuritySettings factors={factors} />
+                <RequireMfaSwitch on={s.require_mfa} isOwner={ctx.role === "owner"} hasAuthenticator={factors.some((f) => f.verified)} />
+              </div>
+            )}
+          </CardContent>
+        </Card>
         <Card id="email" className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Email for sending bids</CardTitle>
@@ -141,24 +171,32 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             ))}
           </CardContent>
         </Card>
-        <Card className="lg:col-span-2">
+        <Card id="team" className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Members</CardTitle>
+            <CardTitle>Team</CardTitle>
+            <CardDescription>
+              Everyone in {ctx.organisation.name}. Auditors and accountants who work in your account join as viewers: read-only, with no way to change anything.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <ul className="grid gap-1.5 text-[13px]">
-              {(members ?? []).map((m) => (
-                <li key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 border-t pt-1.5 first:border-t-0 first:pt-0">
-                  <span>
-                    {names[m.user_id] ?? "Unnamed member"}
-                    {m.user_id === ctx.userId && <span className="text-muted-foreground"> (you)</span>}
-                  </span>
-                  <span className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                    <Badge variant="outline">{humanize(m.role)}</Badge> joined {formatDateTime(m.created_at)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {membersError ? (
+              <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+                The team could not be loaded. Try again in a moment.
+              </p>
+            ) : (
+              <TeamMembers members={(members ?? []) as MemberRow[]} currentUserId={ctx.userId} currentRole={ctx.role} />
+            )}
+            {canAdminister(ctx.role) && (
+              <div className="mt-6 border-t pt-4">
+                {invitationsError ? (
+                  <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+                    Invitations could not be loaded. Try again in a moment.
+                  </p>
+                ) : (
+                  <InvitationsPanel invitations={(invitations ?? []) as InvitationRow[]} actorRole={ctx.role} />
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
         {ctx.role === "owner" && (
