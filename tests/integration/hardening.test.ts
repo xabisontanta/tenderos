@@ -96,6 +96,8 @@ describe("database hardening", () => {
       "resend_invitation",
       "revoke_invitation",
       "accept_invitation",
+      "set_ai_settings",
+      "set_ai_budget",
     ];
     const { rows } = await pool.query(`select proname, prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = any($1)`, [fns]);
     expect(rows.map((r) => r.proname).sort()).toEqual([...fns].sort());
@@ -126,6 +128,8 @@ describe("database hardening", () => {
       "create_invitation",
       "revoke_invitation",
       "resend_invitation",
+      "set_ai_settings",
+      "set_ai_budget",
     ];
     const { rows } = await pool.query(`select proname, prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = any($1)`, [fns]);
     expect(rows.map((r) => r.proname).sort()).toEqual([...fns].sort());

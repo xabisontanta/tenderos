@@ -643,14 +643,14 @@ isOneToOne: false
                   ]
                 },"system_settings": {
                   Row: {
-                    "audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"onboarding_completed_at": string | null,"organisation_id": string,"per_tender_budget_usd": number,"require_mfa": boolean,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_methods": (string)[],"watched_provinces": (string)[]
+                    "ai_enabled": boolean,"ai_web_research_enabled": boolean,"audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"onboarding_completed_at": string | null,"organisation_id": string,"per_tender_budget_usd": number,"require_mfa": boolean,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_methods": (string)[],"watched_provinces": (string)[]
                   }
                   ComputedFields: never
                   Insert: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id": string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
+                    "ai_enabled"?: boolean,"ai_web_research_enabled"?: boolean,"audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id": string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Update: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id"?: string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
+                    "ai_enabled"?: boolean,"ai_web_research_enabled"?: boolean,"audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id"?: string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Relationships: [
                     {
@@ -870,6 +870,11 @@ isOneToOne: false
 "agent_usage_totals":
 { Args: { "p_agent_id": string }; Returns: Json
                            },
+"ai_spend":
+{ Args: { "p_org": string }; Returns: {
+              "month_usd": number,"today_usd": number
+            }[]
+                           },
 "archive_company_document":
 { Args: { "p_id": string }; Returns: undefined
                            },
@@ -1003,6 +1008,12 @@ isOneToOne: false
                            },
 "set_agent_control":
 { Args: { "p_action": string,"p_agent_id": string,"p_reason"?: string }; Returns: Database["public"]['Enums']["agent_status"]
+                           },
+"set_ai_budget":
+{ Args: { "p_daily_usd": number,"p_org": string }; Returns: undefined
+                           },
+"set_ai_settings":
+{ Args: { "p_enabled": boolean,"p_org": string,"p_web_research": boolean }; Returns: undefined
                            },
 "set_kill_switch":
 { Args: { "p_engaged": boolean,"p_org": string,"p_reason": string }; Returns: undefined

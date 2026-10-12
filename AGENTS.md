@@ -295,9 +295,14 @@ person to review.
   `ANTHROPIC_API_KEY`, a missing model for the agent's tier or a missing price
   (`AI_PRICE_*`) fails the task before it starts, with the variable named.
 - AI is off by default. It runs only on real (non-simulation) tenders, and only
-  when `system_settings.ai_enabled` is true for the organisation (when that
-  column exists) or, until it does, `AI_ENABLED=true` for the deployment.
-  Otherwise the rules-only executors run.
+  when both switches are on: `system_settings.ai_enabled` for the organisation
+  (owners and admins set it in Settings, AI assistance, through `set_ai_settings`,
+  after ticking that they have read what is sent to Anthropic; it is refused
+  while the daily AI budget is zero) and `AI_ENABLED=true` in the worker's
+  environment, which is the deployment's kill switch. Otherwise the rules-only
+  executors run. Web research (`ai_web_research_enabled`) is a further switch
+  under the first. Settings shows today's and this month's spend, summed by the
+  database (`ai_spend`), and what the web server's environment is missing.
 - Simulation mode makes no AI calls and records cost as $0 with
   `is_simulated = true`. Rule-based steps on a real tender record $0 with
   provider `rules`; AI steps record provider `anthropic`, the model and the

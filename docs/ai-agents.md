@@ -12,10 +12,14 @@ explains how they are met. The provider is Anthropic.
 | Rules only (default) | A real tender, AI off                     | `simulated.ts` rules                         | $0, provider `rules`                      |
 | AI                   | A real tender, AI on for the organisation | `real.ts` for five steps, rules for the rest | Real tokens and USD, provider `anthropic` |
 
-AI is opt-in. The engine turns it on when `system_settings.ai_enabled` is true
-for the organisation, if that column exists, and otherwise when the deployment
-sets `AI_ENABLED=true`. The settings column and screen are a later task.
-Simulation runs never reach a model. Compliance, the Director and the
+AI is opt-in, with two switches that must both be on. `AI_ENABLED=true` in the
+worker's environment is the deployment's kill switch. `system_settings.ai_enabled`
+is the organisation's own switch: an owner or admin sets it in Settings, AI
+assistance (`set_ai_settings`), after ticking that they have read what is sent to
+Anthropic and that it is processed outside South Africa. The database refuses to
+switch it on while the daily AI budget is zero (the engine reads zero as no
+limit), asks for a second factor when the organisation requires one, rate limits
+the change and audits it. Simulation runs never reach a model. Compliance, the Director and the
 Submission Officer stay rule-based in every mode.
 
 `getExecutor(taskType, { simulation, aiEnabled })` in `agents/index.ts` picks
@@ -53,7 +57,7 @@ secrets (`supabase secrets set ANTHROPIC_API_KEY=...`).
 | Variable                                            | Meaning                                                                                                         |
 | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `ANTHROPIC_API_KEY`                                 | Required for AI. Held in a non-enumerable property so it cannot reach a log line or JSON.                       |
-| `AI_ENABLED`                                        | Deployment-wide switch until the settings column exists.                                                        |
+| `AI_ENABLED`                                        | The deployment's kill switch: AI runs only when this is `true` and the organisation's own switch is on.         |
 | `AI_MODEL_LOW` / `MID` / `HIGH`                     | The model for each cost tier. No model name is in the code.                                                     |
 | `AI_PRICE_LOW` / `MID` / `HIGH`                     | USD per million tokens, `input/output[/cacheRead[/cacheWrite]]`. Required: it is how cost is computed.          |
 | `AI_PRICE_OVERRIDE`                                 | Price for an agent's `model_override`.                                                                          |
@@ -63,7 +67,7 @@ secrets (`supabase secrets set ANTHROPIC_API_KEY=...`).
 | `AI_MAX_OUTPUT_TOKENS`, `AI_CHUNK_CHARS`            | Output ceiling per call and the size of a document part.                                                        |
 | `AI_MAX_TASK_COST_USD`                              | A task that has spent this starts no further call (default 2).                                                  |
 | `AI_HIGH_VALUE_ZAR`                                 | Tenders at or above this value move up one tier.                                                                |
-| `AI_WEB_RESEARCH_ENABLED`, `AI_WEB_SEARCH_COST_USD` | Web research switch and the per-search cost.                                                                    |
+| `AI_WEB_RESEARCH_ENABLED`, `AI_WEB_SEARCH_COST_USD` | `false` vetoes web research for the whole deployment; the per-search cost.                                      |
 
 Models confirmed against the `claude-api` skill and Anthropic's pricing page
 on 2026-10-12: LOW `claude-haiku-5-5` ($0.10 / $0.50 per million tokens, for
@@ -338,7 +342,6 @@ quotes from the same constants (so they cannot drift), and add it to
 - The Edge worker loads the SDK through `npm:@anthropic-ai/sdk` (pinned to the
   installed version by `scripts/build-edge-worker.mjs`). Rebuild with
   `npm run build:edge-worker` after changing the SDK version.
-- Not built yet: document download and text extraction, the `ai_enabled` and
-  `ai_web_research_enabled` columns and settings screen, proposal and pricing
+- Not built yet: document download and text extraction, proposal and pricing
   editing screens, ZAR cost display, monthly and per-tender budgets, and a
   workflow step that calls web research.

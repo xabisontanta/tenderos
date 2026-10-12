@@ -301,6 +301,8 @@ describe("every privileged function, with the requirement on", () => {
       ["create_invitation", o, `select * from public.create_invitation($1, 'someone-else@tenderos.test', 'viewer')`, [f.orgId]],
       ["resend_invitation", o, `select * from public.resend_invitation($1)`, [invitationId]],
       ["revoke_invitation", o, `select public.revoke_invitation($1)`, [invitationId]],
+      ["set_ai_settings", a, `select public.set_ai_settings($1, true, false)`, [f.orgId]],
+      ["set_ai_budget", a, `select public.set_ai_budget($1, 6)`, [f.orgId]],
     ];
 
     await requireMfa(f.orgId, true);
