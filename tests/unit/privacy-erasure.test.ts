@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { eraseOrganisation, eraseUser, exportOrganisationData, exportUserData, listFiles } from "@/lib/privacy/erasure";
+import { eraseOrganisation, eraseUser, exportOrganisationData, exportUserData, listFiles, resetUserMfa } from "@/lib/privacy/erasure";
 
 type Entry = { name: string; id: string | null };
 
@@ -93,6 +93,19 @@ describe("eraseOrganisation", () => {
   it("reports a database failure", async () => {
     const { admin } = fakeAdmin({ tree: {}, rpc: () => ({ data: null, error: { message: "Organisation not found" } }) });
     await expect(eraseOrganisation(admin, ORG)).rejects.toThrow(/Could not erase the organisation: Organisation not found/);
+  });
+});
+
+describe("resetUserMfa", () => {
+  it("passes the user and the ticket reference to the database function and returns its counts", async () => {
+    const { admin, rpc } = fakeAdmin({ tree: {}, rpc: () => ({ data: { factors_removed: 1, sessions_ended: 3, reference: "REQ-7" }, error: null }) });
+    expect(await resetUserMfa(admin, "u1", { reference: "REQ-7" })).toEqual({ factors_removed: 1, sessions_ended: 3, reference: "REQ-7" });
+    expect(rpc).toHaveBeenCalledWith("reset_user_mfa", { p_user_id: "u1", p_reference: "REQ-7" });
+  });
+
+  it("surfaces a database error instead of pretending the person was reset", async () => {
+    const { admin } = fakeAdmin({ tree: {}, rpc: () => ({ data: null, error: { message: "User not found" } }) });
+    await expect(resetUserMfa(admin, "u1", { reference: "REQ-7" })).rejects.toThrow(/Could not reset the authenticator: User not found/);
   });
 });
 

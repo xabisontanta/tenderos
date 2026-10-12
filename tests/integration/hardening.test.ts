@@ -103,7 +103,7 @@ describe("database hardening", () => {
   });
 
   it("limits the service-role RPCs that export or erase personal data, and keeps browsers out of them", async () => {
-    const fns = ["erase_user", "erase_organisation", "export_user_data", "export_organisation_data"];
+    const fns = ["erase_user", "erase_organisation", "export_user_data", "export_organisation_data", "reset_user_mfa"];
     const { rows } = await pool.query(
       `select proname, prosrc, has_function_privilege('authenticated', oid, 'execute') as browser, has_function_privilege('anon', oid, 'execute') as anon,
               has_function_privilege('service_role', oid, 'execute') as service

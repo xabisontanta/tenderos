@@ -984,6 +984,9 @@ isOneToOne: false
               "expires_at": string,"invitation_id": string,"token": string
             }[]
                            },
+"reset_user_mfa":
+{ Args: { "p_reference"?: string,"p_user_id": string }; Returns: Json
+                           },
 "resolve_autofill_token":
 { Args: { "p_hash": string }; Returns: {
               "organisation_id": string,"role": Database["public"]['Enums']["org_role"],"token_id": string,"user_id": string

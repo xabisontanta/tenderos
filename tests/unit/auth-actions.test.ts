@@ -6,6 +6,7 @@ const h = vi.hoisted(() => ({
   requestHeaders: {} as Record<string, string>,
   signUp: vi.fn(),
   signInWithPassword: vi.fn(),
+  aal: vi.fn(),
   resetPasswordForEmail: vi.fn(),
   resend: vi.fn(),
   rpc: vi.fn(),
@@ -19,7 +20,13 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({
   getServerSupabase: async () => ({
-    auth: { signUp: h.signUp, signInWithPassword: h.signInWithPassword, resetPasswordForEmail: h.resetPasswordForEmail, resend: h.resend },
+    auth: {
+      signUp: h.signUp,
+      signInWithPassword: h.signInWithPassword,
+      resetPasswordForEmail: h.resetPasswordForEmail,
+      resend: h.resend,
+      mfa: { getAuthenticatorAssuranceLevel: h.aal },
+    },
   }),
 }));
 vi.mock("@/lib/supabase/admin", () => ({ getAdminSupabase: () => ({ rpc: h.rpc }) }));
@@ -52,6 +59,7 @@ beforeEach(() => {
   h.requestHeaders = { "x-vercel-forwarded-for": "41.0.0.9" };
   h.signUp.mockReset().mockResolvedValue({ data: { user: { id: "u1" }, session: null }, error: null });
   h.signInWithPassword.mockReset().mockResolvedValue({ data: {}, error: null });
+  h.aal.mockReset().mockResolvedValue({ data: { currentLevel: "aal1", nextLevel: "aal1", currentAuthenticationMethods: [] }, error: null });
   h.resetPasswordForEmail.mockReset().mockResolvedValue({ data: {}, error: null });
   h.resend.mockReset().mockResolvedValue({ data: {}, error: null });
   h.rpc.mockReset().mockResolvedValue({ data: null, error: null });
@@ -304,6 +312,36 @@ describe("sign-in with an unconfirmed address", () => {
     expect(state.code).toBe("email_not_confirmed");
     expect(state.error).toMatch(/confirm your email/i);
     expect(state.values).toEqual({ email: "thandi@example.test" });
+  });
+});
+
+describe("sign-in with an authenticator set up", () => {
+  it("goes to the challenge page, remembering where the person was going", async () => {
+    h.aal.mockResolvedValue({ data: { currentLevel: "aal1", nextLevel: "aal2", currentAuthenticationMethods: [] }, error: null });
+    await expect(signIn({}, form({ ...signInForm, next: "/tenders?status=open" }))).rejects.toThrow("NEXT_REDIRECT:/mfa?next=%2Ftenders%3Fstatus%3Dopen");
+  });
+
+  it("goes to the challenge page, and then the dashboard, when no page was asked for", async () => {
+    h.aal.mockResolvedValue({ data: { currentLevel: "aal1", nextLevel: "aal2", currentAuthenticationMethods: [] }, error: null });
+    await expect(signIn({}, form(signInForm))).rejects.toThrow("NEXT_REDIRECT:/mfa");
+  });
+
+  it("never follows an unsafe next to or from the challenge", async () => {
+    h.aal.mockResolvedValue({ data: { currentLevel: "aal1", nextLevel: "aal2", currentAuthenticationMethods: [] }, error: null });
+    await expect(signIn({}, form({ ...signInForm, next: "//evil.example" }))).rejects.toThrow("NEXT_REDIRECT:/mfa");
+    h.aal.mockResolvedValue({ data: { currentLevel: "aal1", nextLevel: "aal1", currentAuthenticationMethods: [] }, error: null });
+    await expect(signIn({}, form({ ...signInForm, next: "https://evil.example" }))).rejects.toThrow("NEXT_REDIRECT:/");
+  });
+
+  it("goes straight on for someone with no authenticator", async () => {
+    await expect(signIn({}, form({ ...signInForm, next: "/tenders" }))).rejects.toThrow("NEXT_REDIRECT:/tenders");
+  });
+
+  it("does not turn a failed assurance lookup into a failed sign-in", async () => {
+    h.aal.mockResolvedValue({ data: null, error: { message: "boom" } });
+    await expect(signIn({}, form(signInForm))).rejects.toThrow("NEXT_REDIRECT:/");
+    h.aal.mockRejectedValue(new Error("network"));
+    await expect(signIn({}, form(signInForm))).rejects.toThrow("NEXT_REDIRECT:/");
   });
 });
 

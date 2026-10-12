@@ -1,11 +1,27 @@
 import { spawn, spawnSync } from "node:child_process";
+import pg from "pg";
 
 const windows = process.platform === "win32";
+
+/**
+ * Sign-up is limited to five an hour per address (docs/auth.md) and `next start` always reports the browser's address,
+ * so a few runs in an hour would refuse every sign-up. Clearing the counters of the local database keeps the suite repeatable.
+ */
+async function clearAuthRateLimits(url: string) {
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query(`delete from private.rate_limits where key like 'auth\\_%'`);
+  } finally {
+    await client.end();
+  }
+}
 
 /** Starts a real job worker for the duration of the run and stops it afterwards. */
 export default async function globalSetup() {
   const url = process.env.DATABASE_URL ?? "";
   if (url && !/127\.0\.0\.1|localhost/.test(url)) throw new Error("E2E tests only run against a local database");
+  if (url) await clearAuthRateLimits(url);
   // On Windows `npx` is npx.cmd, which Node only starts through a shell; elsewhere the worker
   // gets its own process group so the whole tree can be signalled at the end.
   const options = { stdio: ["ignore", "pipe", "inherit"] as ["ignore", "pipe", "inherit"], env: process.env, windowsHide: true };

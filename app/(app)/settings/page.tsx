@@ -11,6 +11,7 @@ import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { formatUsd, humanize } from "@/lib/format";
 import { TeamMembers, type MemberRow } from "@/features/team/team-members";
+import { SecuritySettings, type FactorRow } from "@/features/security/security-settings";
 import { InvitationsPanel, type InvitationRow } from "@/features/team/invitations-panel";
 import { configuredModels } from "@/agents/runtime/model-routing";
 
@@ -32,6 +33,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         .is("revoked_at", null)
         .order("created_at", { ascending: false })
     : { data: [], error: null };
+  // The person's own authenticator apps (verified ones are on; an unverified one is a setup that was never finished).
+  const { data: factorList, error: factorsError } = await supabase.auth.mfa.listFactors();
+  const factors: FactorRow[] = (factorList?.all ?? [])
+    .filter((f) => f.factor_type === "totp")
+    .map((f) => ({ id: f.id, name: f.friendly_name?.trim() || "Authenticator app", verified: f.status === "verified", createdAt: f.created_at }));
   const { data: mailboxes } = await supabase
     .from("email_accounts")
     .select("id,user_id,provider,from_address,smtp_host,status,last_error")
@@ -59,6 +65,21 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </p>
       )}
       <div className="grid gap-4 lg:grid-cols-2">
+        <Card id="security" className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Security</CardTitle>
+            <CardDescription>Protect your account with a second step when you sign in.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {factorsError ? (
+              <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+                Your authenticators could not be loaded. Try again in a moment.
+              </p>
+            ) : (
+              <SecuritySettings factors={factors} />
+            )}
+          </CardContent>
+        </Card>
         <Card id="email" className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Email for sending bids</CardTitle>

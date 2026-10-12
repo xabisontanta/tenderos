@@ -17,6 +17,9 @@ its operator, and the responsible party for the account data of the people who s
 | **Request handler**                   | A named engineer with the service-role key. Runs the commands below. Never acts without a ticket. |
 | **Organisation owner**                | Downloads their own organisation's data from Settings, Your data. Can ask for erasure.            |
 
+The same people, with the same identity checks (section 1), also handle a **lost authenticator** (`npm run popia -- reset-mfa`, the
+runbook and who may approve it are in `docs/auth.md`, "Lost device").
+
 Only the request handler has the service-role key. The commands refuse to run without it, and
 `erase_user`, `erase_organisation`, `export_user_data` and `export_organisation_data` are not callable by
 any signed-in user (an integration test checks the grants).

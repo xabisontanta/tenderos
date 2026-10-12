@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
 import { expect, test, type Page } from "@playwright/test";
-import { registryPayload } from "../../lib/org/bootstrap";
-import { LEGAL_VERSIONS } from "../../lib/legal/versions";
+import { createOrgOwner } from "./helpers/accounts";
 import { pickLink, waitForMail } from "./helpers/mailbox";
+import { signInThroughForm, streamed } from "./helpers/page";
 
 /**
  * Team invitations, end to end: an owner invites an auditor as a read-only viewer from Settings, the auditor
@@ -16,38 +15,14 @@ import { pickLink, waitForMail } from "./helpers/mailbox";
  */
 test("an owner invites an auditor, who creates an account, joins and sees the organisation read-only", async ({ page, browser }) => {
   const stamp = Date.now();
-  const orgName = `Khumalo Civils ${stamp}`;
-  const ownerEmail = `owner-${randomUUID().slice(0, 8)}@tenderos.test`;
-  const ownerPassword = `Pw-${randomUUID()}`;
   const auditorEmail = `auditor-${randomUUID().slice(0, 8)}@tenderos.test`;
   const auditorPassword = `Sup3r-secret-${stamp}`;
 
   // The owner: an organisation that exists, with the terms accepted (set up through the API, not the form).
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const admin = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
-  const created = await admin.auth.admin.createUser({
-    email: ownerEmail,
-    password: ownerPassword,
-    email_confirm: true,
-    user_metadata: { full_name: "Sipho Dlamini" },
-  });
-  if (created.error) throw created.error;
-  const asOwner = createClient(url, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
-  expect((await asOwner.auth.signInWithPassword({ email: ownerEmail, password: ownerPassword })).error).toBeNull();
-  expect((await asOwner.rpc("accept_legal", { p_terms_version: LEGAL_VERSIONS.terms, p_privacy_version: LEGAL_VERSIONS.privacy })).error).toBeNull();
-  const boot = await admin.rpc("bootstrap_organisation", {
-    p_user_id: created.data.user.id,
-    p_name: orgName,
-    p_slug: `e2e-${randomUUID().slice(0, 12)}`,
-    ...registryPayload(),
-  } as never);
-  expect(boot.error).toBeNull();
+  const { email: ownerEmail, password: ownerPassword, orgName } = await createOrgOwner();
 
   // The owner invites the auditor as a viewer.
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(ownerEmail);
-  await page.getByLabel("Password").fill(ownerPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await signInThroughForm(page, ownerEmail, ownerPassword);
   await page.waitForURL((u) => u.pathname === "/");
   await page.goto("/settings");
   await streamed(page);
@@ -123,14 +98,6 @@ test("an owner invites an auditor, who creates an account, joins and sees the or
   await expect(page.getByRole("rowheader", { name: /Thandi Auditor/ })).toContainText(auditorEmail);
   await expect(page.getByText("No pending invitations.")).toBeVisible();
 });
-
-/**
- * Waits for the streamed page to finish. While a page streams in, React keeps the finished content in a hidden
- * segment (id S:n) next to the loading skeleton, so a label can briefly exist twice and a strict locator refuses.
- */
-async function streamed(page: Page) {
-  await page.waitForFunction(() => document.querySelectorAll('[hidden][id^="S:"]').length === 0);
-}
 
 /** Follows the confirmation email when this stack has confirmations on; a stack without them signed the person in already. */
 async function confirmEmail(page: Page, email: string) {
