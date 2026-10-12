@@ -453,6 +453,17 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# The hosted worker. pg_cron calls /functions/v1/tenderos-worker (migration 20261010000008), but the code
+# is in supabase/functions/worker, and Supabase deploys a function under its folder name unless it is
+# mapped here. Without this mapping the cron job calls a function that does not exist. Deploy with
+# `npx supabase functions deploy tenderos-worker` (README, "Hosted worker"). JWT verification stays on:
+# the cron job sends the project's anon JWT, and the function also checks the worker secret in Vault.
+# tests/unit/edge-worker-name.test.ts fails if the cron target, this table and the entrypoint drift apart.
+[functions.tenderos-worker]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/worker/index.ts"
+
 [analytics]
 enabled = true
 port = 56327

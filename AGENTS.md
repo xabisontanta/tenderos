@@ -60,6 +60,17 @@ only facts present in the portal row, deduplicates on the portal id, and, when
 `auto_run_workflows` is on, starts the `tender_bid` workflow on up to
 `max_auto_workflows_per_scan` tenders that still leave 48 hours to bid.
 
+The portal's data is not trusted. Every text field has control characters (NUL
+included, which Postgres refuses) stripped; a tender with no usable description
+or reference is titled `eTenders <id>`; a field of the wrong shape counts as
+missing. Rows that cannot become a tender (unreadable, no closing date, no
+issuing organisation, refused by the database) are counted, never dropped
+silently: `discovery_runs.rows_seen` and `rows_skipped`. If more than
+`DISCOVERY_MAX_INVALID_PCT` percent (default 20) of the rows are unusable the
+scan fails with that explanation, instead of completing with "0 matched".
+Tenders are stored a chunk at a time with a savepoint per tender, so one row the
+database refuses is skipped and the others are kept.
+
 With AI switched on (section 11), five steps of the `tender_bid` plan run a
 model instead of rules: the Tender Analyst, the Qualification Agent's fit
 assessment, the Proposal Writer, the Pricing Analyst and the QA Reviewer. Each
@@ -212,12 +223,30 @@ person to review.
   decided. Approvals expire at the tender's closing time; pg_cron
   `tenderos-expire-approvals` marks them every 15 minutes and the engine
   cancels the run and the tender.
+- Where and when a bid is delivered (`submission_destination`, `submission_method`,
+  `source_url`, `closing_at`) is locked from `READY_FOR_APPROVAL` on, and while any
+  approval is pending or approved (trigger `guard_delivery_details`): not even an owner
+  can edit the columns. Owners and admins use `change_tender_delivery`, which cancels
+  the approval and run, fails an undelivered pack, sends the tender back to
+  `PREPARING_BID`, applies the change and audits who changed what and why; the bid is
+  then prepared again and approved afresh. A bid that was already delivered cannot be
+  changed. The portal may still move the closing date (a pending approval's expiry
+  follows); discovery never applies a changed address, method or link to a locked bid
+  and reports it instead.
 - TenderOS never auto-submits. In simulation mode the submission is a record
   with a package hash; nothing leaves the system.
 - An approved bid is emailed only when an owner or admin presses Send on the
   tender page (`sendBidEmail`), from a mailbox they connected themselves.
   Agents never send email. Every send is logged in `email_messages`, and
-  `record_bid_delivery` closes the submission, tender and run.
+  `record_bid_delivery` closes the submission, tender and run. A bid is emailed
+  at most once: the send is reserved first as a message in state `SENDING`
+  (one `SENDING` or `SENT` message per submission, a unique index), then
+  mailed, then marked `SENT` or `FAILED`; a `FAILED` attempt can be retried.
+  An attempt that was interrupted stays `SENDING` and blocks another send until
+  a person has checked the mailbox's Sent folder and either records the delivery
+  or, if nothing went out, marks that message `FAILED` by hand (database
+  access). Errors writing the message or the mailbox status are logged and, for
+  the message, shown to the person, never swallowed.
 - Mailbox credentials (Gmail refresh token or SMTP password) live in Supabase
   Vault. Browsers cannot read `secret_id`; only the service role can decrypt,
   through `email_account_credential`, and only for the member who connected
@@ -241,7 +270,15 @@ person to review.
 
 - `agent_events` is the user-visible, append-only event stream.
 - `audit_logs` is the append-only compliance trail (who did what, as which
-  actor). Updates and deletes are rejected by trigger.
+  actor). Updates, deletes and truncates are rejected by trigger, with two
+  exceptions: clearing the actor when an account is deleted, and the erasure and
+  retention functions (`erase_user`, `erase_organisation`,
+  `private.run_retention_purge`), which de-identify or delete under
+  `app.erasure`. Erasure keeps the trail but removes names, addresses, ids and
+  what people typed; the runbook is `docs/popia-operations.md`. A new table that
+  holds personal data must be covered by `erase_user` and the exports, and a new
+  foreign key to `auth.users` must be `on delete set null` or `cascade`, never
+  `restrict`.
 - Process logs use `lib/log.ts`: JSON lines with secret redaction. Never log
   tokens, keys, document contents or personal data. Every model call writes
   one `ai.call` line with the model, token counts, cost, the prompt's block

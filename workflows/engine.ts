@@ -16,7 +16,7 @@ import { WORKFLOWS, getStep, type StepResolution, type WorkflowDefinition } from
 import type { PlanStep } from "./definitions/plan";
 import * as db from "./store";
 import { runDiscovery } from "./discovery";
-import type { Fetcher } from "@/agents/discovery/etenders";
+import { maxInvalidRatioFromEnv, type Fetcher } from "@/agents/discovery/etenders";
 
 export interface Job {
   id: number;
@@ -41,6 +41,8 @@ export interface EngineOptions {
   progressThrottleMs?: number;
   /** HTTP client for tender source connectors. Defaults to global fetch. */
   fetcher?: Fetcher;
+  /** Share of the portal's rows a scan may fail to read before it fails (default: DISCOVERY_MAX_INVALID_PCT, else 20 percent). */
+  discovery?: { maxInvalidRatio?: number };
   ai?: EngineAiOptions;
 }
 
@@ -84,6 +86,7 @@ export class WorkflowEngine {
           fetcher: this.opts.fetcher ?? (globalThis.fetch as unknown as Fetcher),
           logger: this.opts.logger,
           now: this.now,
+          maxInvalidRatio: this.opts.discovery?.maxInvalidRatio ?? maxInvalidRatioFromEnv(process.env),
         });
       case "approval.decided":
         return this.approvalDecided(String(job.payload.approval_id));

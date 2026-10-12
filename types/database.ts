@@ -195,13 +195,7 @@ isOneToOne: false
                     "action"?: string,"actor_agent_id"?: string | null,"actor_type"?: Database["public"]['Enums']["actor_type"],"actor_user_id"?: string | null,"correlation_id"?: string | null,"created_at"?: string,"id"?: never,"ip"?: unknown,"metadata"?: NonNullable<Json>,"organisation_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-                    {
-      foreignKeyName: "audit_logs_organisation_id_fkey"
-      columns: ["organisation_id"]
-isOneToOne: false
-      referencedRelation: "organisations"
-      referencedColumns: ["id"]
-    }
+                    
                   ]
                 },"autofill_tokens": {
                   Row: {
@@ -329,14 +323,14 @@ isOneToOne: false
                   ]
                 },"discovery_runs": {
                   Row: {
-                    "completed_at": string | null,"created_at": string,"created_tenders": number,"error": string | null,"id": string,"matched": number,"methods": (string)[],"organisation_id": string,"provinces": (string)[],"requested_by": string | null,"scanned": number,"source": string,"started_at": string | null,"started_workflows": number,"status": Database["public"]['Enums']["discovery_status"],"trigger": string
+                    "completed_at": string | null,"created_at": string,"created_tenders": number,"error": string | null,"id": string,"matched": number,"methods": (string)[],"organisation_id": string,"provinces": (string)[],"requested_by": string | null,"rows_seen": number,"rows_skipped": number,"scanned": number,"source": string,"started_at": string | null,"started_workflows": number,"status": Database["public"]['Enums']["discovery_status"],"trigger": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id": string,"provinces": (string)[],"requested_by"?: string | null,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger": string
+                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id": string,"provinces": (string)[],"requested_by"?: string | null,"rows_seen"?: number,"rows_skipped"?: number,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger": string
                   }
                   Update: {
-                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id"?: string,"provinces"?: (string)[],"requested_by"?: string | null,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger"?: string
+                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id"?: string,"provinces"?: (string)[],"requested_by"?: string | null,"rows_seen"?: number,"rows_skipped"?: number,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger"?: string
                   }
                   Relationships: [
                     {
@@ -375,14 +369,14 @@ isOneToOne: false
                   ]
                 },"email_messages": {
                   Row: {
-                    "attachments": NonNullable<Json>,"created_at": string,"email_account_id": string,"error": string | null,"from_address": string,"id": string,"organisation_id": string,"provider_message_id": string | null,"sent_by": string,"status": string,"subject": string,"submission_record_id": string | null,"tender_id": string,"to_address": string
+                    "attachments": NonNullable<Json>,"created_at": string,"email_account_id": string | null,"error": string | null,"from_address": string,"id": string,"organisation_id": string,"provider_message_id": string | null,"sent_by": string | null,"status": string,"subject": string,"submission_record_id": string | null,"tender_id": string,"to_address": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id": string,"error"?: string | null,"from_address": string,"id"?: string,"organisation_id": string,"provider_message_id"?: string | null,"sent_by": string,"status": string,"subject": string,"submission_record_id"?: string | null,"tender_id": string,"to_address": string
+                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id"?: string | null,"error"?: string | null,"from_address": string,"id"?: string,"organisation_id": string,"provider_message_id"?: string | null,"sent_by"?: string | null,"status": string,"subject": string,"submission_record_id"?: string | null,"tender_id": string,"to_address": string
                   }
                   Update: {
-                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id"?: string,"error"?: string | null,"from_address"?: string,"id"?: string,"organisation_id"?: string,"provider_message_id"?: string | null,"sent_by"?: string,"status"?: string,"subject"?: string,"submission_record_id"?: string | null,"tender_id"?: string,"to_address"?: string
+                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id"?: string | null,"error"?: string | null,"from_address"?: string,"id"?: string,"organisation_id"?: string,"provider_message_id"?: string | null,"sent_by"?: string | null,"status"?: string,"subject"?: string,"submission_record_id"?: string | null,"tender_id"?: string,"to_address"?: string
                   }
                   Relationships: [
                     {
@@ -850,6 +844,9 @@ isOneToOne: false
             "accept_legal":
 { Args: { "p_ip_hmac"?: string,"p_privacy_version": string,"p_terms_version": string }; Returns: undefined
                            },
+"agent_usage_totals":
+{ Args: { "p_agent_id": string }; Returns: Json
+                           },
 "archive_company_document":
 { Args: { "p_id": string }; Returns: undefined
                            },
@@ -871,6 +868,9 @@ isOneToOne: false
                            },
 "cancel_workflow":
 { Args: { "p_reason": string,"p_run_id": string }; Returns: undefined
+                           },
+"change_tender_delivery":
+{ Args: { "p_changes": Json,"p_reason": string,"p_tender_id": string }; Returns: Json
                            },
 "complete_onboarding":
 { Args: { "p_org": string }; Returns: undefined
@@ -899,6 +899,18 @@ isOneToOne: false
 { Args: { "p_id": string,"p_user": string }; Returns: {
               "display_name": string,"from_address": string,"organisation_id": string,"provider": Database["public"]['Enums']["email_provider"],"secret": string,"smtp_host": string,"smtp_port": number,"smtp_username": string
             }[]
+                           },
+"erase_organisation":
+{ Args: { "p_org": string,"p_reference"?: string }; Returns: Json
+                           },
+"erase_user":
+{ Args: { "p_reference"?: string,"p_user_id": string }; Returns: Json
+                           },
+"export_organisation_data":
+{ Args: { "p_actor"?: string,"p_org": string }; Returns: Json
+                           },
+"export_user_data":
+{ Args: { "p_actor"?: string,"p_user_id": string }; Returns: Json
                            },
 "hit_rate_limit":
 { Args: { "p_action": string,"p_max"?: number,"p_window_seconds"?: number }; Returns: undefined

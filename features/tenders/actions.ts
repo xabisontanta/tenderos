@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { requireContext } from "@/lib/data/context";
+import { canAdminister, requireContext } from "@/lib/data/context";
 import { toUserError, type ActionResult } from "@/lib/actions";
 import { tenderInputSchema } from "./schema";
+import { deliveryChangeSchema } from "@/lib/domain/delivery-lock";
 import { USER_SETTABLE_STATUSES } from "@/lib/domain/tender-state";
 
 export interface TenderFormState {
@@ -110,6 +111,26 @@ export async function retryTask(taskId: string): Promise<ActionResult> {
   const { error } = await supabase.rpc("retry_task", { p_task_id: taskId });
   if (error) return { ok: false, error: toUserError(error, "Could not retry the task") };
   return { ok: true };
+}
+
+/**
+ * Changes where and when a bid is delivered. Once a bid is waiting for approval or delivery these details are
+ * locked, and this is the only way to change them: the database withdraws the approval, sends the bid back for
+ * preparation and records who changed what and why. Owners and admins only.
+ */
+export async function changeTenderDelivery(tenderId: string, changes: unknown, reason: string): Promise<ActionResult<{ withdrawn: boolean }>> {
+  const ctx = await requireContext();
+  if (!canAdminister(ctx.role)) return { ok: false, error: "Only owners and admins can change a tender's delivery details" };
+  if (!uuid.safeParse(tenderId).success) return { ok: false, error: "Invalid tender" };
+  const parsed = deliveryChangeSchema.safeParse(changes);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  const r = z.string().trim().min(3, "Give a reason").max(500).safeParse(reason);
+  if (!r.success) return { ok: false, error: r.error.issues[0].message };
+  const supabase = await getServerSupabase();
+  const { data, error } = await supabase.rpc("change_tender_delivery", { p_tender_id: tenderId, p_changes: parsed.data, p_reason: r.data });
+  if (error) return { ok: false, error: toUserError(error, "Could not change the delivery details") };
+  revalidatePath(`/tenders/${tenderId}`);
+  return { ok: true, data: { withdrawn: Boolean((data as { withdrawn?: boolean } | null)?.withdrawn) } };
 }
 
 export async function transitionTender(tenderId: string, to: string, reason: string): Promise<ActionResult> {

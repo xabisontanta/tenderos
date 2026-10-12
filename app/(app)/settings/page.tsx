@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/command-centre/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { KillSwitch } from "@/features/settings/kill-switch";
+import { DataExport } from "@/features/settings/data-export";
 import { MailboxSettings } from "@/features/email/mailbox-settings";
 import { AutofillSettings } from "@/features/autofill/autofill-settings";
 import { googleConfig } from "@/lib/email/gmail";
@@ -160,6 +161,21 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </ul>
           </CardContent>
         </Card>
+        {ctx.role === "owner" && (
+          <Card id="your-data" className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Your data</CardTitle>
+              <CardDescription>
+                Download everything TenderOS holds for this organisation as one JSON file: company profile, tenders, approvals, sent emails, members and the
+                audit trail. It never includes passwords, mailbox credentials, browser pairing codes or the contents of your uploaded files. Each download is
+                recorded in the audit trail. To have the organisation or a member erased, ask the TenderOS Information Officer.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataExport />
+            </CardContent>
+          </Card>
+        )}
       </div>
     </>
   );

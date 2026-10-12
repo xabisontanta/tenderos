@@ -35,17 +35,18 @@ approve it on the Approvals page.
 
 ## Scripts
 
-| Script                                                                | What it does                                                |
-| --------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `dev`, `build`, `start`                                               | Next.js                                                     |
-| `worker`                                                              | Background job worker (agent execution)                     |
-| `build:edge-worker`                                                   | Bundles the worker as the `tenderos-worker` Edge Function   |
-| `lint`, `typecheck`, `format`, `format:check`                         | Code quality                                                |
-| `test` / `test:unit`                                                  | Unit tests (business rules, state machine, permissions)     |
-| `test:integration`                                                    | Against local Supabase: workflow, RLS, roles, failure paths |
-| `test:e2e`                                                            | Playwright, against a production build plus a real worker   |
-| `db:start`, `db:stop`, `db:reset`, `db:migrate`, `db:types`, `db:env` | Database                                                    |
-| `ci`                                                                  | lint, typecheck, unit tests and build                       |
+| Script                                                                | What it does                                                         |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `dev`, `build`, `start`                                               | Next.js                                                              |
+| `worker`                                                              | Background job worker (agent execution)                              |
+| `build:edge-worker`                                                   | Bundles the worker as the `tenderos-worker` Edge Function            |
+| `popia`                                                               | Data-subject requests: export and erase (`docs/popia-operations.md`) |
+| `lint`, `typecheck`, `format`, `format:check`                         | Code quality                                                         |
+| `test` / `test:unit`                                                  | Unit tests (business rules, state machine, permissions)              |
+| `test:integration`                                                    | Against local Supabase: workflow, RLS, roles, failure paths          |
+| `test:e2e`                                                            | Playwright, against a production build plus a real worker            |
+| `db:start`, `db:stop`, `db:reset`, `db:migrate`, `db:types`, `db:env` | Database                                                             |
+| `ci`                                                                  | lint, typecheck, unit tests and build                                |
 
 `test:integration` and `test:e2e` refuse to run against a non-local database.
 For e2e, run `npm run build` first; if Playwright's bundled browser is not
@@ -167,8 +168,23 @@ Each call processes ready jobs for about 45 seconds, so steps advance within a
 minute rather than instantly.
 
 1. `npm run build:edge-worker` writes `supabase/functions/worker/index.ts`.
-2. Deploy it as `tenderos-worker` with JWT verification on
-   (`supabase functions deploy`, or the dashboard).
+2. Deploy it as `tenderos-worker`:
+
+   ```bash
+   npx supabase link --project-ref <ref>
+   npx supabase functions deploy tenderos-worker
+   ```
+
+   The code is in the folder `supabase/functions/worker`, and the cron job
+   calls `/functions/v1/tenderos-worker`. The mapping that joins the two is the
+   `[functions.tenderos-worker]` table in `supabase/config.toml` (entrypoint
+   `./functions/worker/index.ts`, `verify_jwt = true`); without it Supabase
+   would deploy the folder as `worker` and the cron job would call nothing. A
+   unit test fails if the names or the entrypoint drift apart. Add
+   `--use-api` when Docker is not running. Deploying from the dashboard works
+   too, but the function must be named `tenderos-worker` and keep JWT
+   verification on.
+
 3. Migration `20261010000008` generates the worker secret in Vault. Add the
    project URL and the legacy anon JWT to Vault, then schedule the job:
 

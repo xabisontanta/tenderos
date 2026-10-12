@@ -89,10 +89,26 @@ describe("database hardening", () => {
       "revoke_autofill_token",
       "accept_legal",
       "complete_onboarding",
+      "change_tender_delivery",
     ];
     const { rows } = await pool.query(`select proname, prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = any($1)`, [fns]);
     expect(rows.map((r) => r.proname).sort()).toEqual([...fns].sort());
     for (const r of rows) expect(r.prosrc, r.proname).toContain("hit_rate_limit(");
+  });
+
+  it("limits the service-role RPCs that export or erase personal data, and keeps browsers out of them", async () => {
+    const fns = ["erase_user", "erase_organisation", "export_user_data", "export_organisation_data"];
+    const { rows } = await pool.query(
+      `select proname, prosrc, has_function_privilege('authenticated', oid, 'execute') as browser, has_function_privilege('anon', oid, 'execute') as anon,
+              has_function_privilege('service_role', oid, 'execute') as service
+         from pg_proc where pronamespace = 'public'::regnamespace and proname = any($1)`,
+      [fns],
+    );
+    expect(rows.map((r) => r.proname).sort()).toEqual([...fns].sort());
+    for (const r of rows) {
+      expect(r.prosrc, r.proname).toContain("hit_rate_limit_key(");
+      expect([r.browser, r.anon, r.service], r.proname).toEqual([false, false, true]);
+    }
   });
 
   it("rejects a tender that points at another organisation's source", async () => {

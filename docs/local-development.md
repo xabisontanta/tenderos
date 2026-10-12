@@ -66,6 +66,27 @@ see `docs/ai-agents.md`. After changing the Anthropic SDK version, run
 5. Run more than one worker for availability; `SKIP LOCKED` keeps them from
    taking the same job.
 
+### Hosted worker as an Edge Function (instead of step 4)
+
+Where there is no place to run a long-lived process, the worker can run as the
+`tenderos-worker` Edge Function, called every minute by pg_cron (details in the
+README, "Hosted worker"). Deploy it with:
+
+```bash
+npm run build:edge-worker          # regenerates supabase/functions/worker/index.ts
+npx supabase link --project-ref <ref>
+npx supabase functions deploy tenderos-worker     # add --use-api if Docker is not running
+```
+
+The function's name matters: pg_cron calls `/functions/v1/tenderos-worker`, and
+the code lives in `supabase/functions/worker`. `supabase/config.toml` joins them
+with `[functions.tenderos-worker]` (`entrypoint = "./functions/worker/index.ts"`,
+`verify_jwt = true`). Keep `verify_jwt` on: the cron job sends the anon JWT and
+the function also checks the worker secret held in Vault. Then add the project
+URL and the anon JWT to Vault and run `select private.schedule_edge_worker();`
+once. Check it with `select * from cron.job_run_details order by start_time desc limit 5`
+and the function's logs.
+
 ## Troubleshooting
 
 - **Agents never start**: check the worker is running and the sidebar shows

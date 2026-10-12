@@ -36,6 +36,44 @@ export function etendersRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const NUL = "\u0000";
+
+/** Real feeds carry stray control characters (the portal's editors paste from Word and PDF). Postgres rejects NUL in text and jsonb. */
+export function nulRow(overrides: Record<string, unknown> = {}) {
+  return etendersRow({
+    id: 800001,
+    tender_No: `NUL${NUL}-1`,
+    description: `Supply of pipes${NUL}\r\nSecond${NUL} line\u0007 with a bell\u001b[31m`,
+    department: `Water${NUL} Department`,
+    category: `Cat${NUL}egory\u000b`,
+    delivery: `Hand${NUL} delivery\u0000 at the office`,
+    contactPerson: `Pat${NUL}`,
+    email: `pat${NUL}@example.org`,
+    telephone: `011${NUL}-1`,
+    briefingSession: true,
+    briefingVenue: `Room${NUL} 4`,
+    supportDocument: [{ supportDocumentID: `id${NUL}1`, fileName: `spec${NUL}.pdf`, extension: `.pdf${NUL}` }],
+    ...overrides,
+  });
+}
+
+/** A row with nothing usable to name the tender after. */
+export function untitledRow(overrides: Record<string, unknown> = {}) {
+  return etendersRow({ id: 800002, tender_No: null, description: "N/A", ...overrides });
+}
+
+/** Rows that cannot become tenders, each for a different reason (schema drift, missing facts). */
+export function unreadableRows() {
+  return [
+    etendersRow({ id: { surprise: "the portal changed the id" } }),
+    etendersRow({ id: null }),
+    "not an object at all",
+    etendersRow({ id: 800010, closing_Date: null }),
+    etendersRow({ id: 800011, closing_Date: "not a date" }),
+    etendersRow({ id: 800012, department: null, organ_of_State: "" }),
+  ];
+}
+
 export function etendersFetcher(rows: unknown[]) {
   const calls: string[] = [];
   const fetcher = async (url: string) => {

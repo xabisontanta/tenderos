@@ -66,11 +66,28 @@ Temporal was considered and deferred; see `docs/adr/0002-postgres-job-queue.md`.
   `private.has_org_role(...)` and write an audit entry:
   `start_tender_workflow`, `decide_approval`, `set_agent_control`,
   `retry_task`, `cancel_workflow`, `set_kill_switch`, `transition_tender`,
-  `mark_notifications_read`, plus tender insert and update under column grants.
+  `mark_notifications_read`, `change_tender_delivery`, plus tender insert and update under
+  column grants (the delivery columns are locked once a bid is waiting for approval or
+  delivery: trigger `guard_delivery_details`, migration `20261010000055`).
+- **Totals**: the API returns at most 1000 rows (`max_rows`), so a page must never fetch
+  rows to count or sum them. `dashboard_counts` (tenders per status, spend) and
+  `agent_usage_totals` (an agent's calls, cost and tokens) are `SECURITY INVOKER`
+  functions that aggregate in the database under the caller's RLS; long lists page with
+  `.range()` (`lib/pagination.ts`). Queries in `lib/data/queries.ts` throw on a database
+  error instead of returning an empty list.
 - **Writes from agents**: only the worker, over a direct connection, sets
   `app.actor_agent_id` so audit rows name the agent.
 - `bootstrap_organisation` is callable by the service role only.
-- Append-only tables reject `UPDATE` and `DELETE` through `private.reject_mutation`.
+- Append-only tables (`audit_logs`, `agent_events`, `tender_status_history`, `agent_status_transitions`,
+  `cost_usage`) reject `UPDATE`, `DELETE` and `TRUNCATE` through `private.reject_mutation` and
+  `private.reject_truncate`. Two things get past the update/delete trigger: an update whose only change is
+  clearing `actor_user_id` (what `on delete set null` does when an account is deleted), and the erasure and
+  retention functions, which set `app.erasure = 'on'` for their own transaction. `service_role` has no
+  `TRUNCATE` on them. `audit_logs.organisation_id` is a plain uuid, so the trail outlives an erased organisation.
+- Erasure, export and retention (service role only, `docs/popia-operations.md`): `erase_user`,
+  `erase_organisation`, `export_user_data`, `export_organisation_data`, and `private.run_retention_purge()`
+  (pg_cron `tenderos-retention-purge`, daily). A `before delete` trigger on `email_accounts` deletes the
+  mailbox's Vault secret, so removing a member or an organisation never leaves a credential behind.
 
 ## Realtime
 

@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HandoffList } from "@/features/operations/handoff-list";
 import { LiveRefresh } from "@/features/realtime/live-refresh";
+import { DeliveryDetails } from "@/features/tenders/delivery-details";
 import { TenderActions } from "@/features/tenders/tender-actions";
 import { WorkflowTimeline } from "@/features/tenders/workflow-timeline";
 import {
@@ -30,7 +31,8 @@ import type { AppContext } from "@/lib/data/context";
 import { getRecentEvents, type TaskSummary } from "@/lib/data/queries";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { formatDateTime, formatZar, humanize, provinceLabel, relativeTime } from "@/lib/format";
-import type { TenderStatus } from "@/lib/domain/tender-state";
+import { DELIVERY_WITHDRAWABLE_STATUSES, isDeliveryLocked } from "@/lib/domain/delivery-lock";
+import { TERMINAL_TENDER_STATUSES, type TenderStatus } from "@/lib/domain/tender-state";
 
 export const metadata: Metadata = { title: "Tender" };
 
@@ -68,6 +70,11 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   const awaitingDelivery = submission?.status === "ACTION_REQUIRED" && !submission.is_simulation && canAdminister(ctx.role);
   const delivery = awaitingDelivery ? await deliveryData(supabase, ctx.organisation.id, ctx.userId, tender, output("submission")) : null;
   const apply = await applyData(supabase, ctx, tender, submission, output("submission"));
+  // Delivery details are locked while the bid waits for approval or delivery; only owners and admins can change them then.
+  const status = tender.status as TenderStatus;
+  const deliveryLocked = isDeliveryLocked(status, approvals.data ?? []);
+  const canChangeDelivery =
+    canAdminister(ctx.role) && (deliveryLocked ? DELIVERY_WITHDRAWABLE_STATUSES.includes(status) : !TERMINAL_TENDER_STATUSES.includes(status));
 
   return (
     <>
@@ -177,6 +184,18 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
                     </div>
                   </dl>
                   {tender.description && <p className="mt-4 whitespace-pre-wrap text-[13px] text-muted-foreground">{tender.description}</p>}
+                  <DeliveryDetails
+                    key={tender.updated_at}
+                    tenderId={tender.id}
+                    details={{
+                      submission_destination: tender.submission_destination,
+                      submission_method: tender.submission_method,
+                      closing_at: tender.closing_at,
+                      source_url: tender.source_url,
+                    }}
+                    locked={deliveryLocked}
+                    canChange={canChangeDelivery}
+                  />
                 </TabsContent>
                 <TabsContent value="qualification" className="mt-0">
                   <QualificationPanel output={output("qualification")} />

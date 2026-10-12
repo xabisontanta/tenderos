@@ -8,6 +8,7 @@ import { canAdminister, requireContext } from "@/lib/data/context";
 import { rateLimit, toUserError, type ActionResult } from "@/lib/actions";
 import { DOCUMENT_BUCKET } from "@/lib/domain/documents";
 import { MAX_EMAIL_ATTACHMENT_BYTES, type OutgoingAttachment } from "@/lib/email/compose";
+import { reserveBidEmail, settleBidEmail } from "@/lib/email/deliver";
 import { googleConfig, sendWithGmail } from "@/lib/email/gmail";
 import { SMTP_PORTS } from "@/lib/email/network";
 import { sendWithSmtp, verifySmtp } from "@/lib/email/smtp";
@@ -106,49 +107,66 @@ export async function sendBidEmail(input: z.input<typeof sendSchema>): Promise<A
   if (sub.status !== "ACTION_REQUIRED") return { ok: false, error: "This bid is already recorded as delivered" };
   const { data: approval } = await supabase.from("approvals").select("status").eq("id", sub.approval_id).single();
   if (approval?.status !== "APPROVED") return { ok: false, error: "The bid has not been approved" };
-  const { count: alreadySent } = await supabase
-    .from("email_messages")
-    .select("id", { count: "exact", head: true })
-    .eq("submission_record_id", sub.id)
-    .eq("status", "SENT");
-  if (alreadySent) return { ok: false, error: "This bid was already emailed; record the delivery instead of sending it again" };
 
   const admin = getAdminSupabase();
   const { data: creds, error: credError } = await admin.rpc("email_account_credential", { p_id: d.accountId, p_user: ctx.userId });
   const cred = creds?.[0];
   if (credError || !cred || cred.organisation_id !== ctx.organisation.id) return { ok: false, error: "Choose a mailbox you connected yourself" };
 
-  // Attachments: only this organisation's live documents, read with the member's own access.
-  const attachments: OutgoingAttachment[] = [];
+  // Attachments: only this organisation's live documents, read with the member's own access. Their
+  // details are checked now; the files are read after the send is reserved.
+  let docs: Array<{ id: string; file_name: string; mime_type: string | null; storage_path: string; size_bytes: number | null }> = [];
   if (d.documentIds.length) {
-    const { data: docs } = await supabase
+    const { data } = await supabase
       .from("company_documents")
       .select("id, file_name, mime_type, storage_path, size_bytes")
       .eq("organisation_id", ctx.organisation.id)
       .is("archived_at", null)
       .in("id", d.documentIds);
-    if ((docs ?? []).length !== d.documentIds.length) return { ok: false, error: "A selected document is no longer available" };
-    const total = (docs ?? []).reduce((n, x) => n + (x.size_bytes ?? 0), 0);
+    docs = data ?? [];
+    if (docs.length !== d.documentIds.length) return { ok: false, error: "A selected document is no longer available" };
+    const total = docs.reduce((n, x) => n + (x.size_bytes ?? 0), 0);
     if (total > MAX_EMAIL_ATTACHMENT_BYTES)
       return { ok: false, error: "The attachments are larger than 18 MB together; deselect some or deliver the bid another way" };
-    for (const doc of docs ?? []) {
-      const { data: blob, error } = await supabase.storage.from(DOCUMENT_BUCKET).download(doc.storage_path);
-      if (error || !blob) return { ok: false, error: `Could not read ${doc.file_name}` };
-      attachments.push({ filename: doc.file_name, contentType: doc.mime_type ?? "application/octet-stream", content: Buffer.from(await blob.arrayBuffer()) });
-    }
   }
 
-  const message = {
-    from: { address: cred.from_address, name: cred.display_name },
+  // Reserve the send before anything is mailed. The database allows one SENDING or SENT message per bid,
+  // so of two simultaneous presses of Send only one gets past here.
+  const reservation = await reserveBidEmail(admin, {
+    organisationId: ctx.organisation.id,
+    accountId: d.accountId,
+    tenderId: sub.tender_id,
+    submissionId: sub.id,
+    sentBy: ctx.userId,
+    from: cred.from_address,
     to: d.to,
-    replyTo: cred.from_address,
     subject: d.subject,
-    text: d.body,
-    attachments,
-  };
+  });
+  if (!reservation.ok) {
+    if (reservation.failed) {
+      log.error("bid email not reserved", { organisation_id: ctx.organisation.id, submission_id: sub.id, error: reservation.error });
+      return { ok: false, error: "Could not start the send. Nothing was emailed; try again in a moment." };
+    }
+    return { ok: false, error: reservation.error };
+  }
+
+  const attachments: OutgoingAttachment[] = [];
   let messageId: string | null = null;
   let failure: string | null = null;
   try {
+    for (const doc of docs) {
+      const { data: blob, error } = await supabase.storage.from(DOCUMENT_BUCKET).download(doc.storage_path);
+      if (error || !blob) throw new Error(`Could not read ${doc.file_name}`);
+      attachments.push({ filename: doc.file_name, contentType: doc.mime_type ?? "application/octet-stream", content: Buffer.from(await blob.arrayBuffer()) });
+    }
+    const message = {
+      from: { address: cred.from_address, name: cred.display_name },
+      to: d.to,
+      replyTo: cred.from_address,
+      subject: d.subject,
+      text: d.body,
+      attachments,
+    };
     const secret = JSON.parse(cred.secret) as { password?: string; refresh_token?: string };
     if (cred.provider === "GMAIL") {
       const g = googleConfig();
@@ -164,25 +182,38 @@ export async function sendBidEmail(input: z.input<typeof sendSchema>): Promise<A
     log.warn("bid email failed", { organisation_id: ctx.organisation.id, submission_id: sub.id, provider: cred.provider });
   }
 
-  await admin.from("email_messages").insert({
-    organisation_id: ctx.organisation.id,
-    email_account_id: d.accountId,
-    tender_id: sub.tender_id,
-    submission_record_id: sub.id,
-    sent_by: ctx.userId,
-    from_address: cred.from_address,
-    to_address: d.to,
-    subject: d.subject,
-    attachments: attachments.map((a) => ({ filename: a.filename, bytes: a.content.length })),
-    status: failure ? "FAILED" : "SENT",
-    provider_message_id: messageId,
-    error: failure,
-  });
-  await admin
+  // Close the reservation. If this fails after a successful send, the row stays SENDING and keeps
+  // blocking a second send; the person is told so.
+  const sizes = attachments.map((a) => ({ filename: a.filename, bytes: a.content.length }));
+  const settleError = await settleBidEmail(
+    admin,
+    reservation.id,
+    failure ? { ok: false, error: failure, attachments: sizes } : { ok: true, messageId, attachments: sizes },
+  );
+  if (settleError) {
+    log.error("bid email record not saved", {
+      organisation_id: ctx.organisation.id,
+      submission_id: sub.id,
+      message_id: reservation.id,
+      sent: !failure,
+      error: settleError,
+    });
+  }
+  const { error: accountError } = await admin
     .from("email_accounts")
     .update(failure ? { status: "ERROR", last_error: failure } : { status: "ACTIVE", last_error: null, last_used_at: new Date().toISOString() })
     .eq("id", d.accountId);
+  if (accountError) {
+    log.error("mailbox status not updated", { organisation_id: ctx.organisation.id, account_id: d.accountId, error: accountError.message });
+  }
   if (failure) return { ok: false, error: failure };
+  if (settleError) {
+    return {
+      ok: false,
+      error:
+        "The email was sent, but TenderOS could not save the record of it. Do not send it again: check the mailbox's Sent folder, then press Record as delivered.",
+    };
+  }
 
   const { error: recordError } = await supabase.rpc("record_bid_delivery", {
     p_submission_id: sub.id,

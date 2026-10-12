@@ -38,6 +38,21 @@ const TASK_SUMMARY_COLS =
 const TENDER_SUMMARY_COLS = "id,title,reference_number,status,closing_at,is_simulation,issuing_organisation";
 const ACTIVE_TASK_STATUSES = ["QUEUED", "RUNNING", "WAITING", "BLOCKED", "NEEDS_APPROVAL"] as const;
 
+/**
+ * The rows of a query, or an error naming what could not be loaded. A failed query must never look like an empty
+ * list: a screen that quietly shows "nothing here" when the database refused is worse than one that says so.
+ */
+export function rowsOrThrow<T>(res: { data: T[] | null; error: { message: string } | null }, what: string): T[] {
+  if (res.error) throw new Error(`Could not load ${what}: ${res.error.message}`);
+  return res.data ?? [];
+}
+
+/** The single row of a `maybeSingle()` query (null when there is none), or an error naming what could not be loaded. */
+export function rowOrThrow<T>(res: { data: T | null; error: { message: string } | null }, what: string): T | null {
+  if (res.error) throw new Error(`Could not load ${what}: ${res.error.message}`);
+  return res.data;
+}
+
 /** Departments, agents, their current tasks and the tenders those tasks belong to. */
 export async function getAgentFloor(orgId: string) {
   const supabase = await getServerSupabase();
@@ -52,16 +67,18 @@ export async function getAgentFloor(orgId: string) {
       .order("created_at", { ascending: false })
       .limit(200),
   ]);
-  const agentRows = agents.data ?? [];
+  const departments = rowsOrThrow(deps, "departments");
+  const agentRows = rowsOrThrow(agents, "agents");
+  const active = rowsOrThrow(activeTasks, "tasks");
   const currentTaskIds = agentRows.map((a) => a.current_task_id).filter(Boolean) as string[];
-  const missing = currentTaskIds.filter((id) => !(activeTasks.data ?? []).some((t) => t.id === id));
-  const extra = missing.length ? ((await supabase.from("tasks").select(TASK_SUMMARY_COLS).in("id", missing)).data ?? []) : [];
-  const tasks = [...(activeTasks.data ?? []), ...extra];
+  const missing = currentTaskIds.filter((id) => !active.some((t) => t.id === id));
+  const extra = missing.length ? rowsOrThrow(await supabase.from("tasks").select(TASK_SUMMARY_COLS).in("id", missing), "tasks") : [];
+  const tasks = [...active, ...extra];
 
   const tenderIds = [...new Set([...tasks.map((t) => t.tender_id), ...agentRows.map((a) => a.current_tender_id)].filter(Boolean))] as string[];
-  const tenders = tenderIds.length ? ((await supabase.from("tenders").select(TENDER_SUMMARY_COLS).in("id", tenderIds)).data ?? []) : [];
+  const tenders = tenderIds.length ? rowsOrThrow(await supabase.from("tenders").select(TENDER_SUMMARY_COLS).in("id", tenderIds), "tenders") : [];
 
-  return { departments: deps.data ?? [], agents: agentRows, tasks: tasks as TaskSummary[], tenders: tenders as TenderSummary[] };
+  return { departments, agents: agentRows, tasks: tasks as TaskSummary[], tenders: tenders as TenderSummary[] };
 }
 
 export async function getRecentEvents(orgId: string, opts: { limit?: number; before?: string; tenderId?: string; agentId?: string; runId?: string } = {}) {
@@ -76,37 +93,42 @@ export async function getRecentEvents(orgId: string, opts: { limit?: number; bef
   if (opts.tenderId) q = q.eq("tender_id", opts.tenderId);
   if (opts.agentId) q = q.eq("agent_id", opts.agentId);
   if (opts.runId) q = q.eq("workflow_run_id", opts.runId);
-  const { data } = await q;
-  return data ?? [];
+  return rowsOrThrow(await q, "events");
 }
 
 export async function getRecentHandoffs(orgId: string, limit = 30) {
   const supabase = await getServerSupabase();
-  const { data } = await supabase.from("handoffs").select("*").eq("organisation_id", orgId).order("created_at", { ascending: false }).limit(limit);
-  return data ?? [];
+  return rowsOrThrow(
+    await supabase.from("handoffs").select("*").eq("organisation_id", orgId).order("created_at", { ascending: false }).limit(limit),
+    "handoffs",
+  );
 }
 
 export async function getPendingApprovals(orgId: string) {
   const supabase = await getServerSupabase();
-  const { data } = await supabase
-    .from("approvals")
-    .select("*, tenders(id,title,reference_number,closing_at)")
-    .eq("organisation_id", orgId)
-    .eq("status", "PENDING")
-    .order("requested_at", { ascending: true });
-  return data ?? [];
+  return rowsOrThrow(
+    await supabase
+      .from("approvals")
+      .select("*, tenders(id,title,reference_number,closing_at)")
+      .eq("organisation_id", orgId)
+      .eq("status", "PENDING")
+      .order("requested_at", { ascending: true }),
+    "approvals",
+  );
 }
 
 export async function getApprovalHistory(orgId: string, limit = 30) {
   const supabase = await getServerSupabase();
-  const { data } = await supabase
-    .from("approvals")
-    .select("*, tenders(id,title,reference_number)")
-    .eq("organisation_id", orgId)
-    .neq("status", "PENDING")
-    .order("requested_at", { ascending: false })
-    .limit(limit);
-  return data ?? [];
+  return rowsOrThrow(
+    await supabase
+      .from("approvals")
+      .select("*, tenders(id,title,reference_number)")
+      .eq("organisation_id", orgId)
+      .neq("status", "PENDING")
+      .order("requested_at", { ascending: false })
+      .limit(limit),
+    "approval history",
+  );
 }
 
 export async function getDashboardData(orgId: string) {
@@ -140,15 +162,19 @@ export async function getDashboardData(orgId: string) {
       .limit(8),
   ]);
 
-  if (counts.error) throw new Error(counts.error.message);
+  if (counts.error) throw new Error(`Could not load the dashboard counts: ${counts.error.message}`);
   const totals = counts.data as { tenders: Record<string, number>; cost_today: number; cost_month: number };
   const byStatus = totals.tenders ?? {};
   const tally = (statuses: TenderStatus[]) => statuses.reduce((n, s) => n + Number(byStatus[s] ?? 0), 0);
   const count = <S extends string>(rows: { status: S }[] | null, statuses: S[]) => (rows ?? []).filter((r) => statuses.includes(r.status)).length;
-  const a = agents.data ?? [];
+  const a = rowsOrThrow(agents, "agents");
+  const upcomingRows = rowsOrThrow(upcoming, "upcoming tenders");
+  const runRows = rowsOrThrow(runs, "workflow runs");
 
   return {
     tenders: {
+      /** Tenders per status, counted by the database (one query, not a row per tender). */
+      byStatus,
       active: tally([
         "INGESTING",
         "ANALYSING",
@@ -193,29 +219,26 @@ export async function getDashboardData(orgId: string) {
       total: a.length,
     },
     spend: { today: Number(totals.cost_today ?? 0), month: Number(totals.cost_month ?? 0) },
-    upcoming: (upcoming.data ?? []) as TenderSummary[],
-    runs: runs.data ?? [],
+    upcoming: upcomingRows as TenderSummary[],
+    runs: runRows,
     dayStart: dayStart.toISOString(),
   };
 }
 
 export async function getWorkerHealth() {
   const supabase = await getServerSupabase();
-  const { data } = await supabase.rpc("worker_health");
+  const { data, error } = await supabase.rpc("worker_health");
+  if (error) throw new Error(`Could not load the worker status: ${error.message}`);
   const row = data?.[0];
   return { online: (row?.workers ?? 0) > 0, workers: row?.workers ?? 0, lastSeen: row?.last_seen_at ?? null };
 }
 
 export async function getUnreadNotifications(userId: string) {
   const supabase = await getServerSupabase();
-  const { data } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("user_id", userId)
-    .is("read_at", null)
-    .order("created_at", { ascending: false })
-    .limit(20);
-  return data ?? [];
+  return rowsOrThrow(
+    await supabase.from("notifications").select("*").eq("user_id", userId).is("read_at", null).order("created_at", { ascending: false }).limit(20),
+    "notifications",
+  );
 }
 
 export async function getQueueHealth(orgId: string) {
@@ -235,7 +258,7 @@ export async function getQueueHealth(orgId: string) {
       .eq("status", "BLOCKED")
       .limit(20),
   ]);
-  return { problemTasks: (failed.data ?? []) as TaskSummary[], blockedRuns: blockedRuns.data ?? [] };
+  return { problemTasks: rowsOrThrow(failed, "failed tasks") as TaskSummary[], blockedRuns: rowsOrThrow(blockedRuns, "blocked workflows") };
 }
 
 /** Titles for tenders referenced in a list of events (for feed links). */
@@ -243,6 +266,6 @@ export async function getTenderTitles(ids: (string | null)[]) {
   const unique = [...new Set(ids.filter(Boolean))] as string[];
   if (!unique.length) return {} as Record<string, string>;
   const supabase = await getServerSupabase();
-  const { data } = await supabase.from("tenders").select("id,title").in("id", unique);
-  return Object.fromEntries((data ?? []).map((t) => [t.id, t.title])) as Record<string, string>;
+  const data = rowsOrThrow(await supabase.from("tenders").select("id,title").in("id", unique), "tender titles");
+  return Object.fromEntries(data.map((t) => [t.id, t.title])) as Record<string, string>;
 }

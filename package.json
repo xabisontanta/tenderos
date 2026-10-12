@@ -16,6 +16,7 @@
     "test:e2e": "playwright test",
     "eval:live": "tsx tests/eval/live-cli.ts",
     "worker": "tsx scripts/worker.ts",
+    "popia": "tsx scripts/popia.ts",
     "build:edge-worker": "node scripts/build-edge-worker.mjs",
     "build:emails": "tsx scripts/build-email-templates.ts",
     "build:email-assets": "tsx scripts/build-email-assets.ts",
