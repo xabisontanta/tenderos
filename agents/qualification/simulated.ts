@@ -1,7 +1,7 @@
 import type { AgentExecutor } from "@/agents/runtime/types";
 import { NonRetryableError } from "@/agents/runtime/types";
 import { SIMULATED_COST, simulateWork } from "@/agents/runtime/simulation";
-import { assessQualification } from "./logic";
+import { assessQualification, companyFitInputs } from "./logic";
 import { qualificationOutputSchema, type QualificationOutput } from "./schema";
 
 export const opportunityQualification: AgentExecutor<QualificationOutput> = {
@@ -14,12 +14,7 @@ export const opportunityQualification: AgentExecutor<QualificationOutput> = {
     if (!ctx.tender) throw new NonRetryableError("Tender data unavailable");
     await simulateWork(ctx, ["Checking hard disqualifiers", "Assessing feasibility", "Compiling evidence"]);
     // Without a company profile the capability factors stay unconfirmed.
-    const p = ctx.company;
-    const company =
-      p && (p.provinces.length || p.sectors.length || p.max_contract_value_zar != null)
-        ? { provinces: p.provinces, sectors: p.sectors, maxContractValueZar: p.max_contract_value_zar }
-        : null;
-    const result = assessQualification(ctx.tender, ctx.now, company);
+    const result = assessQualification(ctx.tender, ctx.now, companyFitInputs(ctx.company));
     const qualified = result.decision === "QUALIFIED";
     return {
       output: { ...result, simulated: ctx.workflow.isSimulation },

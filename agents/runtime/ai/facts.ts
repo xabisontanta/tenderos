@@ -3,7 +3,8 @@ import { documentType } from "@/lib/domain/documents";
 import { endOfDaySast, provinceLabel } from "@/lib/format";
 import { PROMPT_PROHIBITED_CATEGORIES } from "../permissions";
 import type { CompanyDocumentMeta, CompanyProfile } from "../types";
-import { sanitiseSourceText } from "./guardrails/text";
+import type { PromptPart } from "./guardrails/data-policy";
+import { sanitiseSourceText, wrapUntrusted } from "./guardrails/text";
 
 export interface CompanyFact {
   /** Stable id the model must cite, e.g. "fact:cidb_grade" or "doc:<uuid>". */
@@ -69,6 +70,22 @@ export function companyFacts(
     facts.push({ id: `doc:${d.id}`, label: type.label, value: `${clean(d.title)}${expiry}`, category, provenance: "VERIFIED_DOCUMENT" });
   }
   return facts;
+}
+
+/**
+ * Facts as prompt parts, one per data category so each passes the data policy
+ * with its own category. The text is wrapped as data like every other source.
+ */
+export function factParts(facts: CompanyFact[]): PromptPart[] {
+  const byCategory = new Map<DataCategory, CompanyFact[]>();
+  for (const f of facts) byCategory.set(f.category, [...(byCategory.get(f.category) ?? []), f]);
+  return [...byCategory].map(([category, list]) => ({
+    type: "text" as const,
+    category,
+    label: `company_facts:${category}`,
+    cache: true,
+    text: wrapUntrusted({ kind: "company_facts", id: category.toLowerCase(), title: "Company facts", text: renderFacts(list) }),
+  }));
 }
 
 /** One citable line per fact, as shown to the model. */

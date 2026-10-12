@@ -1,6 +1,6 @@
-import type { TenderSnapshot } from "@/agents/runtime/types";
+import type { CompanyProfile, TenderSnapshot } from "@/agents/runtime/types";
 import { hoursUntil } from "@/lib/domain/time";
-import type { QualificationFactor, QualificationOutput } from "./schema";
+import type { AiFitModel, QualificationFactor, QualificationOutput } from "./schema";
 import { formatSast } from "@/lib/format";
 
 /** Minimum hours before closing needed to prepare a compliant bid. */
@@ -11,6 +11,39 @@ export interface CompanyFitInputs {
   provinces: string[];
   sectors: string[];
   maxContractValueZar: number | null;
+}
+
+/** The profile facts the rule gates compare with. Null until the organisation has recorded something to compare. */
+export function companyFitInputs(p: CompanyProfile | null): CompanyFitInputs | null {
+  return p && (p.provinces.length || p.sectors.length || p.max_contract_value_zar != null)
+    ? { provinces: p.provinces, sectors: p.sectors, maxContractValueZar: p.max_contract_value_zar }
+    : null;
+}
+
+/** Problems that make a drafted fit assessment unusable. They are sent back to the model once for repair. */
+export function validateFit(fit: AiFitModel, factIds: ReadonlySet<string>, requirementIds: ReadonlySet<string>): string[] {
+  const issues: string[] = [];
+  fit.reasons.forEach((r, i) => {
+    for (const id of r.fact_ids) if (!factIds.has(id)) issues.push(`reasons[${i}] cites fact id "${id}", which is not one of the supplied company facts`);
+    for (const id of r.requirement_ids) if (!requirementIds.has(id)) issues.push(`reasons[${i}] cites requirement id "${id}", which is not one of the supplied requirements`);
+    if (r.assessment === "SUPPORTS" && r.fact_ids.length === 0) issues.push(`reasons[${i}] says SUPPORTS but cites no company fact; use UNKNOWN when no fact backs it`);
+  });
+  fit.risks.forEach((r, i) => {
+    for (const id of r.requirement_ids) if (!requirementIds.has(id)) issues.push(`risks[${i}] cites requirement id "${id}", which is not one of the supplied requirements`);
+  });
+  return issues;
+}
+
+/** The AI assessment as one display factor. It is never a hard disqualifier, and low confidence asks for confirmation instead of a verdict. */
+export function fitFactor(fit: Pick<AiFitModel, "score" | "confidence" | "reasons" | "risks">): QualificationFactor {
+  const result = fit.confidence === "LOW" ? "REQUIRES_CONFIRMATION" : fit.score >= 70 ? "PASS" : fit.score >= 40 ? "WARN" : "FAIL";
+  return {
+    key: "ai_fit",
+    label: "AI fit assessment (draft)",
+    result,
+    hard_disqualifier: false,
+    evidence: `Drafted by AI from the recorded company facts: ${fit.score}/100, ${fit.confidence.toLowerCase()} confidence, ${fit.reasons.length} reasons, ${fit.risks.length} risks. A person must review it`,
+  };
 }
 
 /**

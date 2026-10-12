@@ -1,4 +1,4 @@
-import type { AgentExecutor, DomainEvent, TenderSnapshot } from "@/agents/runtime/types";
+import type { AgentExecutor, DomainEvent } from "@/agents/runtime/types";
 import { NonRetryableError } from "@/agents/runtime/types";
 import { RULES_COST, requireAi } from "@/agents/runtime/ai/context";
 import { MAX_PDF_BASE64_CHARS, chunkDocument, prepareDocument, renderChunk, type PreparedDocument } from "@/agents/runtime/ai/documents";
@@ -8,7 +8,7 @@ import { buildPrompt, type PromptPart } from "@/agents/runtime/ai/guardrails/dat
 import { detectInjection, wrapUntrusted } from "@/agents/runtime/ai/guardrails/text";
 import { buildSystemPrompt } from "@/agents/runtime/ai/prompts";
 import { generateStructured } from "@/agents/runtime/ai/structured";
-import { formatSast, formatZar } from "@/lib/format";
+import { renderTenderRecord } from "@/agents/runtime/ai/render";
 import { checkDates, citeItems, dedupeEntries, extractRecordRequirements, type CitedEntry } from "./logic";
 import { analysisOutputSchema, extractionSchema, type AnalysisOutput } from "./schema";
 
@@ -30,23 +30,6 @@ const SYSTEM = buildSystemPrompt({
 
 const MAX_GAPS = 20;
 const MAX_GAP_CHARS = 300;
-
-function recordText(t: TenderSnapshot): string {
-  const lines: Array<[string, string | null]> = [
-    ["Reference", t.reference_number],
-    ["Title", t.title],
-    ["Issuing organisation", t.issuing_organisation],
-    ["Province", t.province],
-    ["Sector", t.sector],
-    ["Estimated value", t.estimated_value_zar != null ? formatZar(Number(t.estimated_value_zar)) : null],
-    ["Published", t.published_at ? formatSast(t.published_at) : null],
-    ["Closing", formatSast(t.closing_at)],
-    ["Briefing", t.briefing_at ? `${formatSast(t.briefing_at)}${t.briefing_compulsory ? " (compulsory)" : ""}` : t.briefing_compulsory ? "compulsory, date not recorded" : null],
-    ["Questions deadline", t.questions_deadline_at ? formatSast(t.questions_deadline_at) : null],
-    ["Submission method", t.submission_method],
-  ];
-  return lines.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join("\n");
-}
 
 interface Chunk {
   doc: PreparedDocument;
@@ -168,7 +151,7 @@ export const tenderAnalysisReal: AgentExecutor<AnalysisOutput> = {
           routing,
           system: SYSTEM,
           prompt: buildPrompt(
-            [{ type: "text", category: "PUBLIC_TENDER_DATA", label: "tender_record", cache: true, text: wrapUntrusted({ kind: "tender_record", id: t.id, title: "Tender record", text: recordText(t) }) }, ...chunk.parts],
+            [{ type: "text", category: "PUBLIC_TENDER_DATA", label: "tender_record", cache: true, text: wrapUntrusted({ kind: "tender_record", id: t.id, title: "Tender record", text: renderTenderRecord(t) }) }, ...chunk.parts],
             ctx.granted,
           ),
           instruction: "Extract the requirements from the tender documents above. Use the id attribute of the UNTRUSTED_DATA marker as document_id.",
