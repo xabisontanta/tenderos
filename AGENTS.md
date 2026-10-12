@@ -212,6 +212,16 @@ person to review.
   decided. Approvals expire at the tender's closing time; pg_cron
   `tenderos-expire-approvals` marks them every 15 minutes and the engine
   cancels the run and the tender.
+- Where and when a bid is delivered (`submission_destination`, `submission_method`,
+  `source_url`, `closing_at`) is locked from `READY_FOR_APPROVAL` on, and while any
+  approval is pending or approved (trigger `guard_delivery_details`): not even an owner
+  can edit the columns. Owners and admins use `change_tender_delivery`, which cancels
+  the approval and run, fails an undelivered pack, sends the tender back to
+  `PREPARING_BID`, applies the change and audits who changed what and why; the bid is
+  then prepared again and approved afresh. A bid that was already delivered cannot be
+  changed. The portal may still move the closing date (a pending approval's expiry
+  follows); discovery never applies a changed address, method or link to a locked bid
+  and reports it instead.
 - TenderOS never auto-submits. In simulation mode the submission is a record
   with a package hash; nothing leaves the system.
 - An approved bid is emailed only when an owner or admin presses Send on the

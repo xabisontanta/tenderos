@@ -866,6 +866,9 @@ isOneToOne: false
 "cancel_workflow":
 { Args: { "p_reason": string,"p_run_id": string }; Returns: undefined
                            },
+"change_tender_delivery":
+{ Args: { "p_changes": Json,"p_reason": string,"p_tender_id": string }; Returns: Json
+                           },
 "complete_onboarding":
 { Args: { "p_org": string }; Returns: undefined
                            },

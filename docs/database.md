@@ -66,7 +66,9 @@ Temporal was considered and deferred; see `docs/adr/0002-postgres-job-queue.md`.
   `private.has_org_role(...)` and write an audit entry:
   `start_tender_workflow`, `decide_approval`, `set_agent_control`,
   `retry_task`, `cancel_workflow`, `set_kill_switch`, `transition_tender`,
-  `mark_notifications_read`, plus tender insert and update under column grants.
+  `mark_notifications_read`, `change_tender_delivery`, plus tender insert and update under
+  column grants (the delivery columns are locked once a bid is waiting for approval or
+  delivery: trigger `guard_delivery_details`, migration `20261010000055`).
 - **Writes from agents**: only the worker, over a direct connection, sets
   `app.actor_agent_id` so audit rows name the agent.
 - `bootstrap_organisation` is callable by the service role only.

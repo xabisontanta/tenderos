@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import type { Pool } from "@/lib/db/pool";
+import { withTx, type Pool } from "@/lib/db/pool";
 import type { Worker } from "@/workflows/worker";
 import { DOCUMENT_BUCKET } from "@/lib/domain/documents";
 import type { AutofillPayload } from "@/lib/autofill/format";
@@ -517,13 +517,18 @@ describe("Apply with TenderOS", () => {
   });
 
   it("says plainly when the tender has no portal address the helper can open", async () => {
-    await pool.query(`update public.tenders set submission_destination = 'Hand delivery at the municipal offices', source_url = null where id = $1`, [
-      tenderId,
-    ]);
+    // An approved bid's delivery details are locked (migration 055); this test sets up unusual ones the way
+    // change_tender_delivery does, inside a transaction that lifts the lock.
+    const setDelivery = (sql: string) =>
+      withTx(pool, async (c) => {
+        await c.query(`select set_config('app.delivery_change', 'on', true)`);
+        await c.query(sql, [tenderId]);
+      });
+    await setDelivery(`update public.tenders set submission_destination = 'Hand delivery at the municipal offices', source_url = null where id = $1`);
     const res = await planCall(ownerToken, tenderId);
     expect(res.status).toBe(422);
     expect((await res.json()).error).toMatch(/web address/);
-    await pool.query(`update public.tenders set submission_destination = 'https://www.etenders.gov.za (eSubmission)' where id = $1`, [tenderId]);
+    await setDelivery(`update public.tenders set submission_destination = 'https://www.etenders.gov.za (eSubmission)' where id = $1`);
     expect((await planCall(ownerToken, tenderId)).status).toBe(200);
   });
 

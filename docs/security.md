@@ -16,17 +16,18 @@ append-only record of every consequential action.
 
 ## Authorisation
 
-| Action                                                 | owner | admin | operator | viewer |
-| ------------------------------------------------------ | ----- | ----- | -------- | ------ |
-| View everything in the organisation                    | ✓     | ✓     | ✓        | ✓      |
-| Create tenders, start or cancel workflows, retry tasks | ✓     | ✓     | ✓        |        |
-| Decide approvals                                       | ✓     | ✓     |          |        |
-| Pause, resume, disable or enable agents                | ✓     | ✓     |          |        |
-| Engage or release the kill switch                      | ✓     | ✓     |          |        |
-| Upload company documents                               | ✓     | ✓     | ✓        |        |
-| Verify or remove documents                             | ✓     | ✓     |          |        |
-| Open director IDs, bank letters, proof of address      | ✓     | ✓     |          |        |
-| Connect a sending mailbox, email or record a bid       | ✓     | ✓     |          |        |
+| Action                                                                              | owner | admin | operator | viewer |
+| ----------------------------------------------------------------------------------- | ----- | ----- | -------- | ------ |
+| View everything in the organisation                                                 | ✓     | ✓     | ✓        | ✓      |
+| Create tenders, start or cancel workflows, retry tasks                              | ✓     | ✓     | ✓        |        |
+| Decide approvals                                                                    | ✓     | ✓     |          |        |
+| Pause, resume, disable or enable agents                                             | ✓     | ✓     |          |        |
+| Engage or release the kill switch                                                   | ✓     | ✓     |          |        |
+| Upload company documents                                                            | ✓     | ✓     | ✓        |        |
+| Verify or remove documents                                                          | ✓     | ✓     |          |        |
+| Open director IDs, bank letters, proof of address                                   | ✓     | ✓     |          |        |
+| Connect a sending mailbox, email or record a bid                                    | ✓     | ✓     |          |        |
+| Change a bid's delivery details after it went for approval (withdraws the approval) | ✓     | ✓     |          |        |
 
 The UI hides controls a role cannot use, but the RPC is the enforcement point.
 Integration tests cover role refusals and cross-tenant isolation.

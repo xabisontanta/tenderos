@@ -296,10 +296,33 @@ const FROZEN_STATUSES = new Set(["SUBMITTED", "UNDER_EVALUATION", "AWARDED", "UN
 async function refreshTender(
   c: Parameters<Parameters<typeof withTx>[1]>[0],
   prev: { id: string; closing_at: string },
-  t: DiscoveredTender,
+  portal: DiscoveredTender,
   scoutId: string,
   taskId: string,
 ): Promise<boolean> {
+  // Once a bid is waiting for approval or delivery its delivery details are locked (migration 055): the
+  // portal may move the closing date, but not the address, method or link the bid was approved with.
+  const { rows: current } = await c.query<{
+    organisation_id: string;
+    locked: boolean;
+    submission_method: DiscoveredTender["submission_method"];
+    submission_destination: string | null;
+    source_url: string | null;
+  }>(
+    `select organisation_id, private.delivery_locked(id, status) as locked, submission_method::text as submission_method, submission_destination, source_url
+       from public.tenders where id = $1`,
+    [prev.id],
+  );
+  const cur = current[0];
+  if (!cur) return false;
+  const deliveryChanged =
+    portal.submission_method !== cur.submission_method || portal.submission_destination !== cur.submission_destination || portal.source_url !== cur.source_url;
+  // What is written: the portal's values, except the delivery details of a locked bid (stored ones may be null).
+  const t: Omit<DiscoveredTender, "source_url"> & { source_url: string | null } = cur.locked
+    ? { ...portal, submission_method: cur.submission_method, submission_destination: cur.submission_destination, source_url: cur.source_url }
+    : portal;
+  if (cur.locked && deliveryChanged) await reportKeptDelivery(c, prev.id, cur.organisation_id, portal, scoutId, taskId);
+
   const { rows } = await c.query<{ organisation_id: string }>(
     `update public.tenders
         set description = $2::text, closing_at = $3::timestamptz, briefing_at = $4::timestamptz, briefing_compulsory = $5::boolean,
@@ -338,4 +361,38 @@ async function refreshTender(
     });
   }
   return true;
+}
+
+/**
+ * The portal lists other delivery details than the ones a bid was put forward with. They are not applied,
+ * so the person is told once for each distinct set of details the portal shows, not on every scan.
+ */
+async function reportKeptDelivery(
+  c: Parameters<Parameters<typeof withTx>[1]>[0],
+  tenderId: string,
+  organisationId: string,
+  portal: DiscoveredTender,
+  scoutId: string,
+  taskId: string,
+): Promise<void> {
+  const payload = {
+    kept_delivery_details: true,
+    portal: { submission_method: portal.submission_method, submission_destination: portal.submission_destination, source_url: portal.source_url },
+  };
+  const { rows } = await c.query(`select 1 from public.agent_events where tender_id = $1 and event_type = 'TENDER_UPDATED' and payload @> $2::jsonb limit 1`, [
+    tenderId,
+    JSON.stringify(payload),
+  ]);
+  if (rows.length) return;
+  await db.emitEvent(c, {
+    organisationId,
+    type: "TENDER_UPDATED",
+    severity: "WARNING",
+    summary:
+      "eTenders now lists different delivery details for this tender. The bid keeps the delivery details it was put forward with: check the portal before delivering, and use Change delivery details if they really changed.",
+    agentId: scoutId,
+    tenderId,
+    taskId,
+    payload,
+  });
 }
