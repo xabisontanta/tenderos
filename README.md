@@ -167,8 +167,23 @@ Each call processes ready jobs for about 45 seconds, so steps advance within a
 minute rather than instantly.
 
 1. `npm run build:edge-worker` writes `supabase/functions/worker/index.ts`.
-2. Deploy it as `tenderos-worker` with JWT verification on
-   (`supabase functions deploy`, or the dashboard).
+2. Deploy it as `tenderos-worker`:
+
+   ```bash
+   npx supabase link --project-ref <ref>
+   npx supabase functions deploy tenderos-worker
+   ```
+
+   The code is in the folder `supabase/functions/worker`, and the cron job
+   calls `/functions/v1/tenderos-worker`. The mapping that joins the two is the
+   `[functions.tenderos-worker]` table in `supabase/config.toml` (entrypoint
+   `./functions/worker/index.ts`, `verify_jwt = true`); without it Supabase
+   would deploy the folder as `worker` and the cron job would call nothing. A
+   unit test fails if the names or the entrypoint drift apart. Add
+   `--use-api` when Docker is not running. Deploying from the dashboard works
+   too, but the function must be named `tenderos-worker` and keep JWT
+   verification on.
+
 3. Migration `20261010000008` generates the worker secret in Vault. Add the
    project URL and the legacy anon JWT to Vault, then schedule the job:
 
