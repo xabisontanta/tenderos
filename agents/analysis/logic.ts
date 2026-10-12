@@ -75,8 +75,8 @@ export interface CitationSources {
   docIds: ReadonlySet<string>;
   /** Documents sent as PDF only: no text layer, so their quotes cannot be checked. */
   unverifiable: ReadonlySet<string>;
-  /** Normalised text of instruction-like passages found in the documents. */
-  injectionMatches: readonly string[];
+  /** Instruction-like passages found in the documents (normalised): the matched text and the line it sits on. */
+  injection: ReadonlyArray<{ match: string; line: string }>;
 }
 
 export interface CitedEntry {
@@ -88,6 +88,7 @@ export interface CitedEntry {
 }
 
 const MAX_TEXT = 500;
+const MIN_TAINT_CHARS = 12;
 
 const FAILURE_TEXT: Record<QuoteFailure, string> = {
   TOO_SHORT: "The quote is too short to prove anything",
@@ -134,8 +135,12 @@ export function citeItems(items: ExtractionItem[], sources: CitationSources, fir
       }
     }
 
+    // Quoting the trigger phrase, a piece of its line, or all of it: either way the quote comes from the instruction.
     const normQuote = normaliseForMatch(item.quote);
-    if (sources.injectionMatches.some((m) => m && normQuote.includes(m))) {
+    const tainted = sources.injection.some(
+      (h) => (h.match && normQuote.includes(h.match)) || (normQuote.length >= MIN_TAINT_CHARS && (h.line.includes(normQuote) || (h.line.length >= MIN_TAINT_CHARS && normQuote.includes(h.line)))),
+    );
+    if (tainted) {
       status = "REQUIRES_CONFIRMATION";
       warning = "The quoted text reads like an instruction to an AI system and was not trusted as a tender requirement";
     }

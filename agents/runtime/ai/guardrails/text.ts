@@ -98,6 +98,8 @@ export interface InjectionHit {
   pattern: string;
   /** The text that matched, normalised, for comparing with quotes. */
   match: string;
+  /** The whole line the match is on, normalised. A model that obeys the instruction quotes its payload, which sits on this line. */
+  line: string;
   excerpt: string;
 }
 
@@ -118,9 +120,13 @@ export function detectInjection(text: string): InjectionHit[] {
   for (const [pattern, re] of INJECTION_PATTERNS) {
     const global = new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`);
     for (const m of text.matchAll(global)) {
-      const start = Math.max(0, (m.index ?? 0) - 30);
+      const at = m.index ?? 0;
+      const start = Math.max(0, at - 30);
       const excerpt = text.slice(start, start + 150).replace(/\s+/g, " ").trim().slice(0, 160);
-      hits.push({ pattern, match: normaliseForMatch(m[0]), excerpt });
+      const lineStart = text.lastIndexOf("\n", at - 1) + 1;
+      const lineEnd = text.indexOf("\n", at);
+      const line = normaliseForMatch(text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd));
+      hits.push({ pattern, match: normaliseForMatch(m[0]), line, excerpt });
     }
   }
   return hits;

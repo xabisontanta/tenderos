@@ -104,12 +104,12 @@ export const tenderAnalysisReal: AgentExecutor<AnalysisOutput> = {
 
     // Text that reads like a command to an AI system is reported, and any quote that contains it is distrusted.
     const injectionWarnings: NonNullable<AnalysisOutput["injection_warnings"]> = [];
-    const injectionMatches: string[] = [];
+    const injection: Array<{ match: string; line: string }> = [];
     for (const d of docs) {
       for (const p of d.pages) {
         for (const hit of detectInjection(p.text)) {
           injectionWarnings.push({ document_id: d.id, page: p.page, pattern: hit.pattern, excerpt: hit.excerpt });
-          injectionMatches.push(hit.match);
+          injection.push({ match: hit.match, line: hit.line });
         }
       }
     }
@@ -118,7 +118,7 @@ export const tenderAnalysisReal: AgentExecutor<AnalysisOutput> = {
       index: new SourceIndex(docs.map((d) => ({ id: d.id, title: d.title, pages: d.pages }))),
       docIds: new Set(docs.map((d) => d.id)),
       unverifiable: new Set(docs.filter((d) => d.pages.length === 0 && d.pdfBase64).map((d) => d.id)),
-      injectionMatches,
+      injection,
     };
 
     const chunks: Chunk[] = [];
@@ -181,8 +181,10 @@ export const tenderAnalysisReal: AgentExecutor<AnalysisOutput> = {
     if (downgraded > 0) {
       gaps.push(`${downgraded} extracted requirement${downgraded === 1 ? "" : "s"} could not be tied to a verbatim quote in the documents and need${downgraded === 1 ? "s" : ""} confirmation`);
     }
-    if (!docReqs.some((r) => r.category === "DOCUMENT")) gaps.push("No list of required documents (returnables) was found in the supplied documents");
-    if (!docReqs.some((r) => r.category === "EVALUATION")) gaps.push("No evaluation criteria were found in the supplied documents");
+    // Only requirements that were verified count: an item the documents do not support is not a returnables list.
+    const verified = (category: string) => docReqs.some((r) => r.category === category && r.status === "EXTRACTED");
+    if (!verified("DOCUMENT")) gaps.push("No list of required documents (returnables) could be verified in the supplied documents");
+    if (!verified("EVALUATION")) gaps.push("No evaluation criteria could be verified in the supplied documents");
     if (injectionWarnings.length) {
       gaps.push(`${injectionWarnings.length} passage${injectionWarnings.length === 1 ? "" : "s"} in the documents read like instructions to an AI system; they were treated as text, not followed`);
     }
