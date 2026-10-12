@@ -19,7 +19,9 @@ const money = (n: number) => `$${n.toFixed(4)}`;
 /** A plain-text report for a terminal or a CI log. */
 export function formatReport(rows: ReportRow[], opts: { model: string; minRecall: number }): string {
   const out: string[] = [];
-  out.push(`TenderOS evaluation report (model ${opts.model}, pass needs recall >= ${pct(opts.minRecall)} and no forbidden, unverified or missing-gap findings)`);
+  out.push(
+    `TenderOS evaluation report (model ${opts.model}, pass needs recall >= ${pct(opts.minRecall)} and no forbidden, unverified or missing-gap findings)`,
+  );
   out.push("");
   for (const r of rows) {
     const s = r.score;
@@ -42,6 +44,8 @@ export function formatReport(rows: ReportRow[], opts: { model: string; minRecall
   const advPassed = adversarial.filter((r) => r.score?.passed).length;
   out.push("");
   out.push(`Passed ${passed} of ${rows.length}; mean recall ${pct(meanRecall)}; adversarial ${advPassed} of ${adversarial.length}`);
-  out.push(`Spend ${money(rows.reduce((n, r) => n + r.costUsd, 0))}; ${rows.reduce((n, r) => n + r.inputTokens, 0)} input and ${rows.reduce((n, r) => n + r.outputTokens, 0)} output tokens`);
+  out.push(
+    `Spend ${money(rows.reduce((n, r) => n + r.costUsd, 0))}; ${rows.reduce((n, r) => n + r.inputTokens, 0)} input and ${rows.reduce((n, r) => n + r.outputTokens, 0)} output tokens`,
+  );
   return out.join("\n");
 }

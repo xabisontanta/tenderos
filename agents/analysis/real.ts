@@ -45,7 +45,13 @@ function chunksFor(doc: PreparedDocument, chunkChars: number): Chunk[] {
         doc,
         label: doc.title,
         parts: [
-          { type: "text", category: "TENDER_DOCUMENTS", label: `tender_document:${doc.id}`, cache: true, text: wrapUntrusted({ kind: "tender_document_pdf", id: doc.id, title: doc.title, text: "The PDF document that follows is this document." }) },
+          {
+            type: "text",
+            category: "TENDER_DOCUMENTS",
+            label: `tender_document:${doc.id}`,
+            cache: true,
+            text: wrapUntrusted({ kind: "tender_document_pdf", id: doc.id, title: doc.title, text: "The PDF document that follows is this document." }),
+          },
           { type: "pdf", category: "TENDER_DOCUMENTS", label: `tender_pdf:${doc.id}`, base64: doc.pdfBase64, cache: true },
         ],
       },
@@ -60,7 +66,12 @@ function chunksFor(doc: PreparedDocument, chunkChars: number): Chunk[] {
         category: "TENDER_DOCUMENTS",
         label: `tender_document:${doc.id}:${c.part}`,
         cache: true,
-        text: wrapUntrusted({ kind: "tender_document", id: doc.id, title: c.parts > 1 ? `${doc.title} (part ${c.part} of ${c.parts})` : doc.title, text: renderChunk(c) }),
+        text: wrapUntrusted({
+          kind: "tender_document",
+          id: doc.id,
+          title: c.parts > 1 ? `${doc.title} (part ${c.part} of ${c.parts})` : doc.title,
+          text: renderChunk(c),
+        }),
       },
     ],
   }));
@@ -90,7 +101,8 @@ export const tenderAnalysisReal: AgentExecutor<AnalysisOutput> = {
 
     if (docs.length === 0) {
       const base = extractRecordRequirements(t);
-      base.gaps[base.gaps.length - 1] = "No tender documents were available to read, so forms, evaluation criteria and mandatory conditions have not been extracted";
+      base.gaps[base.gaps.length - 1] =
+        "No tender documents were available to read, so forms, evaluation criteria and mandatory conditions have not been extracted";
       return {
         output: { requirements: base.requirements, gaps: base.gaps, documents_analysed: 0, simulated: false, ai_generated: false },
         summary: "No tender documents available; only the tender record was analysed",
@@ -151,7 +163,16 @@ export const tenderAnalysisReal: AgentExecutor<AnalysisOutput> = {
           routing,
           system: SYSTEM,
           prompt: buildPrompt(
-            [{ type: "text", category: "PUBLIC_TENDER_DATA", label: "tender_record", cache: true, text: wrapUntrusted({ kind: "tender_record", id: t.id, title: "Tender record", text: renderTenderRecord(t) }) }, ...chunk.parts],
+            [
+              {
+                type: "text",
+                category: "PUBLIC_TENDER_DATA",
+                label: "tender_record",
+                cache: true,
+                text: wrapUntrusted({ kind: "tender_record", id: t.id, title: "Tender record", text: renderTenderRecord(t) }),
+              },
+              ...chunk.parts,
+            ],
             ctx.granted,
           ),
           instruction: "Extract the requirements from the tender documents above. Use the id attribute of the UNTRUSTED_DATA marker as document_id.",
@@ -179,19 +200,28 @@ export const tenderAnalysisReal: AgentExecutor<AnalysisOutput> = {
     const docReqs = unique.map((e) => e.requirement);
     const downgraded = docReqs.filter((r) => r.status === "REQUIRES_CONFIRMATION" && r.source.quote_verified === false).length;
     if (downgraded > 0) {
-      gaps.push(`${downgraded} extracted requirement${downgraded === 1 ? "" : "s"} could not be tied to a verbatim quote in the documents and need${downgraded === 1 ? "s" : ""} confirmation`);
+      gaps.push(
+        `${downgraded} extracted requirement${downgraded === 1 ? "" : "s"} could not be tied to a verbatim quote in the documents and need${downgraded === 1 ? "s" : ""} confirmation`,
+      );
     }
     // Only requirements that were verified count: an item the documents do not support is not a returnables list.
     const verified = (category: string) => docReqs.some((r) => r.category === category && r.status === "EXTRACTED");
     if (!verified("DOCUMENT")) gaps.push("No list of required documents (returnables) could be verified in the supplied documents");
     if (!verified("EVALUATION")) gaps.push("No evaluation criteria could be verified in the supplied documents");
     if (injectionWarnings.length) {
-      gaps.push(`${injectionWarnings.length} passage${injectionWarnings.length === 1 ? "" : "s"} in the documents read like instructions to an AI system; they were treated as text, not followed`);
+      gaps.push(
+        `${injectionWarnings.length} passage${injectionWarnings.length === 1 ? "" : "s"} in the documents read like instructions to an AI system; they were treated as text, not followed`,
+      );
     }
 
     const events: DomainEvent[] = [];
     if (downgraded > 0) {
-      events.push({ type: "AI_CITATIONS_DOWNGRADED", severity: "WARNING", summary: `${downgraded} requirement${downgraded === 1 ? "" : "s"} lacked a verifiable quote and need confirmation`, payload: { downgraded } });
+      events.push({
+        type: "AI_CITATIONS_DOWNGRADED",
+        severity: "WARNING",
+        summary: `${downgraded} requirement${downgraded === 1 ? "" : "s"} lacked a verifiable quote and need confirmation`,
+        payload: { downgraded },
+      });
     }
     if (injectionWarnings.length) {
       events.push({

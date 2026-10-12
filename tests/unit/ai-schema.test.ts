@@ -18,7 +18,10 @@ describe("structured output schema from zod", () => {
     ratio: z.number().min(0).max(1),
     kind: z.enum(["A", "B"]),
     note: z.string().nullable(),
-    items: z.array(z.object({ label: z.string(), at: z.string().datetime() })).min(2).max(5),
+    items: z
+      .array(z.object({ label: z.string(), at: z.string().datetime() }))
+      .min(2)
+      .max(5),
     flag: z.boolean(),
   });
 

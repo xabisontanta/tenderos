@@ -57,24 +57,43 @@ export const qaReviewReal: AgentExecutor<QaOutput> = {
       const events: DomainEvent[] = [
         verdict === "FAIL"
           ? { type: "QA_FAIL", severity: "ERROR", summary: "Quality assurance failed", payload: { issues: open_issues } }
-          : { type: "QA_PASS", summary: verdict === "PASS" ? "Quality assurance passed" : "QA passed with open issues", payload: { verdict, issues: open_issues } },
+          : {
+              type: "QA_PASS",
+              summary: verdict === "PASS" ? "Quality assurance passed" : "QA passed with open issues",
+              payload: { verdict, issues: open_issues },
+            },
       ];
       return {
         output: { verdict, checks, open_issues, simulated: false, ai_generated: aiUsed, ...(note ? { ai_note: note } : {}) } satisfies QaOutput,
         summary:
-          verdict === "FAIL" ? `QA failed: ${open_issues.length} problems` : verdict === "CONDITIONAL" ? `QA passed with ${open_issues.length} open issues for the approver` : "QA passed",
+          verdict === "FAIL"
+            ? `QA failed: ${open_issues.length} problems`
+            : verdict === "CONDITIONAL"
+              ? `QA passed with ${open_issues.length} open issues for the approver`
+              : "QA passed",
         events,
         cost,
       };
     };
 
-    if (rules.verdict === "FAIL") return done(rules.checks, "Not run: the rule checks already found a hard failure, which an AI review cannot change", RULES_COST, false);
+    if (rules.verdict === "FAIL")
+      return done(rules.checks, "Not run: the rule checks already found a hard failure, which an AI review cannot change", RULES_COST, false);
 
     const analysis = analysisOutputSchema.safeParse(ctx.previousOutputs.analysis);
     const { reviewed, skipped } = reviewSet(analysis.success && ctx.granted.has("TENDER_DOCUMENTS") ? analysis.data.requirements : []);
     if (reviewed.length === 0) {
-      const gap: QaCheck = { key: "coverage", label: "Requirement coverage", result: "OPEN_ISSUE", detail: "No requirements read from the tender documents were available to review the bid against" };
-      return done([...rules.checks, gap], "Not run: no analysed requirements to review against; coverage of the tender's requirements is unverified", RULES_COST, false);
+      const gap: QaCheck = {
+        key: "coverage",
+        label: "Requirement coverage",
+        result: "OPEN_ISSUE",
+        detail: "No requirements read from the tender documents were available to review the bid against",
+      };
+      return done(
+        [...rules.checks, gap],
+        "Not run: no analysed requirements to review against; coverage of the tender's requirements is unverified",
+        RULES_COST,
+        false,
+      );
     }
 
     const evidence = buildEvidence(ctx.previousOutputs);
@@ -83,24 +102,65 @@ export const qaReviewReal: AgentExecutor<QaOutput> = {
     const pricing = pricingOutputSchema.safeParse(ctx.previousOutputs.pricing);
 
     const parts: PromptPart[] = [
-      { type: "text", category: "PUBLIC_TENDER_DATA", label: "tender_record", cache: true, text: wrapUntrusted({ kind: "tender_record", id: t.id, title: "Tender record", text: renderTenderRecord(t) }) },
-      { type: "text", category: "TENDER_DOCUMENTS", label: "tender_requirements", cache: true, text: wrapUntrusted({ kind: "tender_requirements", id: "analysis", title: "Requirements to review the bid against", text: renderRequirements(reviewed, MAX_REVIEWED_REQUIREMENTS) }) },
+      {
+        type: "text",
+        category: "PUBLIC_TENDER_DATA",
+        label: "tender_record",
+        cache: true,
+        text: wrapUntrusted({ kind: "tender_record", id: t.id, title: "Tender record", text: renderTenderRecord(t) }),
+      },
+      {
+        type: "text",
+        category: "TENDER_DOCUMENTS",
+        label: "tender_requirements",
+        cache: true,
+        text: wrapUntrusted({
+          kind: "tender_requirements",
+          id: "analysis",
+          title: "Requirements to review the bid against",
+          text: renderRequirements(reviewed, MAX_REVIEWED_REQUIREMENTS),
+        }),
+      },
     ];
     if (proposal.success) {
       const text = proposal.data.sections
-        .map((s) => `[section:${s.key}] (${s.status}) ${s.title}: ${s.content ? trim(s.content, 1200) : "(no content)"}${s.needs.length ? ` | still needs: ${s.needs.join("; ")}` : ""}`)
+        .map(
+          (s) =>
+            `[section:${s.key}] (${s.status}) ${s.title}: ${s.content ? trim(s.content, 1200) : "(no content)"}${s.needs.length ? ` | still needs: ${s.needs.join("; ")}` : ""}`,
+        )
         .join("\n");
-      parts.push({ type: "text", category: "COMPANY_PROFILE", label: "proposal_sections", cache: true, text: wrapUntrusted({ kind: "bid_proposal", id: "proposal", title: "Proposal sections", text }) });
+      parts.push({
+        type: "text",
+        category: "COMPANY_PROFILE",
+        label: "proposal_sections",
+        cache: true,
+        text: wrapUntrusted({ kind: "bid_proposal", id: "proposal", title: "Proposal sections", text }),
+      });
     }
     if (compliance.success) {
       // Statuses only: the evidence text can carry company registration numbers.
       const text = compliance.data.items.map((i) => `[compliance:${i.key}] ${i.label}${i.mandatory ? " (mandatory)" : ""}: ${i.status}`).join("\n");
-      parts.push({ type: "text", category: "COMPANY_PROFILE", label: "compliance_items", cache: true, text: wrapUntrusted({ kind: "bid_compliance", id: "compliance", title: "Compliance checklist", text }) });
+      parts.push({
+        type: "text",
+        category: "COMPANY_PROFILE",
+        label: "compliance_items",
+        cache: true,
+        text: wrapUntrusted({ kind: "bid_compliance", id: "compliance", title: "Compliance checklist", text }),
+      });
     }
     if (pricing.success) {
-      const lines = pricing.data.lines.map((l) => `[pricing:${l.requirement_id ?? "line"}] ${l.description}${l.quantity != null ? `, ${l.quantity} ${l.unit ?? ""}` : ""}: price ${l.unit_price_zar == null ? "not entered" : "entered"}`);
+      const lines = pricing.data.lines.map(
+        (l) =>
+          `[pricing:${l.requirement_id ?? "line"}] ${l.description}${l.quantity != null ? `, ${l.quantity} ${l.unit ?? ""}` : ""}: price ${l.unit_price_zar == null ? "not entered" : "entered"}`,
+      );
       const text = [`Schedule status: ${pricing.data.status}`, ...lines].join("\n");
-      parts.push({ type: "text", category: "PRICING", label: "pricing_schedule", cache: true, text: wrapUntrusted({ kind: "bid_pricing", id: "pricing", title: "Pricing schedule", text }) });
+      parts.push({
+        type: "text",
+        category: "PRICING",
+        label: "pricing_schedule",
+        cache: true,
+        text: wrapUntrusted({ kind: "bid_pricing", id: "pricing", title: "Pricing schedule", text }),
+      });
     }
 
     await ctx.progress(35, "Reviewing the bid against the requirements");
@@ -116,7 +176,12 @@ export const qaReviewReal: AgentExecutor<QaOutput> = {
     const validRefs = new Set<string>([...evidence.keys(), ...reviewed.map((r) => r.id)]);
     const checks: QaCheck[] = [...rules.checks, ...coverageChecks(reviewed, model, evidence), ...findingChecks(model, validRefs)];
     if (skipped > 0) {
-      checks.push({ key: "coverage", label: "Requirement coverage", result: "OPEN_ISSUE", detail: `${skipped} further requirement${skipped === 1 ? "" : "s"} were not reviewed (limit of ${MAX_REVIEWED_REQUIREMENTS} per review)` });
+      checks.push({
+        key: "coverage",
+        label: "Requirement coverage",
+        result: "OPEN_ISSUE",
+        detail: `${skipped} further requirement${skipped === 1 ? "" : "s"} were not reviewed (limit of ${MAX_REVIEWED_REQUIREMENTS} per review)`,
+      });
     }
     return done(checks, undefined, ai.meter.toCostRecord(), true);
   },

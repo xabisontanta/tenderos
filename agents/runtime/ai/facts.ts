@@ -33,12 +33,7 @@ function asStrings(v: unknown): string[] {
  * the agent holds its data category (AGENTS.md section 4). `keywords` and
  * `past_experience` are read when the profile has them.
  */
-export function companyFacts(
-  profile: CompanyProfile | null,
-  documents: CompanyDocumentMeta[],
-  granted: ReadonlySet<DataCategory>,
-  now: Date,
-): CompanyFact[] {
+export function companyFacts(profile: CompanyProfile | null, documents: CompanyDocumentMeta[], granted: ReadonlySet<DataCategory>, now: Date): CompanyFact[] {
   const facts: CompanyFact[] = [];
   const add = (key: string, label: string, value: string, category: DataCategory) => {
     const v = clean(value);
@@ -51,7 +46,8 @@ export function companyFacts(
     if (profile.trading_name) add("trading_name", "Trading name", profile.trading_name, "COMPANY_PROFILE");
     if (profile.cidb_grade) add("cidb_grade", "CIDB grade", profile.cidb_grade, "COMPANY_PROFILE");
     if (profile.bbbee_level != null) add("bbbee_level", "B-BBEE level", `Level ${profile.bbbee_level}`, "COMPANY_PROFILE");
-    if (profile.provinces.length) add("provinces", "Provinces of operation", profile.provinces.map((p) => (provinceLabel(p) !== "—" ? provinceLabel(p) : p)).join(", "), "COMPANY_PROFILE");
+    if (profile.provinces.length)
+      add("provinces", "Provinces of operation", profile.provinces.map((p) => (provinceLabel(p) !== "—" ? provinceLabel(p) : p)).join(", "), "COMPANY_PROFILE");
     if (profile.sectors.length) add("sectors", "Sectors", profile.sectors.join(", "), "COMPANY_CAPABILITIES");
     const keywords = asStrings(extra.keywords);
     if (keywords.length) add("keywords", "Capability keywords", keywords.join(", "), "COMPANY_CAPABILITIES");

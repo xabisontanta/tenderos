@@ -13,7 +13,12 @@ export function captureLogs() {
   return {
     logger: createLogger({ service: "test" }, "debug"),
     text: () => lines.join(""),
-    records: () => lines.join("").split("\n").filter(Boolean).map((l) => JSON.parse(l) as Record<string, unknown>),
+    records: () =>
+      lines
+        .join("")
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => JSON.parse(l) as Record<string, unknown>),
     restore: () => {
       out.mockRestore();
       err.mockRestore();

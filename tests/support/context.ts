@@ -46,7 +46,14 @@ export const tender = (o: Partial<TenderSnapshot> = {}): TenderSnapshot => ({
 /** A runtime wired to the given client with test config; the logger only shows errors. */
 export function makeAi(
   client: AiClient,
-  over: { agent?: AgentSlug; documents?: DocumentSource; env?: Record<string, string | undefined>; webResearch?: boolean; signal?: AbortSignal; logger?: ReturnType<typeof createLogger> } = {},
+  over: {
+    agent?: AgentSlug;
+    documents?: DocumentSource;
+    env?: Record<string, string | undefined>;
+    webResearch?: boolean;
+    signal?: AbortSignal;
+    logger?: ReturnType<typeof createLogger>;
+  } = {},
 ): AiRuntime {
   const slug = over.agent ?? "tender_analyst";
   const def = AGENTS.find((a) => a.slug === slug)!;

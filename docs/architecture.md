@@ -42,6 +42,24 @@ TenderOS has three runtime parts.
 Failures retry with backoff, then block the run and notify people. See
 `AGENTS.md` §9.
 
+## Executors and AI
+
+Each step's executor is chosen per task by
+`getExecutor(taskType, { simulation, aiEnabled })` in `agents/index.ts`.
+Simulation runs and real tenders with AI off use `simulated.ts` (rules only,
+the default). A real tender with AI on uses `real.ts` for five steps: Tender
+Analyst, Qualification fit, Proposal Writer, Pricing Analyst and QA Reviewer.
+
+Before such a step starts, the engine loads the AI configuration (it refuses
+to run if the key, the agent's model or its price is missing), caps the task at
+what is left of the daily budget, and builds the AI runtime: an injectable model
+client (`AnthropicAiClient` in production, a deterministic fake in tests), a cost
+meter, a tool gate that enforces the agent's stored `allowedTools`, and a source
+of tender documents. The executor returns real token counts and USD cost, which
+the engine records in `cost_usage`, so the daily budget gate sees real numbers.
+Failed attempts record their spend too. `docs/ai-agents.md` describes each
+agent, the guardrails and the evaluation harness.
+
 ## Views
 
 - **Dashboard**: pipeline counts, agents, spend, active runs, deadlines, live events.
@@ -63,9 +81,14 @@ app/                     Next.js routes
   auth/callback/         Supabase auth callback
 agents/
   registry.ts            departments and agents (single source of truth)
-  runtime/               executor types, permissions, model routing, simulation
-  <agent>/               schema.ts, logic.ts, simulated.ts per executor
-  index.ts               executor lookup
+  runtime/               executor types, permissions, model routing, simulation,
+                         tool gate (allowedTools enforcement)
+  runtime/ai/            Anthropic client, config and pricing, structured output,
+                         guardrails (untrusted text, citations, data policy),
+                         company facts, documents, call logging, web research
+  <agent>/               schema.ts, logic.ts, simulated.ts per executor, and
+                         real.ts for the five AI-backed steps
+  index.ts               executor lookup (simulated by default, AI by mode)
 workflows/
   definitions/           workflow plans and step resolution
   engine.ts              WorkflowEngine (job handlers)
@@ -85,5 +108,7 @@ lib/
 supabase/migrations/     schema, RLS, RPCs (ordered)
 scripts/                 worker entry point, env writer
 tests/unit, tests/integration, tests/e2e
+tests/eval/              labelled synthetic tenders, fake-model runner, live eval
+tests/support/           fake AI client, fake document source, context builders
 types/database.ts        generated from the database
 ```

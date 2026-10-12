@@ -63,7 +63,10 @@ export async function generateStructured<T>(call: StructuredCall<T>): Promise<T>
       signal: runtime.signal,
     });
     if (tokens > config.maxInputTokens) {
-      throw new AiInputTooLargeError(`The prompt is ${tokens} tokens, over the limit of ${config.maxInputTokens} (AI_MAX_INPUT_TOKENS); the material must be split`, tokens);
+      throw new AiInputTooLargeError(
+        `The prompt is ${tokens} tokens, over the limit of ${config.maxInputTokens} (AI_MAX_INPUT_TOKENS); the material must be split`,
+        tokens,
+      );
     }
     runtime.meter.assertCanSpend((tokens / 1_000_000) * model.price.inputPerMillion);
 
@@ -142,7 +145,9 @@ export async function generateStructured<T>(call: StructuredCall<T>): Promise<T>
             `Your previous reply did not pass validation. Problems:\n${[...check.messages, ...check.semantic]
               .slice(0, MAX_ISSUES_SENT)
               .map((m) => `- ${m}`)
-              .join("\n")}\nReturn the complete corrected JSON document again. Fix only what is listed, and do not add anything the supplied material does not support.`,
+              .join(
+                "\n",
+              )}\nReturn the complete corrected JSON document again. Fix only what is listed, and do not add anything the supplied material does not support.`,
             "repair_request",
           ),
         ],
@@ -150,7 +155,9 @@ export async function generateStructured<T>(call: StructuredCall<T>): Promise<T>
     );
   }
 
-  throw new AiOutputError(`The model's output failed validation after one repair attempt (${lastIssues.slice(0, MAX_ISSUES_SENT).join(", ") || "no detail"}); a person needs to look at this task`);
+  throw new AiOutputError(
+    `The model's output failed validation after one repair attempt (${lastIssues.slice(0, MAX_ISSUES_SENT).join(", ") || "no detail"}); a person needs to look at this task`,
+  );
 }
 
 type Check<T> = { ok: true; value: T } | { ok: false; paths: string[]; messages: string[]; semantic: string[] };

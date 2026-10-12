@@ -104,13 +104,22 @@ export interface InjectionHit {
 }
 
 const INJECTION_PATTERNS: Array<[string, RegExp]> = [
-  ["ignore_instructions", /\b(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+|any\s+|the\s+|your\s+|my\s+)*(?:previous\s+|prior\s+|above\s+|earlier\s+|preceding\s+|safety\s+)*(?:instructions?|prompts?|guardrails?|directions)\b/i],
+  [
+    "ignore_instructions",
+    /\b(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+|any\s+|the\s+|your\s+|my\s+)*(?:previous\s+|prior\s+|above\s+|earlier\s+|preceding\s+|safety\s+)*(?:instructions?|prompts?|guardrails?|directions)\b/i,
+  ],
   ["system_prompt", /\b(?:system|developer)\s+prompt\b/i],
   ["role_reassignment", /\byou\s+are\s+(?:now\s+)?(?:an?\s+|the\s+)?(?:ai|a\.i\.|assistant|language\s+model|llm|chatbot|claude|gpt|chatgpt)\b/i],
   ["as_an_ai", /\b(?:as|being)\s+an?\s+(?:ai|llm|language\s+model)\b/i],
-  ["reveal_instructions", /\b(?:reveal|print|repeat|output|show|leak)\s+(?:me\s+)?(?:your|the)\s+(?:hidden\s+|secret\s+|system\s+)?(?:instructions|prompt|rules)\b/i],
+  [
+    "reveal_instructions",
+    /\b(?:reveal|print|repeat|output|show|leak)\s+(?:me\s+)?(?:your|the)\s+(?:hidden\s+|secret\s+|system\s+)?(?:instructions|prompt|rules)\b/i,
+  ],
   ["conceal_from_user", /\bdo\s+not\s+(?:tell|inform|mention|reveal|show)\s+(?:this\s+)?(?:to\s+)?the\s+(?:user|reader|human|operator)\b/i],
-  ["force_compliance", /\b(?:mark|record|state|report|treat|declare|confirm)\s+(?:all\s+|every\s+|each\s+)?(?:the\s+)?(?:requirements?|items?|documents?|bidders?|this\s+(?:bid|bidder|tender|company))\s+(?:as\s+)?(?:met|compliant|satisfied|valid|qualified|passed|approved)\b/i],
+  [
+    "force_compliance",
+    /\b(?:mark|record|state|report|treat|declare|confirm)\s+(?:all\s+|every\s+|each\s+)?(?:the\s+)?(?:requirements?|items?|documents?|bidders?|this\s+(?:bid|bidder|tender|company))\s+(?:as\s+)?(?:met|compliant|satisfied|valid|qualified|passed|approved)\b/i,
+  ],
   ["markup_lookalike", /<\s*\/?\s*(?:system|instructions?|assistant|untrusted_data)\b|\[\s*(?:system|inst|assistant)\s*\]/i],
 ];
 
@@ -122,7 +131,11 @@ export function detectInjection(text: string): InjectionHit[] {
     for (const m of text.matchAll(global)) {
       const at = m.index ?? 0;
       const start = Math.max(0, at - 30);
-      const excerpt = text.slice(start, start + 150).replace(/\s+/g, " ").trim().slice(0, 160);
+      const excerpt = text
+        .slice(start, start + 150)
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 160);
       const lineStart = text.lastIndexOf("\n", at - 1) + 1;
       const lineEnd = text.indexOf("\n", at);
       const line = normaliseForMatch(text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd));

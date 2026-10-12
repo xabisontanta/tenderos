@@ -47,7 +47,9 @@ export const erpSupportServices: EvalFixture = {
   company: "it",
   expected: {
     requirements: [
-      expectReq(D, "closing", "DEADLINE", true, L.closing, 1, ["30 October 2026", "closing", "electronic"], { date: { kind: "CLOSING", iso: "2026-10-30T12:00:00+02:00" } }),
+      expectReq(D, "closing", "DEADLINE", true, L.closing, 1, ["30 October 2026", "closing", "electronic"], {
+        date: { kind: "CLOSING", iso: "2026-10-30T12:00:00+02:00" },
+      }),
       expectReq(D, "period", "SCOPE", true, L.period, 1, ["36 months"]),
       expectReq(D, "csd", "MANDATORY_CONDITION", true, L.csd, 2, ["CSD", "Central Supplier Database"]),
       expectReq(D, "iso", "DOCUMENT", true, L.iso, 2, ["ISO"]),

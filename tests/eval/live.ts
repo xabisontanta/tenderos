@@ -43,7 +43,9 @@ export async function runLive(env: Env, log: (line: string) => void): Promise<Li
     throw err;
   }
 
-  const wanted = env.EVAL_FIXTURES?.split(",").map((s) => s.trim()).filter(Boolean);
+  const wanted = env.EVAL_FIXTURES?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   const fixtures = wanted?.length ? FIXTURES.filter((f) => wanted.includes(f.id)) : FIXTURES;
   const maxUsd = Number(env.EVAL_MAX_USD ?? 5);
   const minRecall = Number(env.EVAL_MIN_RECALL ?? 0.8);

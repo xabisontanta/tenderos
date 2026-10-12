@@ -147,7 +147,10 @@ describe("generateStructured", () => {
   });
 
   it("gives up after the single repair and fails without retrying, keeping the spend on the meter", async () => {
-    const { client, runtime } = setup([{ text: "nope", usage: { inputTokens: 500, outputTokens: 50 } }, { json: { items: "still wrong" }, usage: { inputTokens: 500, outputTokens: 50 } }]);
+    const { client, runtime } = setup([
+      { text: "nope", usage: { inputTokens: 500, outputTokens: 50 } },
+      { json: { items: "still wrong" }, usage: { inputTokens: 500, outputTokens: 50 } },
+    ]);
     const err = await call(runtime).catch((e) => e);
     expect(err).toBeInstanceOf(AiOutputError);
     expect(err).toBeInstanceOf(NonRetryableError);
@@ -177,10 +180,10 @@ describe("generateStructured", () => {
   });
 
   it("stops before a call that would take the task over its cost ceiling", async () => {
-    const { client, runtime } = setup(
-      [{ text: "bad", usage: { inputTokens: 200_000, outputTokens: 1000 } }, { json: { items: [] } }],
-      { ...ENV, AI_MAX_TASK_COST_USD: "0.05" },
-    );
+    const { client, runtime } = setup([{ text: "bad", usage: { inputTokens: 200_000, outputTokens: 1000 } }, { json: { items: [] } }], {
+      ...ENV,
+      AI_MAX_TASK_COST_USD: "0.05",
+    });
     await expect(call(runtime)).rejects.toBeInstanceOf(AiBudgetError);
     expect(client.requests).toHaveLength(1);
   });
@@ -212,7 +215,9 @@ describe("prompt and response logging", () => {
     // These keys survive log redaction: they are not named like secrets.
     expect(rec!.usage).toMatchObject({ in: 1000, out: 500 });
     expect(rec!.cost_usd).toBeCloseTo(0.007, 8);
-    expect(rec!.prompt).toMatchObject({ blocks: [expect.objectContaining({ label: "tender_document:d1", category: "TENDER_DOCUMENTS" }), expect.objectContaining({ label: "instruction" })] });
+    expect(rec!.prompt).toMatchObject({
+      blocks: [expect.objectContaining({ label: "tender_document:d1", category: "TENDER_DOCUMENTS" }), expect.objectContaining({ label: "instruction" })],
+    });
     expect(JSON.stringify(rec!.prompt)).toMatch(/"sha":"[0-9a-f]{12}"/);
   });
 

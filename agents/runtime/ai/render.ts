@@ -13,7 +13,14 @@ export function renderTenderRecord(t: TenderSnapshot): string {
     ["Estimated value", t.estimated_value_zar != null ? formatZar(Number(t.estimated_value_zar)) : null],
     ["Published", t.published_at ? formatSast(t.published_at) : null],
     ["Closing", formatSast(t.closing_at)],
-    ["Briefing", t.briefing_at ? `${formatSast(t.briefing_at)}${t.briefing_compulsory ? " (compulsory)" : ""}` : t.briefing_compulsory ? "compulsory, date not recorded" : null],
+    [
+      "Briefing",
+      t.briefing_at
+        ? `${formatSast(t.briefing_at)}${t.briefing_compulsory ? " (compulsory)" : ""}`
+        : t.briefing_compulsory
+          ? "compulsory, date not recorded"
+          : null,
+    ],
     ["Questions deadline", t.questions_deadline_at ? formatSast(t.questions_deadline_at) : null],
     ["Submission method", t.submission_method],
   ];
@@ -24,10 +31,7 @@ export function renderTenderRecord(t: TenderSnapshot): string {
 }
 
 /** Requirements from the analysis step, one citable line each. */
-export function renderRequirements(
-  reqs: Array<{ id: string; category: string; text: string; mandatory: boolean; status: string }>,
-  limit = 80,
-): string {
+export function renderRequirements(reqs: Array<{ id: string; category: string; text: string; mandatory: boolean; status: string }>, limit = 80): string {
   return reqs
     .slice(0, limit)
     .map((r) => `[${r.id}] (${r.category}${r.mandatory ? ", mandatory" : ""}${r.status === "EXTRACTED" ? "" : ", unconfirmed"}) ${r.text}`)

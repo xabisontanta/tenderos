@@ -30,7 +30,10 @@ describe("tool gate (AGENTS.md section 5)", () => {
   it("matches tool ids exactly, with no prefixes or wildcards", async () => {
     const { gate } = make(["tender.documents.read", "tender.*"]);
     for (const tool of ["tender.documents.readall", "tender.documents", "Tender.Documents.Read", "tender.documents.write", "tender.x"]) {
-      await expect(gate.run(tool, async () => 1), tool).rejects.toBeInstanceOf(ToolNotPermittedError);
+      await expect(
+        gate.run(tool, async () => 1),
+        tool,
+      ).rejects.toBeInstanceOf(ToolNotPermittedError);
     }
   });
 
@@ -52,7 +55,11 @@ describe("tool gate (AGENTS.md section 5)", () => {
 
 describe("registry tool lists", () => {
   it("grants web search only to the discovery and intelligence roles", () => {
-    expect(AGENTS.filter((a) => a.allowedTools.includes("web.search")).map((a) => a.slug).sort()).toEqual(["tender_discovery", "tender_intelligence"]);
+    expect(
+      AGENTS.filter((a) => a.allowedTools.includes("web.search"))
+        .map((a) => a.slug)
+        .sort(),
+    ).toEqual(["tender_discovery", "tender_intelligence"]);
   });
   it("registers the refusal event type", () => {
     expect(isEventType("TOOL_REFUSED")).toBe(true);

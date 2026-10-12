@@ -42,13 +42,16 @@ const message = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+/** A request as the stub records it: plain JSON, read loosely by the assertions. */
+type Recorded = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
 function stub(results: Array<unknown | Error>) {
-  const streamCalls: Array<{ params: Record<string, any>; opts: Record<string, any> }> = []; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const countCalls: Array<Record<string, any>> = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const streamCalls: Array<{ params: Recorded; opts: Recorded }> = [];
+  const countCalls: Recorded[] = [];
   let i = 0;
   const sdk = {
     messages: {
-      stream: (params: Record<string, any>, opts: Record<string, any>) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      stream: (params: Recorded, opts: Recorded) => {
         streamCalls.push({ params: JSON.parse(JSON.stringify(params)), opts });
         return {
           finalMessage: async () => {
@@ -58,7 +61,7 @@ function stub(results: Array<unknown | Error>) {
           },
         };
       },
-      countTokens: async (params: Record<string, any>) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      countTokens: async (params: Recorded) => {
         countCalls.push(params);
         return { input_tokens: 321 };
       },
@@ -109,7 +112,10 @@ describe("request shape", () => {
     const { c, streamCalls } = client([message()]);
     const pdf = buildPrompt([{ type: "pdf", category: "TENDER_DOCUMENTS", label: "pdf", base64: "JVBERi0xLjQ=" }], GRANTED);
     await c.complete(request({ messages: [{ role: "user", content: [...pdf, trusted("Read it.")] }] }));
-    expect(streamCalls[0].params.messages[0].content[0]).toEqual({ type: "document", source: { type: "base64", media_type: "application/pdf", data: "JVBERi0xLjQ=" } });
+    expect(streamCalls[0].params.messages[0].content[0]).toEqual({
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: "JVBERi0xLjQ=" },
+    });
   });
 
   it("omits output_config when nothing is configured", async () => {
@@ -146,7 +152,15 @@ describe("response mapping", () => {
   });
 
   it("ignores thinking blocks and joins text blocks", async () => {
-    const { c } = client([message({ content: [{ type: "thinking", thinking: "", signature: "s" }, { type: "text", text: "a" }, { type: "text", text: "b" }] })]);
+    const { c } = client([
+      message({
+        content: [
+          { type: "thinking", thinking: "", signature: "s" },
+          { type: "text", text: "a" },
+          { type: "text", text: "b" },
+        ],
+      }),
+    ]);
     expect((await c.complete(request())).text).toBe("ab");
   });
 
@@ -250,7 +264,11 @@ describe("web search turns", () => {
 
   it("resumes a paused turn, adds up usage and returns deduplicated sources", async () => {
     const { c, streamCalls } = client([
-      message({ stop_reason: "pause_turn", content: [...searchBlocks], usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, server_tool_use: { web_search_requests: 1 } } }),
+      message({
+        stop_reason: "pause_turn",
+        content: [...searchBlocks],
+        usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, server_tool_use: { web_search_requests: 1 } },
+      }),
       message({
         content: [
           {

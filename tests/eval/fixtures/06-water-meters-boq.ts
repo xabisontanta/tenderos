@@ -4,7 +4,8 @@ import { expectReq, page } from "./helpers";
 const D = "doc-meters";
 const L = {
   title: "TENDER MBM/TECH/2026/09: SUPPLY, DELIVERY AND INSTALLATION OF 2 000 SMART PREPAID WATER METERS",
-  intro: "The Mbombela Local Municipality invites tenders for the supply and installation of smart prepaid water meters in the Nelspruit and Kanyamazane supply areas.",
+  intro:
+    "The Mbombela Local Municipality invites tenders for the supply and installation of smart prepaid water meters in the Nelspruit and Kanyamazane supply areas.",
   closing: "Tenders must be submitted on the eTender portal before 12:00 on 4 November 2026.",
   briefing: "A non-compulsory information session will be held on 16 October 2026 at 10:00 at the Technical Services boardroom.",
   csd: "Tenderers must be registered on the Central Supplier Database (CSD).",
@@ -22,7 +23,8 @@ const L = {
 export const waterMetersBoq: EvalFixture = {
   id: "water-meters-boq",
   title: "Smart water meters with a bill of quantities",
-  description: "Municipal supply-and-install tender with four BOQ lines and a VAT instruction: the pricing agent must structure the lines and leave every rate empty.",
+  description:
+    "Municipal supply-and-install tender with four BOQ lines and a VAT instruction: the pricing agent must structure the lines and leave every rate empty.",
   tags: ["sector:municipal", "sector:electrical"],
   tender: {
     reference_number: "MBM/TECH/2026/09",
@@ -51,7 +53,9 @@ export const waterMetersBoq: EvalFixture = {
   expected: {
     requirements: [
       expectReq(D, "closing", "DEADLINE", true, L.closing, 1, ["4 November 2026", "eTender"], { date: { kind: "CLOSING", iso: "2026-11-04T12:00:00+02:00" } }),
-      expectReq(D, "session", "BRIEFING", false, L.briefing, 1, ["information session", "non-compulsory"], { date: { kind: "BRIEFING", iso: "2026-10-16T10:00:00+02:00" } }),
+      expectReq(D, "session", "BRIEFING", false, L.briefing, 1, ["information session", "non-compulsory"], {
+        date: { kind: "BRIEFING", iso: "2026-10-16T10:00:00+02:00" },
+      }),
       expectReq(D, "csd", "MANDATORY_CONDITION", true, L.csd, 1, ["CSD", "Central Supplier Database"]),
       expectReq(D, "nrcs", "DOCUMENT", true, L.nrcs, 2, ["NRCS"]),
       expectReq(D, "warranty", "MANDATORY_CONDITION", true, L.warranty, 2, ["24 months", "warranty"]),

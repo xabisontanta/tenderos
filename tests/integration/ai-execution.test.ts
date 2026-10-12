@@ -60,12 +60,20 @@ async function realRun(orgId: string) {
 }
 
 const costRows = async (runId: string) =>
-  (await pool.query(`select provider, model, input_tokens, output_tokens, cost_usd::float8 as cost_usd, is_simulated from public.cost_usage where workflow_run_id = $1 order by id`, [runId])).rows;
+  (
+    await pool.query(
+      `select provider, model, input_tokens, output_tokens, cost_usd::float8 as cost_usd, is_simulated from public.cost_usage where workflow_run_id = $1 order by id`,
+      [runId],
+    )
+  ).rows;
 
 describe("AI execution on real tenders", () => {
   it("records real tokens and cost for AI steps, which is what the daily budget gate reads", async () => {
     const orgId = await bootstrapOrg(owner);
-    await pool.query(`insert into public.company_profiles (organisation_id, legal_name, cidb_grade, sectors, provinces) values ($1, 'Umzansi Civils (Pty) Ltd', '6CE', '{Construction}', '{LIMPOPO}')`, [orgId]);
+    await pool.query(
+      `insert into public.company_profiles (organisation_id, legal_name, cidb_grade, sectors, provinces) values ($1, 'Umzansi Civils (Pty) Ltd', '6CE', '{Construction}', '{LIMPOPO}')`,
+      [orgId],
+    );
     const { runId } = await realRun(orgId);
     await drainOrg(aiWorker(AI_ENV), pool, orgId);
 
@@ -80,7 +88,10 @@ describe("AI execution on real tenders", () => {
     // Compliance is rules-only and costs nothing.
     expect(rows.some((r) => r.provider === "rules" && r.cost_usd === 0)).toBe(true);
 
-    const { rows: tasks } = await pool.query(`select step_key, actual_cost_usd::float8 as cost, output from public.tasks where workflow_run_id = $1 and status = 'COMPLETED'`, [runId]);
+    const { rows: tasks } = await pool.query(
+      `select step_key, actual_cost_usd::float8 as cost, output from public.tasks where workflow_run_id = $1 and status = 'COMPLETED'`,
+      [runId],
+    );
     const analysis = tasks.find((t) => t.step_key === "analysis");
     expect(analysis.cost).toBeGreaterThan(0);
     expect(analysis.output.ai_generated).toBe(true);
@@ -111,7 +122,10 @@ describe("AI execution on real tenders", () => {
     await pool.query(`update public.system_settings set daily_ai_budget_usd = 0.005 where organisation_id = $1`, [orgId]);
     const { runId } = await realRun(orgId);
     await drainOrg(aiWorker(AI_ENV), pool, orgId);
-    const { rows: events } = await pool.query(`select event_type, severity from public.agent_events where organisation_id = $1 and event_type = 'BUDGET_WARNING'`, [orgId]);
+    const { rows: events } = await pool.query(
+      `select event_type, severity from public.agent_events where organisation_id = $1 and event_type = 'BUDGET_WARNING'`,
+      [orgId],
+    );
     expect(events.length).toBeGreaterThan(0);
     const { rows: run } = await pool.query(`select status from public.workflow_runs where id = $1`, [runId]);
     expect(run[0].status).toBe("BLOCKED");

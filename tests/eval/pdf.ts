@@ -14,7 +14,12 @@ function wrap(lines: string[], width = 92): string[] {
   return out;
 }
 
-const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)").replace(/[^\x20-\x7e]/g, "?");
+const esc = (s: string) =>
+  s
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)")
+    .replace(/[^\x20-\x7e]/g, "?");
 
 /**
  * A minimal one-page-per-50-lines PDF with a real text layer, base64 encoded,

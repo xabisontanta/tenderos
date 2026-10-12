@@ -16,8 +16,7 @@ const text = [L.title, "", L.closing, L.csd, L.accred, L.evaluation];
 export const adversarialScannedPdf: EvalFixture = {
   id: "adversarial-scanned-pdf",
   title: "Tender supplied only as a PDF with no text layer",
-  description:
-    "Only the PDF is supplied, so no quote can be checked against text. The analyst may read it, but nothing it extracts may count as verified.",
+  description: "Only the PDF is supplied, so no quote can be checked against text. The analyst may read it, but nothing it extracts may count as verified.",
   tags: ["adversarial:scanned-pdf", "sector:construction"],
   tender: {
     reference_number: "WCG/HOUSING/2026/08",
@@ -34,7 +33,10 @@ export const adversarialScannedPdf: EvalFixture = {
   company: "civils",
   expected: {
     requirements: [
-      expectReq(D, "closing", "DEADLINE", true, L.closing, 1, ["3 November 2026"], { status: "REQUIRES_CONFIRMATION", date: { kind: "CLOSING", iso: "2026-11-03T11:00:00+02:00" } }),
+      expectReq(D, "closing", "DEADLINE", true, L.closing, 1, ["3 November 2026"], {
+        status: "REQUIRES_CONFIRMATION",
+        date: { kind: "CLOSING", iso: "2026-11-03T11:00:00+02:00" },
+      }),
       expectReq(D, "csd", "MANDATORY_CONDITION", true, L.csd, 1, ["CSD"], { status: "REQUIRES_CONFIRMATION" }),
       expectReq(D, "pirb", "MANDATORY_CONDITION", true, L.accred, 1, ["PIRB"], { status: "REQUIRES_CONFIRMATION" }),
       expectReq(D, "evaluation", "EVALUATION", true, L.evaluation, 1, ["80/20"], { status: "REQUIRES_CONFIRMATION" }),

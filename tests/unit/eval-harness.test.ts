@@ -16,19 +16,24 @@ import { runAnalyst, runPipeline } from "../eval/run";
 import { scoreAnalysis } from "../eval/score";
 
 const textOf = (fx: (typeof FIXTURES)[number]) =>
-  normaliseForMatch(
-    [
-      ...fx.documents.flatMap((d) => [d.text ?? "", ...(d.pages ?? []).map((p) => p.text)]),
-      fx.groundTruth?.text ?? "",
-    ].join("\n"),
-  );
+  normaliseForMatch([...fx.documents.flatMap((d) => [d.text ?? "", ...(d.pages ?? []).map((p) => p.text)]), fx.groundTruth?.text ?? ""].join("\n"));
 
 describe("evaluation fixtures", () => {
   it("has at least ten synthetic tenders across the sectors that matter, with adversarial cases", () => {
     expect(FIXTURES.length).toBeGreaterThanOrEqual(10);
     expect(new Set(FIXTURES.map((f) => f.id)).size).toBe(FIXTURES.length);
     const tags = new Set(FIXTURES.flatMap((f) => f.tags));
-    for (const t of ["sector:construction", "sector:it", "sector:cleaning", "sector:security", "sector:medical", "sector:municipal", "adversarial:prompt-injection", "adversarial:missing-mandatory-documents", "adversarial:conflicting-dates"] as const) {
+    for (const t of [
+      "sector:construction",
+      "sector:it",
+      "sector:cleaning",
+      "sector:security",
+      "sector:medical",
+      "sector:municipal",
+      "adversarial:prompt-injection",
+      "adversarial:missing-mandatory-documents",
+      "adversarial:conflicting-dates",
+    ] as const) {
       expect(tags.has(t), t).toBe(true);
     }
     expect(FIXTURES.filter((f) => f.tags.some((t) => t.startsWith("adversarial:"))).length).toBeGreaterThanOrEqual(3);
@@ -78,16 +83,19 @@ describe("Tender Analyst against the labels (deterministic fake model)", () => {
     expect(score.passed).toBe(true);
   });
 
-  it.each(FIXTURES.filter((f) => f.hostileModelItems).map((f) => [f.id, f] as const))("%s: a model that obeys the document still cannot get its content through", async (_id, fx) => {
-    const res = await runAnalyst(fx, analystClient(fx, "obedient"));
-    const score = scoreAnalysis(fx, res.output);
-    expect(score.forbiddenViolations).toEqual([]);
-    expect(score.passed).toBe(true);
-    for (const h of fx.hostileModelItems!) {
-      const hit = res.output.requirements.find((r) => r.source.quote === h.quote);
-      expect(hit?.status, h.text).toBe("REQUIRES_CONFIRMATION");
-    }
-  });
+  it.each(FIXTURES.filter((f) => f.hostileModelItems).map((f) => [f.id, f] as const))(
+    "%s: a model that obeys the document still cannot get its content through",
+    async (_id, fx) => {
+      const res = await runAnalyst(fx, analystClient(fx, "obedient"));
+      const score = scoreAnalysis(fx, res.output);
+      expect(score.forbiddenViolations).toEqual([]);
+      expect(score.passed).toBe(true);
+      for (const h of fx.hostileModelItems!) {
+        const hit = res.output.requirements.find((r) => r.source.quote === h.quote);
+        expect(hit?.status, h.text).toBe("REQUIRES_CONFIRMATION");
+      }
+    },
+  );
 
   it("reports the hidden instructions in the prompt-injection fixture and keeps them out of every instruction", async () => {
     const fx = fixtureById("adversarial-prompt-injection")!;
@@ -126,7 +134,11 @@ describe("Tender Analyst against the labels (deterministic fake model)", () => {
     const client = analystClient(fx);
     const res = await runAnalyst(fx, client);
     expect(client.requests[0].messages[0].content.some((b) => b.type === "pdf")).toBe(true);
-    expect(res.output.requirements.filter((r) => r.source.kind === "TENDER_DOCUMENT").every((r) => r.status === "REQUIRES_CONFIRMATION" && r.source.quote_verified === false)).toBe(true);
+    expect(
+      res.output.requirements
+        .filter((r) => r.source.kind === "TENDER_DOCUMENT")
+        .every((r) => r.status === "REQUIRES_CONFIRMATION" && r.source.quote_verified === false),
+    ).toBe(true);
   });
 
   it("stops at a refusal without retrying, and after one repair when the output stays invalid", async () => {
@@ -224,7 +236,10 @@ describe("all five AI steps end to end with the fake model", () => {
     }
     const aiSteps = Object.values(run.results).filter((r) => r.cost?.provider === "anthropic");
     expect(aiSteps.length).toBeGreaterThanOrEqual(1);
-    expect(run.costUsd).toBeCloseTo(aiSteps.reduce((n, r) => n + r.cost!.costUsd, 0), 8);
+    expect(run.costUsd).toBeCloseTo(
+      aiSteps.reduce((n, r) => n + r.cost!.costUsd, 0),
+      8,
+    );
     expect(run.costUsd).toBeGreaterThan(0);
     // Each executor ran at the tier its agent has: QA on the HIGH model.
     const qa = client.requests.filter((r) => r.label === "qa.review");
@@ -246,8 +261,28 @@ describe("report and live script", () => {
     const fx = fixtureById("roads-rehabilitation")!;
     const res = await runAnalyst(fx, analystClient(fx));
     const rows: ReportRow[] = [
-      { fixtureId: fx.id, title: fx.title, tags: fx.tags, score: scoreAnalysis(fx, res.output), error: null, costUsd: res.cost!.costUsd, inputTokens: res.cost!.inputTokens, outputTokens: res.cost!.outputTokens, ms: 12 },
-      { fixtureId: "x", title: "x", tags: ["adversarial:prompt-injection"], score: null, error: "AiRefusalError: declined", costUsd: 0, inputTokens: 0, outputTokens: 0, ms: 1 },
+      {
+        fixtureId: fx.id,
+        title: fx.title,
+        tags: fx.tags,
+        score: scoreAnalysis(fx, res.output),
+        error: null,
+        costUsd: res.cost!.costUsd,
+        inputTokens: res.cost!.inputTokens,
+        outputTokens: res.cost!.outputTokens,
+        ms: 12,
+      },
+      {
+        fixtureId: "x",
+        title: "x",
+        tags: ["adversarial:prompt-injection"],
+        score: null,
+        error: "AiRefusalError: declined",
+        costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        ms: 1,
+      },
     ];
     const text = formatReport(rows, { model: "model-mid", minRecall: 0.8 });
     expect(text).toMatch(/PASS\s+roads-rehabilitation\s+recall 100%/);

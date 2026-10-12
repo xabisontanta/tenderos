@@ -36,7 +36,13 @@ Integration tests cover role refusals and cross-tenant isolation.
 - Data-category grants per agent, checked before every step
   (`authoriseExecutor`). Sensitive categories (director personal data,
   banking, proof of address) are granted only to the Document Manager.
-- Tool allow-lists per agent.
+- Tool allow-lists per agent, enforced in the runtime (`ctx.tools`): a tool
+  that is not on the stored list is never run and is logged as a `TOOL_REFUSED`
+  WARNING.
+- Model prompts: built only through a data-category policy that refuses
+  director personal data, bank details, proof of address and ID numbers;
+  third-party text is wrapped as data; secrets and document text are never
+  logged (`docs/ai-agents.md`).
 - Agents write only through the worker, never through the browser.
 - Kill switch, per-agent pause and disable, loop guard, daily budget.
 - No automatic submission: a human approval is required by the workflow and

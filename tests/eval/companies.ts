@@ -5,7 +5,16 @@ import type { CompanyKey } from "./types";
  * Personal and sensitive values that must never reach a prompt. They appear in
  * every synthetic profile, and the evaluation fails if one is sent to a model.
  */
-export const SENSITIVE_SENTINELS = ["Thandeka Sentinel", "sentinel.owner@example.test", "082 555 0100", "1 Sentinel Road, Sandton", "SENTINEL-TCS-PIN", "4999999999", "2019/999999/07", "MAAA9999999"];
+export const SENSITIVE_SENTINELS = [
+  "Thandeka Sentinel",
+  "sentinel.owner@example.test",
+  "082 555 0100",
+  "1 Sentinel Road, Sandton",
+  "SENTINEL-TCS-PIN",
+  "4999999999",
+  "2019/999999/07",
+  "MAAA9999999",
+];
 
 const base: CompanyProfile = {
   organisation_id: "00000000-0000-0000-0000-0000000000aa",

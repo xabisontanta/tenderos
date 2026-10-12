@@ -38,11 +38,7 @@ export interface ToolGate {
  * engine writes an agent_events WARNING) and then fails the task without a
  * retry. A failure to report never turns a refusal into permission.
  */
-export function createToolGate(opts: {
-  agent: string;
-  allowedTools: readonly string[];
-  onRefused: (refusal: ToolRefusal) => Promise<void> | void;
-}): ToolGate {
+export function createToolGate(opts: { agent: string; allowedTools: readonly string[]; onRefused: (refusal: ToolRefusal) => Promise<void> | void }): ToolGate {
   const allowed = [...opts.allowedTools];
   const refuse = async (tool: string, reason: ToolRefusalReason): Promise<never> => {
     try {

@@ -60,6 +60,12 @@ only facts present in the portal row, deduplicates on the portal id, and, when
 `auto_run_workflows` is on, starts the `tender_bid` workflow on up to
 `max_auto_workflows_per_scan` tenders that still leave 48 hours to bid.
 
+With AI switched on (section 11), five steps of the `tender_bid` plan run a
+model instead of rules: the Tender Analyst, the Qualification Agent's fit
+assessment, the Proposal Writer, the Pricing Analyst and the QA Reviewer. Each
+is a draft for a person (`docs/ai-agents.md`); the rule gates and the approval
+gate are unchanged. Simulation runs never call a model.
+
 `tender_bid` uses the same plan as `simulated_bid` on real tenders. Compliance
 gaps block it at `MISSING_INFORMATION`; saving the company profile or adding a
 verified document re-queues blocked compliance tasks. A bid the approver sent
@@ -90,6 +96,17 @@ verified pack and delivery instructions. TenderOS never submits a bid itself.
   grant is a `PermissionDeniedError`: the task fails without retrying.
 - Director personal data, banking and proof of address are only granted to
   the Document Manager.
+- Prompts: nothing reaches a model except through `buildPrompt`
+  (`agents/runtime/ai/guardrails/data-policy.ts`). Each part names its data
+  category and is refused if the category is director personal data, banking
+  or proof of address (`PROMPT_PROHIBITED_CATEGORIES`, the same list as the
+  vault's restricted categories), if the agent was not granted it for the
+  task, or if the text holds a South African ID number. Company facts for a
+  prompt are an allow-list (`agents/runtime/ai/facts.ts`): names, CIDB grade,
+  B-BBEE level, provinces, sectors, and verified, in-date certification and
+  reference documents. Contact details, signatories, addresses, tax and
+  registration numbers, the exposure limit and file names are never sent.
+  A unit test fails if a prohibited category can reach the builder.
 - Company documents (`company_documents`, `lib/domain/documents.ts`) each carry
   the data category of their type. The engine gives an agent metadata only
   (`AgentContext.documents`: id, type, title, file name, expiry, verified) for
@@ -112,9 +129,22 @@ verified pack and delivery instructions. TenderOS never submits a bid itself.
 ## 5. Tool access
 
 Each agent has an `allowedTools` allow-list in the registry, stored on the
-agent row. Milestone 1 executors call no external tools. When real tools are
-added, the runtime must refuse any tool that is not on the list, and log the
-refusal as an `agent_events` row with severity `WARNING`.
+agent row. The runtime enforces the stored list: an executor reaches every tool
+through `ctx.tools.run(toolId, fn)` (`agents/runtime/tool-access.ts`). A tool
+that is not on the list is never run, the task fails without a retry, and the
+refusal is written as an `agent_events` row (`TOOL_REFUSED`) with severity
+`WARNING`. Ids match exactly; there are no wildcards. Each executor declares
+the tools it uses (`AgentExecutor.tools`) and a unit test checks they are on
+its agent's registry list.
+
+The tools in use: `tender.documents.read` (Tender Analyst reads the documents),
+`company.capabilities.read` and `company.references.read` (company facts for
+the Qualification Agent and Proposal Writer), `pricing.model`, `bid.read`, and
+`web.search` (Anthropic's server-side web search, for the Tender Scout and
+Intelligence Analyst only). `web.search` also needs the organisation's own web
+research switch; without it the call is refused and logged the same way.
+Agents created before a tool was added get it from a migration (see
+`supabase/migrations/20261010000030_ai_agent_tools.sql`).
 
 ### Browser helper (`extension/`)
 
@@ -157,12 +187,21 @@ host permissions and no localhost (`npm run build:extension` enforces this).
 ## 7. Structured output schemas
 
 Every executor folder has `schema.ts` (zod), `logic.ts` (pure functions,
-unit-tested) and `simulated.ts` (the executor). Outputs are validated against
-the schema before they are stored in `tasks.output`. Unknown or unverifiable
-fields are explicit:
+unit-tested) and `simulated.ts` (the executor). The five steps that do
+judgement work also have `real.ts`, the model-backed executor for the same task
+type, chosen by `getExecutor(taskType, { simulation, aiEnabled })`
+(`agents/index.ts`); `simulated.ts` stays the default and the rules-only
+behaviour. Outputs are validated against the schema before they are stored in
+`tasks.output`. The model is asked for JSON generated from the same zod schemas
+(`z.toJSONSchema`, structured outputs), validated, and given one repair attempt
+before the task fails without a retry. Unknown or unverifiable fields are
+explicit:
 
 - `MISSING_INFORMATION`: the tender record does not contain it.
 - `REQUIRES_CONFIRMATION`: a person must confirm it before it can be relied on.
+
+Output a model took part in carries `ai_generated: true` and is a draft for a
+person to review.
 
 ## 8. Approval policies
 
@@ -204,7 +243,10 @@ fields are explicit:
 - `audit_logs` is the append-only compliance trail (who did what, as which
   actor). Updates and deletes are rejected by trigger.
 - Process logs use `lib/log.ts`: JSON lines with secret redaction. Never log
-  tokens, keys, document contents or personal data.
+  tokens, keys, document contents or personal data. Every model call writes
+  one `ai.call` line with the model, token counts, cost, the prompt's block
+  labels, categories, sizes and a hash, and whether the answer validated; never
+  the prompt text or the model's answer (`agents/runtime/ai/logging.ts`).
 
 ## 11. Model-selection policy
 
@@ -212,10 +254,22 @@ fields are explicit:
   model from `AI_MODEL_LOW`, `AI_MODEL_MID`, `AI_MODEL_HIGH`; high-value or
   complex work moves up one tier. An agent can carry a `model_override`.
 - No model names are hard-coded. Unset tiers mean "not configured", and real
-  execution must refuse to run rather than fall back silently.
+  execution refuses to run rather than fall back silently: a missing
+  `ANTHROPIC_API_KEY`, a missing model for the agent's tier or a missing price
+  (`AI_PRICE_*`) fails the task before it starts, with the variable named.
+- AI is off by default. It runs only on real (non-simulation) tenders, and only
+  when `system_settings.ai_enabled` is true for the organisation (when that
+  column exists) or, until it does, `AI_ENABLED=true` for the deployment.
+  Otherwise the rules-only executors run.
 - Simulation mode makes no AI calls and records cost as $0 with
-  `is_simulated = true`.
-- The daily AI budget blocks non-simulated work once spent.
+  `is_simulated = true`. Rule-based steps on a real tender record $0 with
+  provider `rules`; AI steps record provider `anthropic`, the model and the
+  real token counts and USD cost (cache reads and writes and web searches
+  priced; ZAR display is a separate concern).
+- The daily AI budget blocks non-simulated work once spent. It now sees real
+  numbers. A task also stops before any model call that would take it past
+  `AI_MAX_TASK_COST_USD` or past what is left of the day's budget, and the
+  spend of a failed attempt is recorded too.
 
 ## 12. Security restrictions
 
@@ -235,9 +289,28 @@ See `docs/security.md` for the full model.
 - Never invent company facts, tender facts, prices, certificates, references
   or deadlines. If it is not in the source data, mark it
   `MISSING_INFORMATION` or `REQUIRES_CONFIRMATION`.
-- Every output field that came from a document must be traceable to it (when
-  document ingestion lands, store the page/section reference).
+- Every output field that came from a document must be traceable to it. A
+  requirement the Tender Analyst extracts carries a verbatim `quote` and a
+  `page` or `section`, and counts as `EXTRACTED` only if the quote is found in
+  the text the model was given (after whitespace, case and quote-mark
+  normalisation). Otherwise it is kept as `REQUIRES_CONFIRMATION` with the
+  reason (`agents/runtime/ai/guardrails/citations.ts`). A PDF without a text
+  layer can be read but nothing from it can be verified.
+- Tender and company text reaches a model only inside content-hashed
+  `UNTRUSTED_DATA` markers, and every system prompt says it is data, not
+  instructions. Text that reads like a command to an AI system is reported
+  (`injection_warnings`, a `PROMPT_INJECTION_SUSPECTED` event), and a quote
+  taken from the line of such text is never trusted as a requirement.
 - Pricing agents structure schedules; they do not produce figures without
-  supplier quotations and human input.
-- QA treats missing information as an open issue, never as a pass.
+  supplier quotations and human input. The Pricing Analyst's model schema has
+  no price field and every amount stays empty.
+- The Proposal Writer drafts only from the allow-listed company facts and the
+  analysed requirements; every paragraph cites them, and a paragraph with
+  figures found in neither is removed. A section the facts do not support
+  stays `MISSING_INFORMATION`.
+- QA treats missing information as an open issue, never as a pass. An AI
+  review can add open issues; it cannot fail a bid, clear an issue, or pass a
+  requirement without citing complete bid content.
+- The Qualification Agent's AI fit assessment never changes the decision,
+  which the rule gates make.
 - Simulated work is labelled simulated everywhere it appears.

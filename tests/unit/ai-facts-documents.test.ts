@@ -88,7 +88,11 @@ describe("company facts for prompts", () => {
   });
 
   it("reads keywords and past experience when the profile has them", () => {
-    const withExtras = { ...profile(), keywords: ["tarring", "kerbing"], past_experience: "Completed 12 km of municipal road rehabilitation in 2024." } as CompanyProfile;
+    const withExtras = {
+      ...profile(),
+      keywords: ["tarring", "kerbing"],
+      past_experience: "Completed 12 km of municipal road rehabilitation in 2024.",
+    } as CompanyProfile;
     const facts = companyFacts(withExtras, [], ALL, NOW);
     expect(facts.find((f) => f.id === "fact:keywords")?.value).toContain("tarring");
     expect(facts.find((f) => f.id === "fact:past_experience")?.value).toContain("12 km");
@@ -117,7 +121,12 @@ describe("company facts for prompts", () => {
 
   it("drops restricted documents even when their category was somehow granted", () => {
     const granted = new Set<DataCategory>([...ALL, "DIRECTOR_PERSONAL", "BANKING", "PROOF_OF_ADDRESS"]);
-    const facts = companyFacts(null, [doc({ id: "a", doc_type: "director_ids" }), doc({ id: "b", doc_type: "bank_confirmation" }), doc({ id: "c", doc_type: "proof_of_address" })], granted, NOW);
+    const facts = companyFacts(
+      null,
+      [doc({ id: "a", doc_type: "director_ids" }), doc({ id: "b", doc_type: "bank_confirmation" }), doc({ id: "c", doc_type: "proof_of_address" })],
+      granted,
+      NOW,
+    );
     expect(facts).toEqual([]);
   });
 

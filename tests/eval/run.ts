@@ -53,7 +53,8 @@ async function step<T>(
   });
   const res = await executor.run(ctx);
   const parsed = executor.outputSchema.safeParse(res.output);
-  if (!parsed.success) throw new Error(`${executor.taskType} output failed its schema: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
+  if (!parsed.success)
+    throw new Error(`${executor.taskType} output failed its schema: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
   return { ...res, output: parsed.data };
 }
 

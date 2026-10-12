@@ -64,7 +64,13 @@ export function logAiCall(logger: Logger, c: AiCallLog): void {
     outcome: c.outcome,
     latency_ms: c.latencyMs,
     usage: c.usage
-      ? { in: c.usage.inputTokens, out: c.usage.outputTokens, cache_read: c.usage.cacheReadTokens, cache_write: c.usage.cacheWriteTokens, searches: c.usage.webSearchRequests }
+      ? {
+          in: c.usage.inputTokens,
+          out: c.usage.outputTokens,
+          cache_read: c.usage.cacheReadTokens,
+          cache_write: c.usage.cacheWriteTokens,
+          searches: c.usage.webSearchRequests,
+        }
       : undefined,
     cost_usd: c.callCostUsd,
     task_cost_usd: c.taskCostUsd,

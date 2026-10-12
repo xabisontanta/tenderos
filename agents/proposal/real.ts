@@ -59,16 +59,41 @@ export const proposalDraftReal: AgentExecutor<ProposalOutput> = {
       return {
         output: { sections, open_items: openItems, simulated: false, ai_generated: false },
         summary: `Outlined ${sections.length} proposal sections; no company facts on file to draft from`,
-        events: [{ type: "PROPOSAL_GENERATED", summary: "Proposal outline generated (no company facts on file; nothing was written)", payload: { open_items: openItems } }],
+        events: [
+          {
+            type: "PROPOSAL_GENERATED",
+            summary: "Proposal outline generated (no company facts on file; nothing was written)",
+            payload: { open_items: openItems },
+          },
+        ],
         cost: RULES_COST,
       };
     }
 
     const analysis = analysisOutputSchema.safeParse(ctx.previousOutputs.analysis);
     const requirements = analysis.success ? analysis.data.requirements : [];
-    const parts: PromptPart[] = [{ type: "text", category: "PUBLIC_TENDER_DATA", label: "tender_record", cache: true, text: wrapUntrusted({ kind: "tender_record", id: t.id, title: "Tender record", text: renderTenderRecord(t) }) }];
+    const parts: PromptPart[] = [
+      {
+        type: "text",
+        category: "PUBLIC_TENDER_DATA",
+        label: "tender_record",
+        cache: true,
+        text: wrapUntrusted({ kind: "tender_record", id: t.id, title: "Tender record", text: renderTenderRecord(t) }),
+      },
+    ];
     if (requirements.length && ctx.granted.has("TENDER_DOCUMENTS")) {
-      parts.push({ type: "text", category: "TENDER_DOCUMENTS", label: "tender_requirements", cache: true, text: wrapUntrusted({ kind: "tender_requirements", id: "analysis", title: "Requirements from the analysis step", text: renderRequirements(requirements) }) });
+      parts.push({
+        type: "text",
+        category: "TENDER_DOCUMENTS",
+        label: "tender_requirements",
+        cache: true,
+        text: wrapUntrusted({
+          kind: "tender_requirements",
+          id: "analysis",
+          title: "Requirements from the analysis step",
+          text: renderRequirements(requirements),
+        }),
+      });
     }
     parts.push(...factParts(facts));
 
@@ -94,7 +119,13 @@ export const proposalDraftReal: AgentExecutor<ProposalOutput> = {
     return {
       output: { sections, open_items: openItems, simulated: false, ai_generated: true },
       summary: `AI draft of ${drafted} of ${sections.length} proposal sections for review; ${openItems} still need information or confirmation`,
-      events: [{ type: "PROPOSAL_GENERATED", summary: "Proposal AI draft generated for review (every paragraph cites its facts; nothing invented)", payload: { open_items: openItems, drafted } }],
+      events: [
+        {
+          type: "PROPOSAL_GENERATED",
+          summary: "Proposal AI draft generated for review (every paragraph cites its facts; nothing invented)",
+          payload: { open_items: openItems, drafted },
+        },
+      ],
       cost: ai.meter.toCostRecord(),
     };
   },

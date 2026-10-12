@@ -8,7 +8,8 @@ const L = {
   closing: "Bids must be submitted in the bid box at the Medical Supplies Depot, Johannesburg, before 11:00 on 6 November 2026.",
   samples: "Samples of each item bid for must be delivered to the Medical Supplies Depot by 12:00 on 20 October 2026.",
   sampleDq: "Bids that are not accompanied by samples will be disqualified.",
-  sahpra: "Bidders must submit a valid South African Health Products Regulatory Authority (SAHPRA) licence to manufacture, import, distribute or wholesale medical devices.",
+  sahpra:
+    "Bidders must submit a valid South African Health Products Regulatory Authority (SAHPRA) licence to manufacture, import, distribute or wholesale medical devices.",
   csd: "Bidders must be registered on the Central Supplier Database (CSD) and have a valid SARS Tax Compliance Status.",
   evaluation: "Bids will be evaluated on the 90/10 preference point system.",
   delivery: "Delivery must be made within 14 days of receipt of an official order.",

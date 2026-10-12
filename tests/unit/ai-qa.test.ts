@@ -8,9 +8,30 @@ import { NOW, makeAi, makeCtx, tender } from "../support/context";
 
 const reqs = [
   { id: "closing", category: "DEADLINE", text: "Closes", mandatory: true, status: "EXTRACTED", source: { kind: "TENDER_RECORD" } },
-  { id: "doc-1", category: "MANDATORY_CONDITION", text: "CIDB grade 6CE or higher", mandatory: true, status: "EXTRACTED", source: { kind: "TENDER_DOCUMENT", quote: "hold a valid CIDB grading of 6CE" } },
-  { id: "doc-2", category: "DOCUMENT", text: "Submit SBD 1 and a Tax Compliance Status PIN", mandatory: true, status: "EXTRACTED", source: { kind: "TENDER_DOCUMENT", quote: "SBD 1 and a valid Tax Compliance Status PIN" } },
-  { id: "doc-3", category: "SCOPE", text: "Rehabilitate 4 km of road", mandatory: false, status: "EXTRACTED", source: { kind: "TENDER_DOCUMENT", quote: "rehabilitation of 4 km of access roads" } },
+  {
+    id: "doc-1",
+    category: "MANDATORY_CONDITION",
+    text: "CIDB grade 6CE or higher",
+    mandatory: true,
+    status: "EXTRACTED",
+    source: { kind: "TENDER_DOCUMENT", quote: "hold a valid CIDB grading of 6CE" },
+  },
+  {
+    id: "doc-2",
+    category: "DOCUMENT",
+    text: "Submit SBD 1 and a Tax Compliance Status PIN",
+    mandatory: true,
+    status: "EXTRACTED",
+    source: { kind: "TENDER_DOCUMENT", quote: "SBD 1 and a valid Tax Compliance Status PIN" },
+  },
+  {
+    id: "doc-3",
+    category: "SCOPE",
+    text: "Rehabilitate 4 km of road",
+    mandatory: false,
+    status: "EXTRACTED",
+    source: { kind: "TENDER_DOCUMENT", quote: "rehabilitation of 4 km of access roads" },
+  },
 ];
 
 const prior = (o: Record<string, unknown> = {}) => ({
@@ -20,8 +41,24 @@ const prior = (o: Record<string, unknown> = {}) => ({
   compliance: {
     outcome: "COMPLETE",
     items: [
-      { key: "cidb_grading", label: "CIDB grading certificate", category: "CERTIFICATIONS", mandatory: true, status: "VALID", evidence: "Registration 2019/999999/07 SENTINEL", document_id: null },
-      { key: "tax_compliance", label: "SARS tax compliance status", category: "TAX", mandatory: true, status: "MISSING_INFORMATION", evidence: "No document on file", document_id: null },
+      {
+        key: "cidb_grading",
+        label: "CIDB grading certificate",
+        category: "CERTIFICATIONS",
+        mandatory: true,
+        status: "VALID",
+        evidence: "Registration 2019/999999/07 SENTINEL",
+        document_id: null,
+      },
+      {
+        key: "tax_compliance",
+        label: "SARS tax compliance status",
+        category: "TAX",
+        mandatory: true,
+        status: "MISSING_INFORMATION",
+        evidence: "No document on file",
+        document_id: null,
+      },
     ],
     missing: ["SARS tax compliance status"],
     simulated: false,
@@ -54,7 +91,11 @@ const reply = (coverage: unknown[], inconsistencies: unknown[] = [], other_issue
   usage: { inputTokens: 6000, outputTokens: 700 },
 });
 
-function setup(replies: ConstructorParameters<typeof FakeAiClient>[0], p: Record<string, unknown> = prior(), o: { closing?: string; allowedTools?: string[] } = {}) {
+function setup(
+  replies: ConstructorParameters<typeof FakeAiClient>[0],
+  p: Record<string, unknown> = prior(),
+  o: { closing?: string; allowedTools?: string[] } = {},
+) {
   const client = new FakeAiClient(replies);
   const ctx = makeCtx({
     agent: "quality_assurance",
@@ -118,7 +159,9 @@ describe("QA Reviewer (AI)", () => {
   });
 
   it("never fails a bid on the model's say-so: not addressed is an open issue for the approver", async () => {
-    const { ctx } = setup([reply([cov("doc-1", "NOT_ADDRESSED"), cov("doc-2", "CANNOT_DETERMINE"), cov("doc-3", "PARTIALLY_ADDRESSED", ["section:executive_summary"])])]);
+    const { ctx } = setup([
+      reply([cov("doc-1", "NOT_ADDRESSED"), cov("doc-2", "CANNOT_DETERMINE"), cov("doc-3", "PARTIALLY_ADDRESSED", ["section:executive_summary"])]),
+    ]);
     const res = await qaReviewReal.run(ctx);
     expect(res.output.checks.filter((c) => c.key.startsWith("req:")).every((c) => c.result === "OPEN_ISSUE")).toBe(true);
     expect(res.output.verdict).toBe("CONDITIONAL");
@@ -151,8 +194,18 @@ describe("QA Reviewer (AI)", () => {
 
   it("can reach PASS only when everything is complete", async () => {
     const complete = prior({
-      compliance: { outcome: "COMPLETE", items: [{ key: "cidb_grading", label: "CIDB", category: "CERTIFICATIONS", mandatory: true, status: "VALID", evidence: "x" }], missing: [], simulated: false, continued_in_simulation: false },
-      proposal: { sections: [{ key: "executive_summary", title: "Executive summary", status: "DRAFTED", content: "Text.", needs: [] }], open_items: 0, simulated: false },
+      compliance: {
+        outcome: "COMPLETE",
+        items: [{ key: "cidb_grading", label: "CIDB", category: "CERTIFICATIONS", mandatory: true, status: "VALID", evidence: "x" }],
+        missing: [],
+        simulated: false,
+        continued_in_simulation: false,
+      },
+      proposal: {
+        sections: [{ key: "executive_summary", title: "Executive summary", status: "DRAFTED", content: "Text.", needs: [] }],
+        open_items: 0,
+        simulated: false,
+      },
       pricing: { ...prior().pricing, status: "READY_FOR_APPROVAL" },
     });
     const only = { ...complete, analysis: { requirements: [reqs[1]], documents_analysed: 1, gaps: [], simulated: false } };
@@ -165,7 +218,11 @@ describe("QA Reviewer (AI)", () => {
 
   it("records the model's consistency findings as open issues with only valid references", async () => {
     const { ctx } = setup([
-      reply([cov("doc-1", "ADDRESSED", ["compliance:cidb_grading"])], [{ detail: "The proposal claims a 10 week programme but the tender asks for 12 weeks", refs: ["section:executive_summary", "doc-3", "nonsense"] }], ["Signatures are not evidenced"]),
+      reply(
+        [cov("doc-1", "ADDRESSED", ["compliance:cidb_grading"])],
+        [{ detail: "The proposal claims a 10 week programme but the tender asks for 12 weeks", refs: ["section:executive_summary", "doc-3", "nonsense"] }],
+        ["Signatures are not evidenced"],
+      ),
     ]);
     const res = await qaReviewReal.run(ctx);
     const c = res.output.checks.find((x) => x.key === "consistency:1")!;

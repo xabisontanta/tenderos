@@ -51,7 +51,8 @@ function outputConfig(req: Pick<AiRequest, "effort" | "outputSchema">): Anthropi
   return Object.keys(cfg).length ? cfg : undefined;
 }
 
-type Verdict = { kind: "retry"; status: number | null; retryAfterMs: number | null } | { kind: "fatal"; status: number | null } | { kind: "abort" } | { kind: "unknown" };
+type Verdict =
+  { kind: "retry"; status: number | null; retryAfterMs: number | null } | { kind: "fatal"; status: number | null } | { kind: "abort" } | { kind: "unknown" };
 
 function judge(err: unknown): Verdict {
   if (err instanceof Anthropic.APIUserAbortError) return { kind: "abort" };
@@ -103,7 +104,11 @@ export class AnthropicAiClient implements AiClient {
           );
         }
         if (attempt >= this.opts.maxAttempts) {
-          throw new AiTransientError(`Anthropic was unavailable after ${attempt} attempts${v.status ? ` (HTTP ${v.status})` : " (connection failed)"}`, v.status, requestId(err));
+          throw new AiTransientError(
+            `Anthropic was unavailable after ${attempt} attempts${v.status ? ` (HTTP ${v.status})` : " (connection failed)"}`,
+            v.status,
+            requestId(err),
+          );
         }
         const backoff = backoffMs(attempt - 1, { baseMs: this.opts.baseMs ?? 1000, maxMs: this.opts.maxMs ?? 30_000, jitter: 0.3, random: this.random });
         await this.sleep(Math.min(Math.max(backoff, v.retryAfterMs ?? 0), MAX_RETRY_AFTER_MS), signal);
@@ -161,7 +166,8 @@ export class AnthropicAiClient implements AiClient {
       for (const block of msg.content) {
         if (block.type === "text") {
           text += block.text;
-          for (const c of block.citations ?? []) if (c.type === "web_search_result_location" && c.url && !sources.has(c.url)) sources.set(c.url, c.title ?? c.url);
+          for (const c of block.citations ?? [])
+            if (c.type === "web_search_result_location" && c.url && !sources.has(c.url)) sources.set(c.url, c.title ?? c.url);
         } else if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
           for (const r of block.content) if (r.type === "web_search_result" && !sources.has(r.url)) sources.set(r.url, r.title ?? r.url);
         }

@@ -37,7 +37,14 @@ const profile = (o: Partial<CompanyProfile> = {}): CompanyProfile => ({
 
 const analysis = {
   requirements: [
-    { id: "doc-1", category: "MANDATORY_CONDITION", text: "CIDB grade 6CE or higher", mandatory: true, status: "EXTRACTED", source: { kind: "TENDER_DOCUMENT" } },
+    {
+      id: "doc-1",
+      category: "MANDATORY_CONDITION",
+      text: "CIDB grade 6CE or higher",
+      mandatory: true,
+      status: "EXTRACTED",
+      source: { kind: "TENDER_DOCUMENT" },
+    },
     { id: "closing", category: "DEADLINE", text: "Closes", mandatory: true, status: "EXTRACTED", source: { kind: "TENDER_RECORD" } },
   ],
   documents_analysed: 1,
@@ -50,7 +57,13 @@ const fit = (o: Record<string, unknown> = {}): FakeReply => ({
     score: 82,
     confidence: "MEDIUM",
     reasons: [
-      { factor: "CIDB_GRADE", assessment: "SUPPORTS", text: "Company holds CIDB 6CE, which meets the stated grade", fact_ids: ["fact:cidb_grade"], requirement_ids: ["doc-1"] },
+      {
+        factor: "CIDB_GRADE",
+        assessment: "SUPPORTS",
+        text: "Company holds CIDB 6CE, which meets the stated grade",
+        fact_ids: ["fact:cidb_grade"],
+        requirement_ids: ["doc-1"],
+      },
       { factor: "GEOGRAPHY", assessment: "SUPPORTS", text: "Works in Gauteng", fact_ids: ["fact:provinces"], requirement_ids: [] },
       { factor: "EXPERIENCE", assessment: "UNKNOWN", text: "No past projects recorded", fact_ids: [], requirement_ids: [] },
     ],
@@ -61,7 +74,10 @@ const fit = (o: Record<string, unknown> = {}): FakeReply => ({
   usage: { inputTokens: 3000, outputTokens: 600 },
 });
 
-function setup(replies: ConstructorParameters<typeof FakeAiClient>[0], o: { tender?: ReturnType<typeof tender>; company?: CompanyProfile | null; allowedTools?: string[] } = {}) {
+function setup(
+  replies: ConstructorParameters<typeof FakeAiClient>[0],
+  o: { tender?: ReturnType<typeof tender>; company?: CompanyProfile | null; allowedTools?: string[] } = {},
+) {
   const client = new FakeAiClient(replies);
   const ctx = makeCtx({
     agent: "opportunity_qualification",
@@ -78,7 +94,12 @@ function setup(replies: ConstructorParameters<typeof FakeAiClient>[0], o: { tend
 
 describe("Qualification Agent (AI fit)", () => {
   it("declares its needs", () => {
-    expect(opportunityQualificationReal).toMatchObject({ taskType: "qualification.assess", agent: "opportunity_qualification", tools: ["company.capabilities.read"], ai: true });
+    expect(opportunityQualificationReal).toMatchObject({
+      taskType: "qualification.assess",
+      agent: "opportunity_qualification",
+      tools: ["company.capabilities.read"],
+      ai: true,
+    });
   });
 
   it("keeps the rule gates and adds a drafted fit assessment with reasons and risks", async () => {
@@ -159,7 +180,9 @@ describe("Qualification Agent (AI fit)", () => {
   });
 
   it("will not accept support that cites no evidence, even after a repair", async () => {
-    const unsupported = fit({ reasons: [{ factor: "EXPERIENCE", assessment: "SUPPORTS", text: "Extensive road experience", fact_ids: [], requirement_ids: [] }] });
+    const unsupported = fit({
+      reasons: [{ factor: "EXPERIENCE", assessment: "SUPPORTS", text: "Extensive road experience", fact_ids: [], requirement_ids: [] }],
+    });
     const { ctx } = setup([unsupported, unsupported]);
     await expect(opportunityQualificationReal.run(ctx)).rejects.toBeInstanceOf(AiOutputError);
   });

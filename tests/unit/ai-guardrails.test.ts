@@ -96,7 +96,10 @@ describe("citation enforcement", () => {
   const index = new SourceIndex([{ id: "doc-1", title: "Invitation", pages }]);
 
   it("verifies a verbatim quote even when the source wraps lines and changes case", () => {
-    const r = index.verify("bidders must be registered on the central supplier database (csd) and hold a valid CIDB grading of 6CE", { docId: "doc-1", page: 2 });
+    const r = index.verify("bidders must be registered on the central supplier database (csd) and hold a valid CIDB grading of 6CE", {
+      docId: "doc-1",
+      page: 2,
+    });
     expect(r).toMatchObject({ verified: true, page: 2 });
   });
 
@@ -116,8 +119,20 @@ describe("citation enforcement", () => {
   });
 
   it("finds a quote that runs across a page break and reports its starting page", () => {
-    const spanning = new SourceIndex([{ id: "d", title: "t", pages: [{ page: 4, text: "The contract period is 36 months and" }, { page: 5, text: "may be extended by mutual agreement." }] }]);
-    expect(spanning.verify("The contract period is 36 months and may be extended by mutual agreement.", { docId: "d" })).toMatchObject({ verified: true, page: 4 });
+    const spanning = new SourceIndex([
+      {
+        id: "d",
+        title: "t",
+        pages: [
+          { page: 4, text: "The contract period is 36 months and" },
+          { page: 5, text: "may be extended by mutual agreement." },
+        ],
+      },
+    ]);
+    expect(spanning.verify("The contract period is 36 months and may be extended by mutual agreement.", { docId: "d" })).toMatchObject({
+      verified: true,
+      page: 4,
+    });
   });
 
   it("rejects a citation of a document that was not supplied", () => {
@@ -125,7 +140,9 @@ describe("citation enforcement", () => {
   });
 
   it("verifies against any document when none is named, and handles text without pages", () => {
-    const flat = new SourceIndex([{ id: "a", title: "A", pages: [{ page: null, text: "Payment will be made within 30 days of receipt of a valid invoice." }] }]);
+    const flat = new SourceIndex([
+      { id: "a", title: "A", pages: [{ page: null, text: "Payment will be made within 30 days of receipt of a valid invoice." }] },
+    ]);
     expect(flat.verify("Payment will be made within 30 days of receipt of a valid invoice.", {})).toMatchObject({ verified: true, page: null, docId: "a" });
   });
 

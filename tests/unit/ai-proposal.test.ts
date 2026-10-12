@@ -35,8 +35,22 @@ const profile = (o: Partial<CompanyProfile> = {}): CompanyProfile => ({
 
 const analysis = {
   requirements: [
-    { id: "doc-1", category: "MANDATORY_CONDITION", text: "CIDB grade 6CE or higher", mandatory: true, status: "EXTRACTED", source: { kind: "TENDER_DOCUMENT" } },
-    { id: "doc-2", category: "SCOPE", text: "Rehabilitation of 4 km of access roads within 12 weeks", mandatory: true, status: "EXTRACTED", source: { kind: "TENDER_DOCUMENT" } },
+    {
+      id: "doc-1",
+      category: "MANDATORY_CONDITION",
+      text: "CIDB grade 6CE or higher",
+      mandatory: true,
+      status: "EXTRACTED",
+      source: { kind: "TENDER_DOCUMENT" },
+    },
+    {
+      id: "doc-2",
+      category: "SCOPE",
+      text: "Rehabilitation of 4 km of access roads within 12 weeks",
+      mandatory: true,
+      status: "EXTRACTED",
+      source: { kind: "TENDER_DOCUMENT" },
+    },
   ],
   documents_analysed: 1,
   gaps: [],
@@ -47,14 +61,10 @@ const analysis = {
 const para = (text: string, fact_ids: string[] = [], requirement_ids: string[] = []) => ({ text, fact_ids, requirement_ids });
 const section = (key: string, status: string, paragraphs: ReturnType<typeof para>[] = [], needs: string[] = []) => ({ key, status, paragraphs, needs });
 
-const SUMMARY = section(
-  "executive_summary",
-  "DRAFTED",
-  [
-    para("Umzansi Civils (Pty) Ltd is a CIDB grade 6CE contractor working in Gauteng and Limpopo.", ["fact:legal_name", "fact:cidb_grade", "fact:provinces"]),
-    para("We understand the tender requires the rehabilitation of 4 km of access roads within 12 weeks.", [], ["doc-1", "doc-2"].slice(1)),
-  ],
-);
+const SUMMARY = section("executive_summary", "DRAFTED", [
+  para("Umzansi Civils (Pty) Ltd is a CIDB grade 6CE contractor working in Gauteng and Limpopo.", ["fact:legal_name", "fact:cidb_grade", "fact:provinces"]),
+  para("We understand the tender requires the rehabilitation of 4 km of access roads within 12 weeks.", [], ["doc-1", "doc-2"].slice(1)),
+]);
 const missingRest = PROPOSAL_SECTIONS.filter((s) => s.key !== "executive_summary").map((s) => section(s.key, "MISSING_INFORMATION", [], s.needs));
 
 const reply = (sections: unknown[]): FakeReply => ({ json: { sections }, usage: { inputTokens: 5000, outputTokens: 900 } });
@@ -157,7 +167,12 @@ describe("Proposal Writer (AI)", () => {
   });
 
   it("does not call a section drafted when the model still lists what it needs", async () => {
-    const partial = section("executive_summary", "DRAFTED", [para("Umzansi Civils (Pty) Ltd works in Gauteng.", ["fact:legal_name", "fact:provinces"])], ["Company overview"]);
+    const partial = section(
+      "executive_summary",
+      "DRAFTED",
+      [para("Umzansi Civils (Pty) Ltd works in Gauteng.", ["fact:legal_name", "fact:provinces"])],
+      ["Company overview"],
+    );
     const { ctx } = setup([reply([partial, ...missingRest])]);
     const res = await proposalDraftReal.run(ctx);
     expect(res.output.sections[0]).toMatchObject({ status: "REQUIRES_CONFIRMATION", needs: ["Company overview"] });
@@ -182,7 +197,14 @@ describe("Proposal Writer (AI)", () => {
 
   it("uses verified, in-date reference documents but never unverified or restricted ones, and never file names", async () => {
     const docs: CompanyDocumentMeta[] = [
-      { id: "ref1", doc_type: "project_references", title: "Reference letter, Polokwane roads", file_name: "SENTINEL-FILE.pdf", expires_at: null, verified: true },
+      {
+        id: "ref1",
+        doc_type: "project_references",
+        title: "Reference letter, Polokwane roads",
+        file_name: "SENTINEL-FILE.pdf",
+        expires_at: null,
+        verified: true,
+      },
       { id: "ref2", doc_type: "project_references", title: "Unverified letter", file_name: "x.pdf", expires_at: null, verified: false },
       { id: "id1", doc_type: "director_ids", title: "Director ID", file_name: "id.pdf", expires_at: null, verified: true },
     ];
@@ -192,7 +214,17 @@ describe("Proposal Writer (AI)", () => {
     expect(everything).toContain("[doc:ref1]");
     expect(everything).not.toContain("doc:ref2");
     expect(everything).not.toContain("doc:id1");
-    for (const s of ["SENTINEL-FILE", "Sentinel Person", "sentinel@example.test", "082 555 0199", "14 Sentinel Street", "SENTINELPIN", "4999999999", "2019/999999/07"]) expect(everything, s).not.toContain(s);
+    for (const s of [
+      "SENTINEL-FILE",
+      "Sentinel Person",
+      "sentinel@example.test",
+      "082 555 0199",
+      "14 Sentinel Street",
+      "SENTINELPIN",
+      "4999999999",
+      "2019/999999/07",
+    ])
+      expect(everything, s).not.toContain(s);
   });
 
   it("is refused when either company tool is not on the agent's list", async () => {

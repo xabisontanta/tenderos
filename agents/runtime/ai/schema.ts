@@ -127,7 +127,9 @@ export function countSchemaComplexity(schema: unknown): { optionalProperties: nu
 export function assertWithinStructuredLimits(schema: unknown, name: string): void {
   const { optionalProperties, unions } = countSchemaComplexity(schema);
   if (optionalProperties > MAX_OPTIONAL_PROPERTIES) {
-    throw new StructuredSchemaError(`Output schema "${name}" has ${optionalProperties} optional properties; the API allows ${MAX_OPTIONAL_PROPERTIES}. Make fields required.`);
+    throw new StructuredSchemaError(
+      `Output schema "${name}" has ${optionalProperties} optional properties; the API allows ${MAX_OPTIONAL_PROPERTIES}. Make fields required.`,
+    );
   }
   if (unions > MAX_UNIONS) {
     throw new StructuredSchemaError(`Output schema "${name}" has ${unions} anyOf or nullable properties; the API allows ${MAX_UNIONS}.`);

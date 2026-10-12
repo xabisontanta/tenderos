@@ -72,13 +72,24 @@ export const pricingPrepareReal: AgentExecutor<PricingOutput> = {
     }
 
     const parts: PromptPart[] = [
-      { type: "text", category: "PUBLIC_TENDER_DATA", label: "tender_record", cache: true, text: wrapUntrusted({ kind: "tender_record", id: t.id, title: "Tender record", text: renderTenderRecord(t) }) },
+      {
+        type: "text",
+        category: "PUBLIC_TENDER_DATA",
+        label: "tender_record",
+        cache: true,
+        text: wrapUntrusted({ kind: "tender_record", id: t.id, title: "Tender record", text: renderTenderRecord(t) }),
+      },
       {
         type: "text",
         category: "TENDER_DOCUMENTS",
         label: "price_requirements",
         cache: true,
-        text: wrapUntrusted({ kind: "tender_requirements", id: "pricing", title: "Price schedule requirements from the analysis step", text: priced.map(requirementLine).join("\n") }),
+        text: wrapUntrusted({
+          kind: "tender_requirements",
+          id: "pricing",
+          title: "Price schedule requirements from the analysis step",
+          text: priced.map(requirementLine).join("\n"),
+        }),
       },
     ];
     const priceIds = new Set(priced.map((r) => r.id));

@@ -22,13 +22,25 @@ const EXCAV = req("doc-8", "Excavation in all materials, 1 500 m3", "1.2 Excavat
 const VAT = req("doc-9", "Tendered prices must be inclusive of VAT", "All tendered prices must be quoted exclusive of VAT.");
 const OTHER = req("doc-2", "Submit SBD 1", "The following documents must be submitted: SBD 1", "EXTRACTED", "DOCUMENT");
 
-const line = (requirement_id: string, o: Record<string, unknown> = {}) => ({ requirement_id, item_ref: "1.1", description: "Supply and lay 110 mm uPVC pipe", quantity: 200, unit: "m", supplier_quote_likely: true, ...o });
+const line = (requirement_id: string, o: Record<string, unknown> = {}) => ({
+  requirement_id,
+  item_ref: "1.1",
+  description: "Supply and lay 110 mm uPVC pipe",
+  quantity: 200,
+  unit: "m",
+  supplier_quote_likely: true,
+  ...o,
+});
 const reply = (lines: unknown[], vat = { treatment: "EXCLUSIVE", requirement_id: "doc-9" }, notes: string[] = []): FakeReply => ({
   json: { lines, vat, notes },
   usage: { inputTokens: 2500, outputTokens: 500 },
 });
 
-function setup(replies: ConstructorParameters<typeof FakeAiClient>[0], reqs: ReturnType<typeof req>[] | null = [PIPE, EXCAV, VAT, OTHER], allowedTools?: string[]) {
+function setup(
+  replies: ConstructorParameters<typeof FakeAiClient>[0],
+  reqs: ReturnType<typeof req>[] | null = [PIPE, EXCAV, VAT, OTHER],
+  allowedTools?: string[],
+) {
   const client = new FakeAiClient(replies);
   const ctx = makeCtx({
     agent: "pricing",
@@ -47,7 +59,12 @@ describe("Pricing Analyst (AI)", () => {
   });
 
   it("structures the schedule from the analysed requirements without producing any figure of its own", async () => {
-    const { ctx } = setup([reply([line("doc-7"), line("doc-8", { item_ref: "1.2", description: "Excavate trench in all materials", quantity: 1500, unit: "m3", supplier_quote_likely: false })])]);
+    const { ctx } = setup([
+      reply([
+        line("doc-7"),
+        line("doc-8", { item_ref: "1.2", description: "Excavate trench in all materials", quantity: 1500, unit: "m3", supplier_quote_likely: false }),
+      ]),
+    ]);
     const res = await pricingPrepareReal.run(ctx);
     expect(pricingOutputSchema.safeParse(res.output).success).toBe(true);
     const out = res.output;
@@ -56,9 +73,24 @@ describe("Pricing Analyst (AI)", () => {
       expect(l.unit_price_zar).toBeNull();
       expect(l.source).toBe("MISSING_INFORMATION");
     }
-    expect(out.lines[0]).toMatchObject({ description: "Supply and lay 110 mm uPVC pipe", quantity: 200, unit: "m", requirement_id: "doc-7", supplier_quote_likely: true, page: 9 });
+    expect(out.lines[0]).toMatchObject({
+      description: "Supply and lay 110 mm uPVC pipe",
+      quantity: 200,
+      unit: "m",
+      requirement_id: "doc-7",
+      supplier_quote_likely: true,
+      page: 9,
+    });
     expect(out.lines[0].quote).toBe(PIPE.source.quote);
-    expect(out).toMatchObject({ currency: "ZAR", vat_rate: SA_VAT_RATE, subtotal_zar: null, status: "REQUIRES_CONFIRMATION", requires_human_approval: true, simulated: false, ai_generated: true });
+    expect(out).toMatchObject({
+      currency: "ZAR",
+      vat_rate: SA_VAT_RATE,
+      subtotal_zar: null,
+      status: "REQUIRES_CONFIRMATION",
+      requires_human_approval: true,
+      simulated: false,
+      ai_generated: true,
+    });
     expect(out.notes.join(" ")).toMatch(/human approval/i);
     expect(res.cost).toMatchObject({ provider: "anthropic", isSimulated: false });
   });

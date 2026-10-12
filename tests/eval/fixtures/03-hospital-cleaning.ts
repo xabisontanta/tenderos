@@ -49,7 +49,9 @@ export const hospitalCleaning: EvalFixture = {
   expected: {
     requirements: [
       expectReq(D, "closing", "DEADLINE", true, L.closing, 1, ["3 November 2026", "closing"], { date: { kind: "CLOSING", iso: "2026-11-03T10:00:00+02:00" } }),
-      expectReq(D, "inspection", "BRIEFING", false, L.inspection, 1, ["site inspection", "not compulsory"], { date: { kind: "BRIEFING", iso: "2026-10-19T09:00:00+02:00" } }),
+      expectReq(D, "inspection", "BRIEFING", false, L.inspection, 1, ["site inspection", "not compulsory"], {
+        date: { kind: "BRIEFING", iso: "2026-10-19T09:00:00+02:00" },
+      }),
       expectReq(D, "csd", "MANDATORY_CONDITION", true, L.csd, 2, ["CSD", "Central Supplier Database"]),
       expectReq(D, "coida", "DOCUMENT", true, L.coida, 2, ["COIDA"]),
       expectReq(D, "wage", "MANDATORY_CONDITION", true, L.wage, 2, ["minimum wage"]),

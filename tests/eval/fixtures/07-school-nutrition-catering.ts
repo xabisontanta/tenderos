@@ -4,7 +4,8 @@ import { expectReq, page } from "./helpers";
 const D = "doc-nutrition";
 const L = {
   title: "BID ECDOE/NSNP/2026/05: PROVISION OF COOKED MEALS TO LEARNERS IN THE MBIZANA CIRCUIT FOR 24 MONTHS",
-  intro: "The Eastern Cape Department of Education invites bids for the preparation and delivery of cooked meals to 38 quintile 1 to 3 schools under the National School Nutrition Programme.",
+  intro:
+    "The Eastern Cape Department of Education invites bids for the preparation and delivery of cooked meals to 38 quintile 1 to 3 schools under the National School Nutrition Programme.",
   closing: "Bids must be placed in the bid box at the district office, Mbizana, before 11:00 on 29 October 2026.",
   briefing: "A compulsory briefing will be held at the district office on 13 October 2026 at 10:00.",
   coa: "Bidders must submit a valid Certificate of Acceptability for food premises issued by the municipal health services.",

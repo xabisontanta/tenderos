@@ -18,7 +18,11 @@ export interface DocumentSource {
 }
 
 /** The source used until ingestion lands: a tender has no documents. */
-export const NO_DOCUMENTS: DocumentSource = { async listTenderDocuments() { return []; } };
+export const NO_DOCUMENTS: DocumentSource = {
+  async listTenderDocuments() {
+    return [];
+  },
+};
 
 /** Largest PDF sent as a document block (the API allows 32 MB per request, base64 included). */
 export const MAX_PDF_BASE64_CHARS = 24 * 1024 * 1024;

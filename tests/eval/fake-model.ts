@@ -90,7 +90,15 @@ export function pipelineClient(fx: EvalFixture, scenario: Scenario = "faithful")
           json: {
             score: cidb ? 78 : 55,
             confidence: "MEDIUM",
-            reasons: facts.slice(0, 3).map((id) => ({ factor: "OTHER", assessment: "SUPPORTS", text: `The recorded fact ${id} is relevant to this tender.`, fact_ids: [id], requirement_ids: [] })),
+            reasons: facts
+              .slice(0, 3)
+              .map((id) => ({
+                factor: "OTHER",
+                assessment: "SUPPORTS",
+                text: `The recorded fact ${id} is relevant to this tender.`,
+                fact_ids: [id],
+                requirement_ids: [],
+              })),
             risks: [{ text: "Compulsory attendance and deadlines must be confirmed by a person", requirement_ids: [] }],
             missing_information: ["Past experience on similar contracts"],
           },
@@ -102,7 +110,18 @@ export function pipelineClient(fx: EvalFixture, scenario: Scenario = "faithful")
         return {
           json: {
             sections: [
-              { key: "executive_summary", status: "DRAFTED", paragraphs: [{ text: "The company's recorded profile is set out in the company facts supplied with this bid.", fact_ids: facts.slice(0, 1), requirement_ids: [] }], needs: [] },
+              {
+                key: "executive_summary",
+                status: "DRAFTED",
+                paragraphs: [
+                  {
+                    text: "The company's recorded profile is set out in the company facts supplied with this bid.",
+                    fact_ids: facts.slice(0, 1),
+                    requirement_ids: [],
+                  },
+                ],
+                needs: [],
+              },
             ],
           },
           usage,
@@ -114,7 +133,14 @@ export function pipelineClient(fx: EvalFixture, scenario: Scenario = "faithful")
         const schedule = lines.filter((l) => l !== vat);
         return {
           json: {
-            lines: schedule.map((l) => ({ requirement_id: l.id, item_ref: "", description: l.body.split(" | ")[0].slice(0, 120), quantity: null, unit: "", supplier_quote_likely: true })),
+            lines: schedule.map((l) => ({
+              requirement_id: l.id,
+              item_ref: "",
+              description: l.body.split(" | ")[0].slice(0, 120),
+              quantity: null,
+              unit: "",
+              supplier_quote_likely: true,
+            })),
             vat: vat
               ? { treatment: /exclusive/i.test(vat.body) ? "EXCLUSIVE" : /inclusive/i.test(vat.body) ? "INCLUSIVE" : "NOT_STATED", requirement_id: vat.id }
               : { treatment: "NOT_STATED", requirement_id: "" },
