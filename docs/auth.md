@@ -427,17 +427,38 @@ and checks the session's level, the sign-in redirect condition and the unenrol r
 - **Unit tests** (mocked Supabase): link building from `APP_URL` with forged headers; the limiter,
   its keys, address parsing and fail-closed behaviour; the CAPTCHA verifier; the sign-up, resend,
   sign-in, reset and consent actions; the confirm and callback routes; the legal pages' content;
-  the wizard's schema and actions; `requireContext`.
+  the wizard's schema and actions; `requireContext`. Teams and MFA: the member and invitation actions,
+  the invite route and cookie, the platform mailer and the invitation email (fake transport), the
+  join action, the role menu rules, the TOTP helper against the RFC 6238 vectors, the MFA helpers,
+  the sign-in and middleware redirect to `/mfa`, the MFA actions, `requireAal2` and every service-role
+  path that calls it, and `reset_user_mfa`'s wrapper.
 - **Integration tests** (real local Auth, database and mail catcher): the limiter against
   `hit_rate_limit_key` and the sweeper; unconfirmed sign-in, resend and `token_hash` verification;
   consent at sign-up and `accept_legal`; the unique membership index, the bootstrap race and the
-  migration's pre-check; keyword constraints and `complete_onboarding`.
+  migration's pre-check; keyword constraints and `complete_onboarding`. Teams and MFA: member
+  management and the last-owner rule under concurrency (`members.test.ts`); invitations, their
+  tokens, limits, acceptance rules and POPIA handling (`invitations.test.ts`); `reset_user_mfa`
+  (`mfa-reset.test.ts`); the second-factor requirement for all twenty functions, the switch, pairing
+  codes and documents (`aal2.test.ts`, with the session's claims set as PostgREST sets them); and the
+  catalogue checks in `hardening.test.ts`. `mfa.test.ts` (a real TOTP enrolment, challenge and aal2
+  session) skips itself when the Auth server has TOTP off.
 - **End to end** (production build, Chromium): sign-up with the terms box through the wizard to an
   approved bid; `/auth/confirm` opened in a browser that never asked for the link; re-acceptance of
-  the terms, the dashboard prompt and skipping the wizard.
+  the terms, the dashboard prompt and skipping the wizard. Teams and MFA: an owner invites an auditor
+  from Settings, who opens the link with no session, creates an account, joins as a read-only viewer
+  and sees the organisation, after which the owner changes their role and removes them; Settings,
+  Security with the requirement on (the banner, the refused action, the "Verify now" link); and, on a
+  stack with TOTP on, setting up an authenticator, the challenge at sign-in and the redirect.
 - **Not exercised.** The local stack is started from `supabase/config.toml` and may have been started
   before confirmations were turned on there; when it has not been restarted, sign-up signs the user in
   at once and the milestone test follows that branch. To exercise confirmation end to end, restart
   the stack from this config, after which the milestone test reads the confirmation email from the mail
   catcher instead. Also not run: the Turnstile widget in a browser (needs a real or test site key and
   the stack), the hosted project's settings, and any real inbox.
+- **Not exercised: authenticator apps against a real Auth server.** The running local Auth container was
+  created from a config with TOTP off, and a restart does not change that; recreating it from this
+  `config.toml` (`supabase stop`, `supabase start`) was not possible in the session that built this. So
+  `tests/integration/mfa.test.ts` and the TOTP end-to-end test were written but have **never run**: they skip
+  themselves with a note. Until they have, the server-side facts marked UNVERIFIED above are exactly that.
+- **Not exercised: the invitation email itself** reaching a real inbox (no provider is chosen; the end-to-end run
+  has no mail server and takes the "share the link" path), and the platform mailer against a real SMTP server.
