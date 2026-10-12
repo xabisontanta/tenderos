@@ -38,7 +38,7 @@ test("a user who never accepted the terms is asked to, and can skip the setup qu
   // Leave the wizard unanswered: the dashboard keeps offering it.
   await page.waitForURL("**/onboarding/profile");
   await page.goto("/");
-  await expect(page.getByText("Finish setting up.")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Finish setting up/ })).toBeVisible();
   await page.getByRole("link", { name: /Finish setting up/ }).click();
   await page.waitForURL("**/onboarding/profile");
 
@@ -47,7 +47,8 @@ test("a user who never accepted the terms is asked to, and can skip the setup qu
   await page.waitForURL((u) => u.pathname === "/discover");
   await expect(page.getByRole("heading", { name: "Discover tenders" })).toBeVisible();
   await page.goto("/");
-  await expect(page.getByText("Finish setting up.")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /command centre/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Finish setting up/ })).toHaveCount(0);
   await page.goto("/onboarding/profile");
   await page.waitForURL("**/company");
 });

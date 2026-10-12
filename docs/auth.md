@@ -268,3 +268,27 @@ hosted project).
 | Sign-up for an existing address, with confirmations on, returns a fake user and no error | **UNVERIFIED by experiment.** The supabase-js reference only warns that "you may get back an error message that attempts to hide this information"; secondary sources describe an obfuscated user (empty `identities`, no session) with confirmations on and "User already registered" with them off, and say an unconfirmed address is re-sent the email. The local stack in use runs with confirmations off and its Auth container could not be recreated, so the confirmations-on path was never exercised. The app does not depend on which one Supabase picks: success with no session, `user_already_exists` and `over_email_send_rate_limit` all produce the same reply (unit-tested). Re-check on a staging project before launch. | supabase.com/docs/reference/javascript/auth-signup (partial)                               |
 | Unconfirmed address, resend, and `token_hash` links                                      | **Verified on the local stack** (`tests/integration/auth-confirmation.test.ts`): sign-in fails with `email_not_confirmed`; the resent email reaches the mail catcher with a verify link that confirms the address; a `token_hash` from `generateLink` verifies once in a client with no PKCE state, and a forged hash is refused. Auth treats magic-link and recovery hashes as interchangeable.                                                                                                                                                                                                                                                                                                                                           | local run                                                                                  |
 | PKCE confirmation links fail when opened in another browser                              | **Verified.** The code verifier is stored only in the browser that started the flow, so the code exchange must happen there. The auth code lives 5 minutes and can be exchanged once.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | supabase.com/docs/guides/auth/sessions/pkce-flow                                           |
+
+Not part of this change, and so not checked here: whether multi-factor authentication
+is available on the hosted plan, whether Supabase offers recovery codes, and whether the
+`aal` claim refreshes after a factor is verified (all belong to the MFA slices).
+
+## What is tested, and what is not
+
+- **Unit tests** (mocked Supabase): link building from `APP_URL` with forged headers; the limiter,
+  its keys, address parsing and fail-closed behaviour; the CAPTCHA verifier; the sign-up, resend,
+  sign-in, reset and consent actions; the confirm and callback routes; the legal pages' content;
+  the wizard's schema and actions; `requireContext`.
+- **Integration tests** (real local Auth, database and mail catcher): the limiter against
+  `hit_rate_limit_key` and the sweeper; unconfirmed sign-in, resend and `token_hash` verification;
+  consent at sign-up and `accept_legal`; the unique membership index, the bootstrap race and the
+  migration's pre-check; keyword constraints and `complete_onboarding`.
+- **End to end** (production build, Chromium): sign-up with the terms box through the wizard to an
+  approved bid; `/auth/confirm` opened in a browser that never asked for the link; re-acceptance of
+  the terms, the dashboard prompt and skipping the wizard.
+- **Not exercised.** The local stack is started from `supabase/config.toml` and may have been started
+  before confirmations were turned on there; when it has not been restarted, sign-up signs the user in
+  at once and the milestone test follows that branch. To exercise confirmation end to end, restart
+  the stack from this config, after which the milestone test reads the confirmation email from the mail
+  catcher instead. Also not run: the Turnstile widget in a browser (needs a real or test site key and
+  the stack), the hosted project's settings, and any real inbox.

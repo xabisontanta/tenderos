@@ -43,5 +43,6 @@ test("a link is good once", async ({ page, browser, baseURL }) => {
 test("a bad link lands on sign-in with an explanation", async ({ page }) => {
   await page.goto(`/auth/confirm?token_hash=${"0".repeat(64)}&type=recovery`);
   await page.waitForURL("**/login?error=link_invalid");
-  await expect(page.getByRole("alert")).toContainText(/expired or was already used/i);
+  // (not getByRole("alert") alone: Next.js has its own route announcer with that role)
+  await expect(page.getByText(/expired or was already used/i)).toBeVisible();
 });
