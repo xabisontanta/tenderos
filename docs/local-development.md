@@ -38,6 +38,17 @@ npm run test:integration       # needs local Supabase
 npm run build && npm run test:e2e
 ```
 
+## AI (optional)
+
+Agents run rules-only or simulated by default. To try the model-backed
+executors on a real tender, set `AI_ENABLED=true`, `ANTHROPIC_API_KEY`, the
+`AI_MODEL_*` and `AI_PRICE_*` variables from `.env.example`, and restart the
+worker. Tender documents are not downloaded yet, so the Tender Analyst reports
+that it had none to read. `npm run eval:live` scores a real model against the
+labelled fixtures in `tests/eval` and does nothing without `ANTHROPIC_API_KEY`;
+see `docs/ai-agents.md`. After changing the Anthropic SDK version, run
+`npm run build:edge-worker` and commit the regenerated bundle.
+
 ## Deploying
 
 1. Create a Supabase project. Apply migrations with

@@ -1,15 +1,7 @@
 import type { AgentExecutor } from "@/agents/runtime/types";
 import { SIMULATED_COST, simulateWork } from "@/agents/runtime/simulation";
+import { PROPOSAL_SECTIONS } from "./logic";
 import { proposalOutputSchema, type ProposalOutput } from "./schema";
-
-const SECTIONS: Array<{ key: string; title: string; needs: string[] }> = [
-  { key: "executive_summary", title: "Executive summary", needs: ["Company overview", "Confirmed scope understanding"] },
-  { key: "methodology", title: "Methodology and approach", needs: ["Company delivery methodology"] },
-  { key: "delivery_schedule", title: "Delivery schedule", needs: ["Delivery capacity", "Contract duration from tender documents"] },
-  { key: "staffing", title: "Key personnel", needs: ["Verified staff list and qualifications"] },
-  { key: "experience", title: "Relevant experience and references", needs: ["Verified project references"] },
-  { key: "quality", title: "Quality management", needs: ["Quality certifications or procedures"] },
-];
 
 /**
  * Proposal Writer (simulation): builds the section outline. Without a company
@@ -23,7 +15,7 @@ export const proposalDraft: AgentExecutor<ProposalOutput> = {
   outputSchema: proposalOutputSchema,
   async run(ctx) {
     await simulateWork(ctx, ["Mapping requirements to sections", "Checking verified company facts", "Flagging gaps"]);
-    const sections = SECTIONS.map((s) => ({ ...s, status: "MISSING_INFORMATION" as const, content: null }));
+    const sections = PROPOSAL_SECTIONS.map((s) => ({ ...s, status: "MISSING_INFORMATION" as const, content: null }));
     return {
       output: { sections, open_items: sections.length, simulated: ctx.workflow.isSimulation },
       summary: `Outlined ${sections.length} proposal sections; all need verified company information`,
