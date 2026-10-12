@@ -148,9 +148,10 @@ database.
 Decisions taken: one organisation per user; Anthropic as the AI provider;
 payment gateway out of scope for now; legal text is a draft for an attorney.
 
-Verified on the `production-readiness` branch: lint and typecheck clean, 1226
-unit tests, 126 integration tests against local Supabase, a production
-build, and 5 end-to-end tests in a real browser.
+Verified on the `production-readiness` branch (2026-10-12): lint and typecheck
+clean, 1449 unit tests, 306 integration tests against local Supabase (TOTP and
+confirmations on), a production build, and 9 end-to-end tests in a real
+browser.
 
 **Resolved (P0 numbers refer to the table above)**
 
@@ -203,12 +204,23 @@ build, and 5 end-to-end tests in a real browser.
   table, lists and totals no longer stop at the API's 1000 rows (operations,
   agent page, Discover), and `lib/data/queries.ts` throws on database errors.
 
+**Resolved in the team and MFA pass (migrations 060 to 063)**
+
+- #5 TOTP MFA: enrolment and challenge, a lost-device runbook
+  (`reset_user_mfa`), and an owner-controlled "Require MFA" setting that makes
+  20 privileged functions, restricted document reads and the service-role paths
+  demand a verified second factor. Verified against a real TOTP-enabled Auth
+  server on the local stack (integration and end-to-end).
+- Team management: role changes, member removal and a last-owner guard that
+  holds under concurrency; invitations with a hashed single-use token, a
+  platform mailer and a join flow, so accountants and auditors can join a
+  client's organisation as read-only viewers. The erasure runbook's
+  ownership-transfer step is no longer manual.
+- Not verified: a real SMTP server or inbox for invitations (no provider is
+  chosen), TOTP on the hosted plan, and the hosted dashboard settings.
+
 **Still open**
 
-- #5 MFA and aal2 enforcement (slices S9 and S10 in `docs/plans/auth-signup.md`).
-- Team invitations and member management (S7 and S8). The erasure runbook needs
-  them for one step (making another member an owner before the only owner is
-  erased); today that is a manual update.
 - #12, the other half: every organisation still crawls the national feed itself.
 - #7: the privacy notice, terms, operator agreement, Information Officer and the
   retention periods in `docs/popia-operations.md` need an attorney. Breach

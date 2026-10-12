@@ -418,9 +418,13 @@ hosted project).
 | TOTP MFA is available on the hosted plan                                                                                                                                                      | **Partly verified.** The pricing page lists "Basic Multi-Factor Auth: Included" for Free, Pro and Team, and only phone MFA as a paid add-on; it does not name TOTP, and the comment in the CLI's generated `config.toml` says "Pro". Treat TOTP on the plan you will use as **UNVERIFIED** until a staging project has been checked.                                                                                                                                                                                                                                                                                                                                                                                                       | supabase.com/pricing                                                                           |
 | The `aal` claim is in the JWT the database sees, and `auth.jwt()->>'aal'` can be tested in SQL                                                                                                | **Verified for the database side** (`tests/integration/aal2.test.ts` sets `request.jwt.claims` the way PostgREST does); that GoTrue puts `aal` in every access token is documented.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | supabase.com/docs/guides/auth/auth-mfa                                                         |
 
-Everything marked UNVERIFIED above can be settled by one run of `tests/integration/mfa.test.ts` against a stack whose Auth container
-was created from this `config.toml`: it enrols a factor, answers the challenge with a code computed in the test (RFC 6238, `node:crypto`),
-and checks the session's level, the sign-in redirect condition and the unenrol rule. On a stack without TOTP it skips itself with a note.
+**Update, 2026-10-12.** The local stack was recreated from this `config.toml` (TOTP and confirmations on) and
+`tests/integration/mfa.test.ts` was run against it: it enrols a factor, answers the challenge with a code computed in the test
+(RFC 6238, `node:crypto`), and checks the session's level, the sign-in redirect condition and the unenrol rule. It passes, and so does the
+TOTP end-to-end test, so the items above marked UNVERIFIED that depend on a TOTP-enabled server (the verified session carries `aal2`,
+sign-in shows `aal1` with next level `aal2`, a verified factor needs `aal2` to remove) are now verified on the local stack. Still
+UNVERIFIED: sign-up for an existing address with confirmations on, TOTP on the hosted plan, the hosted dashboard page, and the
+other MFA error codes. On a stack without TOTP the test skips itself with a note.
 
 ## What is tested, and what is not
 
@@ -455,10 +459,11 @@ and checks the session's level, the sign-in redirect condition and the unenrol r
   the stack from this config, after which the milestone test reads the confirmation email from the mail
   catcher instead. Also not run: the Turnstile widget in a browser (needs a real or test site key and
   the stack), the hosted project's settings, and any real inbox.
-- **Not exercised: authenticator apps against a real Auth server.** The running local Auth container was
-  created from a config with TOTP off, and a restart does not change that; recreating it from this
-  `config.toml` (`supabase stop`, `supabase start`) was not possible in the session that built this. So
-  `tests/integration/mfa.test.ts` and the TOTP end-to-end test were written but have **never run**: they skip
-  themselves with a note. Until they have, the server-side facts marked UNVERIFIED above are exactly that.
+- **Authenticator apps against a real Auth server: now exercised.** The build session could not recreate the local
+  Auth container, so `tests/integration/mfa.test.ts` and the TOTP end-to-end test had never run. On 2026-10-12 the stack
+  was recreated from this `config.toml` and both pass (integration 306 of 306 with no skips; end to end 9 of 9).
+  Note for Windows with Docker Desktop: the CLI bind-mounts `supabase/templates` into the Auth container, so the repo
+  folder must be added under Docker Desktop, Settings, Resources, File Sharing, or the stack must be started with the
+  template `content_path` lines commented out (the generated emails are then not used locally).
 - **Not exercised: the invitation email itself** reaching a real inbox (no provider is chosen; the end-to-end run
   has no mail server and takes the "share the link" path), and the platform mailer against a real SMTP server.
