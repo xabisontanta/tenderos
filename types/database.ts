@@ -195,13 +195,7 @@ isOneToOne: false
                     "action"?: string,"actor_agent_id"?: string | null,"actor_type"?: Database["public"]['Enums']["actor_type"],"actor_user_id"?: string | null,"correlation_id"?: string | null,"created_at"?: string,"id"?: never,"ip"?: unknown,"metadata"?: NonNullable<Json>,"organisation_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-                    {
-      foreignKeyName: "audit_logs_organisation_id_fkey"
-      columns: ["organisation_id"]
-isOneToOne: false
-      referencedRelation: "organisations"
-      referencedColumns: ["id"]
-    }
+                    
                   ]
                 },"autofill_tokens": {
                   Row: {
@@ -375,14 +369,14 @@ isOneToOne: false
                   ]
                 },"email_messages": {
                   Row: {
-                    "attachments": NonNullable<Json>,"created_at": string,"email_account_id": string,"error": string | null,"from_address": string,"id": string,"organisation_id": string,"provider_message_id": string | null,"sent_by": string,"status": string,"subject": string,"submission_record_id": string | null,"tender_id": string,"to_address": string
+                    "attachments": NonNullable<Json>,"created_at": string,"email_account_id": string | null,"error": string | null,"from_address": string,"id": string,"organisation_id": string,"provider_message_id": string | null,"sent_by": string | null,"status": string,"subject": string,"submission_record_id": string | null,"tender_id": string,"to_address": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id": string,"error"?: string | null,"from_address": string,"id"?: string,"organisation_id": string,"provider_message_id"?: string | null,"sent_by": string,"status": string,"subject": string,"submission_record_id"?: string | null,"tender_id": string,"to_address": string
+                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id"?: string | null,"error"?: string | null,"from_address": string,"id"?: string,"organisation_id": string,"provider_message_id"?: string | null,"sent_by"?: string | null,"status": string,"subject": string,"submission_record_id"?: string | null,"tender_id": string,"to_address": string
                   }
                   Update: {
-                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id"?: string,"error"?: string | null,"from_address"?: string,"id"?: string,"organisation_id"?: string,"provider_message_id"?: string | null,"sent_by"?: string,"status"?: string,"subject"?: string,"submission_record_id"?: string | null,"tender_id"?: string,"to_address"?: string
+                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id"?: string | null,"error"?: string | null,"from_address"?: string,"id"?: string,"organisation_id"?: string,"provider_message_id"?: string | null,"sent_by"?: string | null,"status"?: string,"subject"?: string,"submission_record_id"?: string | null,"tender_id"?: string,"to_address"?: string
                   }
                   Relationships: [
                     {
@@ -899,6 +893,18 @@ isOneToOne: false
 { Args: { "p_id": string,"p_user": string }; Returns: {
               "display_name": string,"from_address": string,"organisation_id": string,"provider": Database["public"]['Enums']["email_provider"],"secret": string,"smtp_host": string,"smtp_port": number,"smtp_username": string
             }[]
+                           },
+"erase_organisation":
+{ Args: { "p_org": string,"p_reference"?: string }; Returns: Json
+                           },
+"erase_user":
+{ Args: { "p_reference"?: string,"p_user_id": string }; Returns: Json
+                           },
+"export_organisation_data":
+{ Args: { "p_actor"?: string,"p_org": string }; Returns: Json
+                           },
+"export_user_data":
+{ Args: { "p_actor"?: string,"p_user_id": string }; Returns: Json
                            },
 "hit_rate_limit":
 { Args: { "p_action": string,"p_max"?: number,"p_window_seconds"?: number }; Returns: undefined

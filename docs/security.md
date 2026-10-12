@@ -112,8 +112,12 @@ Integration tests cover role refusals and cross-tenant isolation.
 ## Audit
 
 `audit_logs` records actor type (user, agent, system), actor id, action,
-resource, correlation id and metadata. It is append-only by trigger.
-Retention is configurable (minimum 365 days, default about seven years).
+resource, correlation id and metadata. It is append-only by trigger (no
+update, delete or truncate), except that erasing a person clears the actor and
+what they typed, and the retention job deletes rows past their period.
+Retention is configurable (minimum 365 days, default about seven years). Erasing
+a person or an organisation, exporting their data and handling a breach are in
+`docs/popia-operations.md`.
 
 ## Not yet built (tracked in the roadmap)
 

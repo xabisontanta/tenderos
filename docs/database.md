@@ -70,7 +70,16 @@ Temporal was considered and deferred; see `docs/adr/0002-postgres-job-queue.md`.
 - **Writes from agents**: only the worker, over a direct connection, sets
   `app.actor_agent_id` so audit rows name the agent.
 - `bootstrap_organisation` is callable by the service role only.
-- Append-only tables reject `UPDATE` and `DELETE` through `private.reject_mutation`.
+- Append-only tables (`audit_logs`, `agent_events`, `tender_status_history`, `agent_status_transitions`,
+  `cost_usage`) reject `UPDATE`, `DELETE` and `TRUNCATE` through `private.reject_mutation` and
+  `private.reject_truncate`. Two things get past the update/delete trigger: an update whose only change is
+  clearing `actor_user_id` (what `on delete set null` does when an account is deleted), and the erasure and
+  retention functions, which set `app.erasure = 'on'` for their own transaction. `service_role` has no
+  `TRUNCATE` on them. `audit_logs.organisation_id` is a plain uuid, so the trail outlives an erased organisation.
+- Erasure, export and retention (service role only, `docs/popia-operations.md`): `erase_user`,
+  `erase_organisation`, `export_user_data`, `export_organisation_data`, and `private.run_retention_purge()`
+  (pg_cron `tenderos-retention-purge`, daily). A `before delete` trigger on `email_accounts` deletes the
+  mailbox's Vault secret, so removing a member or an organisation never leaves a credential behind.
 
 ## Realtime
 

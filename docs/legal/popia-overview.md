@@ -46,11 +46,14 @@ connects to, so the lawyer can be briefed quickly.
 
 - Consent record at sign-up with document version and timestamp (planned
   slice S4 in `docs/plans/auth-signup.md`).
-- Erasure and export of user and organisation data. Today the append-only
-  audit triggers and `restrict` foreign keys make erasure impossible; this
-  is a P0 item in `docs/production-readiness.md`.
-- Retention purge jobs, breach alerting, and the rule that director personal
-  data never enters AI prompts.
+- Erasure and export of user and organisation data: built (`erase_user`,
+  `erase_organisation`, the exports, the owner's download in Settings), with the
+  runbook in `docs/popia-operations.md`. The audit trail is de-identified, not
+  deleted, until its retention period ends.
+- Retention purge jobs: built (`tenderos-retention-purge`, daily). Breach
+  alerting is not (no error reporting yet); the breach plan is in
+  `docs/popia-operations.md`. The rule that director personal data never enters
+  AI prompts is enforced in code.
 
 ## Open points for the attorney
 
