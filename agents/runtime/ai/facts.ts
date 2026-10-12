@@ -30,8 +30,9 @@ function asStrings(v: unknown): string[] {
  * The company facts an agent may put in a prompt. An allow-list: contact
  * details, signatories, addresses, tax and registration numbers, the exposure
  * limit and every file name are never projected, and a fact appears only when
- * the agent holds its data category (AGENTS.md section 4). `keywords` and
- * `past_experience` are read when the profile has them.
+ * the agent holds its data category (AGENTS.md section 4). `keywords` come from
+ * the profile; `past_experience` is read if the profile gains such a field (it
+ * has no column yet, so experience stays unknown).
  */
 export function companyFacts(profile: CompanyProfile | null, documents: CompanyDocumentMeta[], granted: ReadonlySet<DataCategory>, now: Date): CompanyFact[] {
   const facts: CompanyFact[] = [];
@@ -49,7 +50,7 @@ export function companyFacts(profile: CompanyProfile | null, documents: CompanyD
     if (profile.provinces.length)
       add("provinces", "Provinces of operation", profile.provinces.map((p) => (provinceLabel(p) !== "—" ? provinceLabel(p) : p)).join(", "), "COMPANY_PROFILE");
     if (profile.sectors.length) add("sectors", "Sectors", profile.sectors.join(", "), "COMPANY_CAPABILITIES");
-    const keywords = asStrings(extra.keywords);
+    const keywords = asStrings(profile.keywords);
     if (keywords.length) add("keywords", "Capability keywords", keywords.join(", "), "COMPANY_CAPABILITIES");
     const experience = asStrings(extra.past_experience);
     if (experience.length) add("past_experience", "Past experience", experience.join("; "), "COMPANY_CAPABILITIES");

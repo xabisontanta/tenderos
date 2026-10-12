@@ -29,6 +29,7 @@ const base: CompanyProfile = {
   bbbee_expires_at: "2027-03-31",
   cidb_grade: null,
   sectors: [],
+  keywords: [],
   provinces: [],
   max_contract_value_zar: null,
   authorised_signatory: "Thandeka Sentinel",

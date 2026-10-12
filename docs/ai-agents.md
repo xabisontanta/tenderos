@@ -143,8 +143,9 @@ add a drafted fit assessment against the company profile.
 
 **Input.** The tender record, the requirements from the analysis step, and
 allow-listed company facts (names, CIDB grade, B-BBEE level, provinces, sectors,
-keywords and past experience if the profile has them, verified in-date
-certification documents).
+keywords, verified in-date certification and reference documents). The profile
+has no past-experience field yet, so experience stays unknown unless a verified
+reference document supplies it; the assessment says so in `missing_information`.
 
 **Output.** The unchanged rule result plus `ai_fit`: a score, confidence, reasons
 (each citing company fact ids and requirement ids), risks and the missing

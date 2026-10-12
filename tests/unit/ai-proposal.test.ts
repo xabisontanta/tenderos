@@ -21,6 +21,7 @@ const profile = (o: Partial<CompanyProfile> = {}): CompanyProfile => ({
   bbbee_expires_at: null,
   cidb_grade: "6CE",
   sectors: ["Roads", "Civil engineering"],
+  keywords: [],
   provinces: ["GAUTENG", "LIMPOPO"],
   max_contract_value_zar: 25_000_000,
   authorised_signatory: "Sentinel Person",
