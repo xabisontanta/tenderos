@@ -85,19 +85,28 @@ export function loadAiConfig(env: Env = process.env): AiConfig {
   return config as AiConfig;
 }
 
+/** A copy of the config whose per-task ceiling is no higher than `usd` (for example what is left of the day's budget). The key stays hidden. */
+export function withTaskCostCeiling(config: AiConfig, usd: number): AiConfig {
+  const copy = { ...config, maxTaskCostUsd: Math.min(config.maxTaskCostUsd, Math.max(0, usd)) };
+  Object.defineProperty(copy, "apiKey", { value: config.apiKey, enumerable: false });
+  return copy as AiConfig;
+}
+
 /**
  * Whether AI execution is switched on for an organisation. The settings column
  * `ai_enabled` decides when it exists; until it does, the deployment flag
  * AI_ENABLED=true does. Off unless explicitly on.
  */
-export function resolveAiEnabled(settings: { ai_enabled?: unknown } | null | undefined, env: Env = process.env): boolean {
-  if (settings && typeof settings.ai_enabled === "boolean") return settings.ai_enabled;
+export function resolveAiEnabled(settings: object | null | undefined, env: Env = process.env): boolean {
+  const column = (settings as Record<string, unknown> | null | undefined)?.ai_enabled;
+  if (typeof column === "boolean") return column;
   return env.AI_ENABLED?.trim().toLowerCase() === "true";
 }
 
 /** Whether Anthropic web search may run for an organisation: its flag when the column exists, else the deployment flag. */
-export function resolveWebResearchEnabled(settings: { ai_web_research_enabled?: unknown } | null | undefined, env: Env = process.env): boolean {
-  if (settings && typeof settings.ai_web_research_enabled === "boolean") return settings.ai_web_research_enabled;
+export function resolveWebResearchEnabled(settings: object | null | undefined, env: Env = process.env): boolean {
+  const column = (settings as Record<string, unknown> | null | undefined)?.ai_web_research_enabled;
+  if (typeof column === "boolean") return column;
   return env.AI_WEB_RESEARCH_ENABLED?.trim().toLowerCase() === "true";
 }
 

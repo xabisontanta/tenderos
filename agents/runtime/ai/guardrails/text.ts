@@ -96,6 +96,8 @@ export function wrapUntrusted(args: { kind: string; id: string; title?: string; 
 
 export interface InjectionHit {
   pattern: string;
+  /** The text that matched, normalised, for comparing with quotes. */
+  match: string;
   excerpt: string;
 }
 
@@ -118,7 +120,7 @@ export function detectInjection(text: string): InjectionHit[] {
     for (const m of text.matchAll(global)) {
       const start = Math.max(0, (m.index ?? 0) - 30);
       const excerpt = text.slice(start, start + 150).replace(/\s+/g, " ").trim().slice(0, 160);
-      hits.push({ pattern, excerpt });
+      hits.push({ pattern, match: normaliseForMatch(m[0]), excerpt });
     }
   }
   return hits;

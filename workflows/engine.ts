@@ -5,7 +5,12 @@ import { getExecutor } from "@/agents";
 import { getAgentDefinition } from "@/agents/registry";
 import { authoriseExecutor } from "@/agents/runtime/permissions";
 import { createToolGate } from "@/agents/runtime/tool-access";
-import { NonRetryableError, type AgentContext, type AgentResult, type SimulationOptions } from "@/agents/runtime/types";
+import { NonRetryableError, type AgentContext, type AgentResult, type CostRecord, type SimulationOptions } from "@/agents/runtime/types";
+import { createAnthropicClient } from "@/agents/runtime/ai/anthropic";
+import type { AiClient } from "@/agents/runtime/ai/client";
+import { loadAiConfig, resolveAiEnabled, resolveModel, resolveWebResearchEnabled, withTaskCostCeiling, type AiConfig } from "@/agents/runtime/ai/config";
+import { NO_DOCUMENTS, type DocumentSource } from "@/agents/runtime/ai/documents";
+import { createAiRuntime, type AiRuntime } from "@/agents/runtime/ai/runtime";
 import { backoffMs, shouldRetry } from "./retry";
 import { WORKFLOWS, getStep, type StepResolution, type WorkflowDefinition } from "./definitions/simulated-bid";
 import type { PlanStep } from "./definitions/plan";
@@ -36,6 +41,17 @@ export interface EngineOptions {
   progressThrottleMs?: number;
   /** HTTP client for tender source connectors. Defaults to global fetch. */
   fetcher?: Fetcher;
+  ai?: EngineAiOptions;
+}
+
+/** Wiring for AI execution. Everything defaults to production behaviour; tests inject fakes. */
+export interface EngineAiOptions {
+  /** Environment to read AI settings from. Defaults to process.env. */
+  env?: Record<string, string | undefined>;
+  /** Model client. Defaults to the Anthropic client built from the environment. */
+  client?: AiClient;
+  /** Where tender documents come from. Defaults to none until document ingestion lands. */
+  documents?: DocumentSource;
 }
 
 const DEFER_PAUSED_MS = 30_000;
@@ -253,7 +269,9 @@ export class WorkflowEngine {
           agent: db.AgentRow;
           step: PlanStep;
           def: WorkflowDefinition;
-          ctxData: Omit<AgentContext, "progress" | "signal" | "tools">;
+          ctxData: Omit<AgentContext, "progress" | "signal" | "tools" | "ai">;
+          /** Present when the step runs a model-backed executor. */
+          aiSetup: { config: AiConfig; webResearch: boolean } | null;
         };
 
     const prepared = await withTx<Prepared>(this.pool, async (c) => {
@@ -294,7 +312,8 @@ export class WorkflowEngine {
       }
 
       const daily = Number(settings.daily_ai_budget_usd);
-      if (!run.is_simulation && daily > 0 && (await db.spendToday(c, task.organisation_id)) >= daily) {
+      const spentToday = !run.is_simulation && daily > 0 ? await db.spendToday(c, task.organisation_id) : 0;
+      if (!run.is_simulation && daily > 0 && spentToday >= daily) {
         await this.failTaskPermanently(c, task, run, agent, step, "Daily AI budget reached; raise the budget or wait until tomorrow");
         await db.emitEvent(c, {
           organisationId: task.organisation_id,
@@ -308,14 +327,25 @@ export class WorkflowEngine {
         return { kind: "outcome", outcome: { status: "dead", error: "Daily AI budget reached" } };
       }
 
-      const executor = getExecutor(task.type);
+      // Rules-only is the default. A model-backed executor needs a real run and AI switched on for the organisation.
+      const aiEnv = this.opts.ai?.env ?? process.env;
+      const executor = getExecutor(task.type, { simulation: run.is_simulation, aiEnabled: resolveAiEnabled(settings, aiEnv) });
       if (!executor) {
         await this.failTaskPermanently(c, task, run, agent, step, `No executor registered for ${task.type}`);
         return { kind: "outcome", outcome: { status: "dead", error: `No executor for ${task.type}` } };
       }
       let granted;
+      let aiSetup: { config: AiConfig; webResearch: boolean } | null = null;
       try {
         granted = authoriseExecutor(executor, await db.getAgentGrants(c, agent.id));
+        if (executor.ai) {
+          // Refuse before the task starts if the key, the agent's model or its price is not configured. Never fall back silently.
+          const loaded = loadAiConfig(aiEnv);
+          resolveModel(loaded, { agentTier: agent.model_tier, override: agent.model_override });
+          // The task may not spend more than what is left of the day's budget.
+          const config = daily > 0 ? withTaskCostCeiling(loaded, daily - spentToday) : loaded;
+          aiSetup = { config, webResearch: resolveWebResearchEnabled(settings, aiEnv) };
+        }
       } catch (err) {
         await this.failTaskPermanently(c, task, run, agent, step, (err as Error).message);
         return { kind: "outcome", outcome: { status: "dead", error: (err as Error).message } };
@@ -361,6 +391,7 @@ export class WorkflowEngine {
         agent,
         step,
         def,
+        aiSetup,
         ctxData: {
           agentSlug: step.agent,
           task: { id: task.id, type: task.type, stepKey: step.key, input: (task.input ?? {}) as Record<string, unknown>, retryCount: task.retry_count },
@@ -377,15 +408,16 @@ export class WorkflowEngine {
     });
 
     if (prepared.kind === "outcome") return prepared.outcome;
-    const { task, run, agent, step, def, ctxData } = prepared;
+    const { task, run, agent, step, def, ctxData, aiSetup } = prepared;
     const log = this.opts.logger.child({ task_id: task.id, run_id: run.id, agent: agent.slug, step: step.key });
-    const executor = getExecutor(task.type)!;
+    const executor = getExecutor(task.type, { simulation: run.is_simulation, aiEnabled: aiSetup !== null })!;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(new Error(`Timed out after ${task.timeout_seconds}s`)), task.timeout_seconds * 1000);
     let lastProgressAt = 0;
     const ctx: AgentContext = {
       ...ctxData,
+      ai: null,
       signal: controller.signal,
       // AGENTS.md section 5: a tool that is not on the agent's stored allow-list is refused and logged as a WARNING.
       tools: createToolGate({
@@ -421,7 +453,20 @@ export class WorkflowEngine {
     };
 
     let result: AgentResult<unknown>;
+    let ai: AiRuntime | null = null;
     try {
+      if (aiSetup) {
+        ai = createAiRuntime({
+          client: this.opts.ai?.client ?? createAnthropicClient(aiSetup.config),
+          config: aiSetup.config,
+          agent: { slug: agent.slug as AiRuntime["agent"]["slug"], tier: agent.model_tier, modelOverride: agent.model_override },
+          logger: log,
+          documents: this.opts.ai?.documents ?? NO_DOCUMENTS,
+          signal: controller.signal,
+          webResearchEnabled: aiSetup.webResearch,
+        });
+        ctx.ai = ai;
+      }
       const raw = await executor.run(ctx);
       const parsed = executor.outputSchema.safeParse(raw.output);
       if (!parsed.success)
@@ -430,7 +475,9 @@ export class WorkflowEngine {
     } catch (err) {
       clearTimeout(timeout);
       log.warn("task failed", { error: (err as Error).message });
-      return this.handleTaskFailure(task.id, err as Error);
+      // Money spent on calls that did not produce a usable result still counts against the budget.
+      const spent = ai && ai.meter.costUsd > 0 ? ai.meter.toCostRecord() : null;
+      return this.handleTaskFailure(task.id, err as Error, spent);
     }
     clearTimeout(timeout);
 
@@ -628,10 +675,11 @@ export class WorkflowEngine {
     }
   }
 
-  private async handleTaskFailure(taskId: string, err: Error): Promise<JobOutcome> {
+  private async handleTaskFailure(taskId: string, err: Error, spent: CostRecord | null = null): Promise<JobOutcome> {
     const retryable = !(err instanceof NonRetryableError);
     return withTx(this.pool, async (c) => {
       const task = await db.lockTask(c, taskId);
+      if (task && spent) await db.recordCost(c, task, spent);
       if (!task || task.status !== "RUNNING") return { status: "completed" } as JobOutcome;
       const run = await db.lockRun(c, task.workflow_run_id!);
       const agent = await db.getAgent(c, task.agent_id);

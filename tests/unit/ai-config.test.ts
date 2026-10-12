@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AiNotConfiguredError, loadAiConfig, resolveAiEnabled, resolveModel } from "@/agents/runtime/ai/config";
+import { AiNotConfiguredError, loadAiConfig, resolveAiEnabled, resolveModel, withTaskCostCeiling } from "@/agents/runtime/ai/config";
 import { computeCostUsd, parsePrice, ZERO_USAGE, addUsage } from "@/agents/runtime/ai/pricing";
 import { NonRetryableError } from "@/agents/runtime/types";
 
@@ -106,6 +106,20 @@ describe("resolveModel", () => {
   });
   it("decides high value from the configured threshold", () => {
     expect(config.highValueThresholdZar).toBe(10_000_000);
+  });
+});
+
+describe("withTaskCostCeiling", () => {
+  const config = loadAiConfig(FULL_ENV);
+  it("lowers the per-task ceiling to what is left of the day's budget, never raises it, never below zero", () => {
+    expect(withTaskCostCeiling(config, 0.5).maxTaskCostUsd).toBe(0.5);
+    expect(withTaskCostCeiling(config, 50).maxTaskCostUsd).toBe(2);
+    expect(withTaskCostCeiling(config, -3).maxTaskCostUsd).toBe(0);
+  });
+  it("keeps the key usable but out of serialisation", () => {
+    const capped = withTaskCostCeiling(config, 1);
+    expect(capped.apiKey).toBe("test-key-not-real");
+    expect(JSON.stringify(capped)).not.toContain("test-key-not-real");
   });
 });
 
