@@ -142,3 +142,53 @@ database.
    affects the POPIA cross-border basis. Vercel plus Supabase is assumed.
 5. **Legal.** Information Officer, privacy notice, terms and operator
    agreements need a named owner.
+
+## Status update, 2026-10-12
+
+Decisions taken: one organisation per user; Anthropic as the AI provider;
+payment gateway out of scope for now; legal text is a draft for an attorney.
+
+Verified on the `production-readiness` branch: lint and typecheck clean, 1226
+unit tests, 126 integration tests against local Supabase, a production
+build, and 5 end-to-end tests in a real browser.
+
+**Resolved (P0 numbers refer to the table above)**
+
+- #2 auth settings: confirmation required, 60 s resend, URL settings and
+  email limits are in `supabase/config.toml`. The hosted-project checklist is
+  in `docs/auth.md`; hosted settings are not changed by this repo.
+- #3 shared throttling: app-level limits per hashed address and email, with
+  an optional Turnstile CAPTCHA (`CAPTCHA_MODE`). Enable Supabase CAPTCHA too,
+  because direct `/auth/v1` calls bypass the app limiter.
+- #4 `nodemailer` upgraded to 10.1.0.
+- #6 auth links come from `APP_URL`, never from the request.
+- #8 CI workflow added (`.github/workflows/ci.yml`). Still missing: Sentry,
+  alerting, a worker container, staging and backups.
+- #13 the worker no longer dies when a job-outcome write fails.
+- Extension permissions: production manifest has no wildcard or localhost
+  hosts; fills only on the tender's own portal host.
+- Also done: terms/privacy consent record and draft pages, one organisation
+  per user in the database, guided onboarding, 18 branded emails, one-click
+  browser pairing and "Apply with TenderOS", an Anthropic AI layer with
+  guardrails and real Tender Analyst, Qualification, Proposal, Pricing and QA
+  executors (not yet run against the live API), and a Windows fix for
+  `db:env`.
+
+**Still open**
+
+- #1 POPIA erasure and retention (audit tables block deleting users and
+  organisations); #7 data export, deletion and breach process.
+- #5 MFA and aal2 enforcement (slices S9 and S10 in `docs/plans/auth-signup.md`).
+- Team invitations and member management (S7 and S8).
+- #9 the hosted worker's function name does not match what cron calls.
+- #10 bid email can be sent twice; #11 delivery address is editable after
+  approval; #12 one bad eTenders row can fail a scan, and every organisation
+  still crawls the national feed itself.
+- AI is off by default and has nothing to read: tender documents are not yet
+  downloaded or extracted, there is no `ai_enabled` setting or UI, and no
+  screens to review or edit proposal and pricing drafts.
+- #14 billing and a public landing page (billing deferred by decision).
+- Known and accepted for now: `postcss` inside Next 15's build tooling
+  (fixed only by the Next 16 major upgrade).
+- Not verifiable here: real Chrome and portal behaviour for the extension,
+  the live Anthropic API, real inbox rendering, hosted Supabase settings.
