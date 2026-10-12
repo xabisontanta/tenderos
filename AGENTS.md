@@ -217,7 +217,15 @@ person to review.
 - An approved bid is emailed only when an owner or admin presses Send on the
   tender page (`sendBidEmail`), from a mailbox they connected themselves.
   Agents never send email. Every send is logged in `email_messages`, and
-  `record_bid_delivery` closes the submission, tender and run.
+  `record_bid_delivery` closes the submission, tender and run. A bid is emailed
+  at most once: the send is reserved first as a message in state `SENDING`
+  (one `SENDING` or `SENT` message per submission, a unique index), then
+  mailed, then marked `SENT` or `FAILED`; a `FAILED` attempt can be retried.
+  An attempt that was interrupted stays `SENDING` and blocks another send until
+  a person has checked the mailbox's Sent folder and either records the delivery
+  or, if nothing went out, marks that message `FAILED` by hand (database
+  access). Errors writing the message or the mailbox status are logged and, for
+  the message, shown to the person, never swallowed.
 - Mailbox credentials (Gmail refresh token or SMTP password) live in Supabase
   Vault. Browsers cannot read `secret_id`; only the service role can decrypt,
   through `email_account_credential`, and only for the member who connected
