@@ -72,6 +72,11 @@ export function companyFacts(
   return facts;
 }
 
+/** Whether the facts say anything about capability. A name or a B-BBEE level alone gives a model nothing to compare or draft from. */
+export function hasCapabilityFacts(facts: Array<{ id: string }>): boolean {
+  return facts.some((f) => !["fact:legal_name", "fact:trading_name", "fact:bbbee_level"].includes(f.id));
+}
+
 /**
  * Facts as prompt parts, one per data category so each passes the data policy
  * with its own category. The text is wrapped as data like every other source.

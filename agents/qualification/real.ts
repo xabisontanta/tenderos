@@ -1,6 +1,6 @@
 import { analysisOutputSchema } from "@/agents/analysis/schema";
 import { RULES_COST, requireAi } from "@/agents/runtime/ai/context";
-import { companyFacts, factParts } from "@/agents/runtime/ai/facts";
+import { companyFacts, factParts, hasCapabilityFacts } from "@/agents/runtime/ai/facts";
 import { buildPrompt, type PromptPart } from "@/agents/runtime/ai/guardrails/data-policy";
 import { wrapUntrusted } from "@/agents/runtime/ai/guardrails/text";
 import { buildSystemPrompt } from "@/agents/runtime/ai/prompts";
@@ -23,11 +23,6 @@ const SYSTEM = buildSystemPrompt({
     "List risks a bidder should know about, such as a compulsory briefing, a CIDB grade above the company's, or a province the company does not work in.",
   ],
 });
-
-/** Facts that say something about capability. A name alone gives nothing to compare. */
-function hasCapabilityFacts(facts: Array<{ id: string }>): boolean {
-  return facts.some((f) => !["fact:legal_name", "fact:trading_name", "fact:bbbee_level"].includes(f.id));
-}
 
 /**
  * Qualification Agent (AI): the rule gates (48 hours, compulsory briefing,
