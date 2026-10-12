@@ -17,7 +17,7 @@ describe("Management API payload for a hosted project", () => {
     expect(payload.mailer_subjects_confirmation).toBe("Confirm your email to open TenderOS");
     expect(payload.mailer_templates_confirmation_content).toBe(built.find((b) => b.key === "confirmation")!.html);
     expect(payload.mailer_subjects_magic_link).toBe("Your TenderOS sign-in link");
-    expect(payload.mailer_templates_recovery_content).toContain("{{ .ConfirmationURL }}");
+    expect(payload.mailer_templates_recovery_content).toContain("{{ .TokenHash }}");
     expect(payload.mailer_subjects_password_changed_notification).toBe("Your TenderOS password was changed");
     expect(payload.mailer_templates_mfa_factor_enrolled_notification_content).toContain("{{ .FactorType }}");
     expect(payload.mailer_notifications_identity_unlinked_enabled).toBe(true);
