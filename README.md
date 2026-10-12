@@ -112,12 +112,48 @@ fills; you submit.** It never presses submit, never ticks declarations, never
 enters prices and never signs, and anything it is unsure of or TenderOS does
 not hold is left empty and listed for you.
 
-Owners, admins and operators pair it on **Settings → Browser helper** with a
-pairing code that is shown once, lasts 30 days and can be revoked there. Only
-its SHA-256 hash is stored. The helper reads `GET /api/autofill/profile` and
-`GET /api/autofill/documents/<id>` with that code; director IDs, bank letters
-and proof of address only reach owners and admins, and every file download is
-audited. See `extension/README.md` to install and use it.
+**One click.** Build and load the helper once (`npm run build:extension`, then
+**Load unpacked** on `extension/dist`; see `extension/README.md`). Owners, admins
+and operators then open **Settings → Browser helper** and press **Connect
+browser**: TenderOS creates the pairing code and hands it straight to the helper
+in the same browser, so there is nothing to copy or paste. The code is never
+shown, put in a URL or logged; it lasts 30 days, is stored only as a SHA-256 hash
+on the server, and can be revoked on the same card. If no helper answers within
+about a second and a half, the page shows how to install it. Pasting a code into
+the helper still works as an advanced fallback.
+
+On the tender page of an approved bid that is delivered through a web portal,
+**Apply with TenderOS** asks the helper to open the portal in a new tab, fill the
+company details and attach the approved bid pack documents (matching file inputs
+are filled automatically; nothing is picked by hand). A review panel on the portal
+page lists what was filled and attached and what is left for you (declarations,
+price schedule, signatures, anything it is unsure of). The helper then reports the
+host and counts to TenderOS, and the tender page shows "Prepared by TenderOS at
+...". **You still check everything and press the portal's Submit yourself.**
+
+How it stays safe:
+
+- The helper fills a page only when its site (registrable domain) is the portal
+  TenderOS named for the tender; on any other site it asks you to confirm, naming
+  both hosts. Only https pages are filled (http only on localhost in a
+  development build), only the top frame and same-origin frames, and the page
+  must still be on that host when the fill starts.
+- The production manifest has no wildcard or optional host permissions and no
+  localhost. It can act by itself only on the TenderOS address it was built for
+  and the portal hosts it was built with (`TENDEROS_PORTAL_HOSTS`, default the
+  eTenders portal). Any other portal is filled from the toolbar button, on the
+  page you are looking at.
+- The helper reads `GET /api/autofill/profile`, `GET /api/autofill/documents/<id>`
+  and `GET /api/autofill/tenders/<id>/apply-plan` with its pairing code, and
+  reports with `POST /api/autofill/tenders/<id>/apply-report` (host and counts
+  only; audit log and tender event). Director IDs, bank letters and proof of
+  address only reach owners and admins, and only when they tick the option on
+  the tender page; every file download is audited.
+
+`TENDEROS_ORIGIN` sets the TenderOS address a build talks to (default
+`https://tenderos-six.vercel.app`; `http://localhost:3000` makes a development
+build). Publishing the helper in the Chrome Web Store is the later one-click
+install route.
 
 ## Hosted worker (Supabase Edge Function)
 

@@ -826,6 +826,9 @@ isOneToOne: false
               "created_at": string,"doc_type": string,"expires_at": string,"file_name": string,"id": string,"mime_type": string,"size_bytes": number,"title": string
             }[]
                            },
+"autofill_record_prepared":
+{ Args: { "p_confirmed_host": boolean,"p_documents": number,"p_fields": number,"p_host": string,"p_left": number,"p_sensitive": boolean,"p_tender_id": string,"p_token_id": string }; Returns: undefined
+                           },
 "bootstrap_organisation":
 { Args: { "p_agents": Json,"p_departments": Json,"p_name": string,"p_slug": string,"p_user_id": string }; Returns: string
                            },

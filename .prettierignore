@@ -8,3 +8,4 @@ package-lock.json
 supabase/functions/worker/index.ts
 supabase/templates
 emails/preview
+extension/dist
