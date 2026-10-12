@@ -10,6 +10,7 @@ import { proposalDraftReal } from "./proposal/real";
 import { pricingPrepare } from "./pricing/simulated";
 import { pricingPrepareReal } from "./pricing/real";
 import { qaReview } from "./qa/simulated";
+import { qaReviewReal } from "./qa/real";
 import { submissionExecute } from "./submission/simulated";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,7 +33,7 @@ export const SIMULATED_EXECUTORS: Record<string, AgentExecutor<unknown>> = byTyp
 ]);
 
 /** Model-backed executors. Used only on real tenders for organisations with AI switched on. */
-export const REAL_EXECUTORS: Record<string, AgentExecutor<unknown>> = byType([tenderAnalysisReal, opportunityQualificationReal, proposalDraftReal, pricingPrepareReal]);
+export const REAL_EXECUTORS: Record<string, AgentExecutor<unknown>> = byType([tenderAnalysisReal, opportunityQualificationReal, proposalDraftReal, pricingPrepareReal, qaReviewReal]);
 
 export interface ExecutionMode {
   /** The run is a simulation: no model is ever called. */

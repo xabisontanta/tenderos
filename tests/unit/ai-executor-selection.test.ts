@@ -26,6 +26,10 @@ describe("executor selection", () => {
     }
   });
 
+  it("has an AI executor for exactly the five steps that do judgement work", () => {
+    expect(Object.keys(REAL_EXECUTORS).sort()).toEqual(["analysis.extract", "pricing.prepare", "proposal.draft", "qa.review", "qualification.assess"]);
+  });
+
   it("returns nothing for an unknown task type", () => {
     expect(getExecutor("nope", { simulation: false, aiEnabled: true })).toBeUndefined();
   });
