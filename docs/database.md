@@ -69,6 +69,12 @@ Temporal was considered and deferred; see `docs/adr/0002-postgres-job-queue.md`.
   `mark_notifications_read`, `change_tender_delivery`, plus tender insert and update under
   column grants (the delivery columns are locked once a bid is waiting for approval or
   delivery: trigger `guard_delivery_details`, migration `20261010000055`).
+- **Totals**: the API returns at most 1000 rows (`max_rows`), so a page must never fetch
+  rows to count or sum them. `dashboard_counts` (tenders per status, spend) and
+  `agent_usage_totals` (an agent's calls, cost and tokens) are `SECURITY INVOKER`
+  functions that aggregate in the database under the caller's RLS; long lists page with
+  `.range()` (`lib/pagination.ts`). Queries in `lib/data/queries.ts` throw on a database
+  error instead of returning an empty list.
 - **Writes from agents**: only the worker, over a direct connection, sets
   `app.actor_agent_id` so audit rows name the agent.
 - `bootstrap_organisation` is callable by the service role only.

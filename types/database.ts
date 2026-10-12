@@ -844,6 +844,9 @@ isOneToOne: false
             "accept_legal":
 { Args: { "p_ip_hmac"?: string,"p_privacy_version": string,"p_terms_version": string }; Returns: undefined
                            },
+"agent_usage_totals":
+{ Args: { "p_agent_id": string }; Returns: Json
+                           },
 "archive_company_document":
 { Args: { "p_id": string }; Returns: undefined
                            },
