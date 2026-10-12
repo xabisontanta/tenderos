@@ -6,7 +6,7 @@ import { AiOutputError } from "@/agents/runtime/ai/errors";
 import { ToolNotPermittedError } from "@/agents/runtime/tool-access";
 import type { CompanyDocumentMeta, CompanyProfile } from "@/agents/runtime/types";
 import { FakeAiClient, type FakeReply } from "../support/fake-ai";
-import { makeAi, makeCtx, tender } from "../support/context";
+import { makeAi, makeCtx } from "../support/context";
 
 const profile = (o: Partial<CompanyProfile> = {}): CompanyProfile => ({
   organisation_id: "00000000-0000-0000-0000-0000000000aa",

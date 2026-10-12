@@ -8,6 +8,7 @@ import { complianceCheck } from "./compliance/simulated";
 import { proposalDraft } from "./proposal/simulated";
 import { proposalDraftReal } from "./proposal/real";
 import { pricingPrepare } from "./pricing/simulated";
+import { pricingPrepareReal } from "./pricing/real";
 import { qaReview } from "./qa/simulated";
 import { submissionExecute } from "./submission/simulated";
 
@@ -31,7 +32,7 @@ export const SIMULATED_EXECUTORS: Record<string, AgentExecutor<unknown>> = byTyp
 ]);
 
 /** Model-backed executors. Used only on real tenders for organisations with AI switched on. */
-export const REAL_EXECUTORS: Record<string, AgentExecutor<unknown>> = byType([tenderAnalysisReal, opportunityQualificationReal, proposalDraftReal]);
+export const REAL_EXECUTORS: Record<string, AgentExecutor<unknown>> = byType([tenderAnalysisReal, opportunityQualificationReal, proposalDraftReal, pricingPrepareReal]);
 
 export interface ExecutionMode {
   /** The run is a simulation: no model is ever called. */
