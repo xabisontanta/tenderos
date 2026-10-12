@@ -31,6 +31,8 @@ append-only record of every consequential action.
 | Change operators' and viewers' roles, remove operators and viewers                  | ✓     | ✓     |          |        |
 | Make someone an owner or an admin, change or remove an owner or an admin            | ✓     |       |          |        |
 | Leave the organisation (never the last owner)                                       | ✓     | ✓     | ✓        | ✓      |
+| Invite operators and viewers, resend or withdraw their invitations                  | ✓     | ✓     |          |        |
+| Invite admins, resend or withdraw their invitations                                 | ✓     |       |          |        |
 
 The UI hides controls a role cannot use, but the RPC is the enforcement point.
 Integration tests cover role refusals and cross-tenant isolation.
@@ -49,6 +51,12 @@ Removing a member revokes their browser pairing codes and disconnects their mail
 Vault goes with the mailbox row); dropping from admin to operator or viewer disconnects the mailboxes too, since
 only owners and admins connect one. Email addresses come from `auth.users` through `list_members` and are sent
 to owners and admins only.
+
+Invitations (migration 061, flow in `docs/auth.md`): the token is random (256 bits), stored only as a SHA-256 hash that
+browsers cannot select, shown to the inviter once, valid for 7 days and bound to one address. Accepting needs the
+confirmed sign-in address to equal the invited one, so a leaked link is useless to anyone else. Only owners invite admins;
+nobody invites an owner. The token travels in an httpOnly SameSite=Lax cookie and never in logs. Limits are inside the RPCs:
+20 invitations an hour per person, 50 pending per organisation, 5 a day to any one address.
 
 ## Agents
 
@@ -142,6 +150,6 @@ a person or an organisation, exporting their data and handling a breach are in
 
 - Malware scanning of uploaded documents.
 - Removing unregistered uploads (files uploaded but never recorded).
-- MFA for owners and admins, invitations and member management.
+- MFA for owners and admins (S9 and S10 of `docs/plans/auth-signup.md`).
 - Sentry error reporting (`SENTRY_DSN`) and alerting.
 - Signed webhooks using `WORKFLOW_SECRET`.

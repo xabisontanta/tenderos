@@ -9,11 +9,44 @@ from one source: `emails/`. There are 18 of them.
 | The app (5)        | Team invitation, welcome and setup checklist, approval needed, bid delivered, closing-date digest                                                                                                                                                                                 |
 
 The five app emails are pure render functions that return
-`{ subject, html, text }`. **Nothing in the app calls them yet.** Each one is
-wired in by the feature it belongs to (invitations: plan slice S8 in
-`docs/plans/auth-signup.md`; the rest when notifications get an email
-channel). The Supabase emails are live as soon as the templates are applied
-(see "Hosted Supabase checklist").
+`{ subject, html, text }`. The **team invitation** is wired in (see "Platform
+mailer" below); the other four are not called yet and are wired in by the
+feature they belong to (when notifications get an email channel). The Supabase
+emails are live as soon as the templates are applied (see "Hosted Supabase
+checklist").
+
+## Platform mailer: the emails the app sends itself
+
+`lib/email/platform.ts` sends the app's own emails (today the team invitation, through
+`lib/email/team-invitation.ts`, which calls `renderTeamInvitation`). It is separate from the customer's
+mailbox that sends bids (`lib/email/smtp.ts`, `gmail.ts`) and from Supabase Auth's mailer. It reads the
+same variables as the Supabase SMTP settings, so one provider and one verified sending domain serve both:
+
+| Variable    | Meaning                                                                         |
+| ----------- | ------------------------------------------------------------------------------- |
+| `MAIL_FROM` | The From header: `no-reply@example.com` or `TenderOS <no-reply@example.com>`    |
+| `SMTP_HOST` | The provider's submission host name (a name, not an IP address)                 |
+| `SMTP_PORT` | 465 (implicit TLS), 587 (STARTTLS, the default) or 2525; port 25 is not offered |
+| `SMTP_USER` | Optional login; set `SMTP_USER` and `SMTP_PASS` together or not at all          |
+| `SMTP_PASS` | The login's password                                                            |
+
+- **Provider-neutral.** Any SMTP submission service. No provider has been chosen (product owner).
+- **TLS 1.2 or later**, certificate validated against the host name; the host must resolve to public
+  addresses (the same rule as customers' mailboxes, `lib/email/network.ts`), and the connection goes to the
+  address that was checked. A local catcher such as Mailpit is therefore **not** usable as `SMTP_HOST`.
+- **Not configured, in development:** nothing is sent, an info line says so, and the caller is told
+  `delivered: false`. Tests and local work need no SMTP server.
+- **Not configured, in production:** an error log names the missing variables, and the caller gets a failure.
+  Half-set configuration (a host without a sender, a user without a password, port 25) is a failure in every
+  environment, so it is never mistaken for "off".
+- **A failed send never loses the invitation.** The invitation is created first. The inviter is told the email
+  did not go and is handed the link (once) to pass on; Resend makes a new link and tries again.
+- **Logs** carry the kind of email (`team_invitation`) and an error code. Never a recipient, subject, body,
+  link or credential.
+- **The link** is `${APP_URL}/invite/<token>` (docs/auth.md, "Teams and invitations"). In production it must be
+  https, or the renderer refuses and the email fails (the end-to-end run, served over local http, takes that path).
+- **UNVERIFIED:** delivery to a real inbox, SPF/DKIM/DMARC alignment, and rendering of this email in real mail clients, as for
+  every email here (no provider was chosen, nothing was sent to a real address).
 
 Status words used below: **verified** means checked against the official
 Supabase documentation or the Supabase CLI 2.120 binary in `node_modules`.

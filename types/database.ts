@@ -535,6 +535,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"organisation_invitations": {
+                  Row: {
+                    "accepted_at": string | null,"accepted_by": string | null,"created_at": string,"email": string,"expires_at": string,"id": string,"invited_by": string | null,"organisation_id": string,"revoked_at": string | null,"role": Database["public"]['Enums']["org_role"],"token_hash": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accepted_at"?: string | null,"accepted_by"?: string | null,"created_at"?: string,"email": string,"expires_at"?: string,"id"?: string,"invited_by"?: string | null,"organisation_id": string,"revoked_at"?: string | null,"role": Database["public"]['Enums']["org_role"],"token_hash": string
+                  }
+                  Update: {
+                    "accepted_at"?: string | null,"accepted_by"?: string | null,"created_at"?: string,"email"?: string,"expires_at"?: string,"id"?: string,"invited_by"?: string | null,"organisation_id"?: string,"revoked_at"?: string | null,"role"?: Database["public"]['Enums']["org_role"],"token_hash"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "organisation_invitations_organisation_id_fkey"
+      columns: ["organisation_id"]
+isOneToOne: false
+      referencedRelation: "organisations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"organisation_members": {
                   Row: {
                     "created_at": string,"organisation_id": string,"role": Database["public"]['Enums']["org_role"],"user_id": string
@@ -841,7 +861,10 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "accept_legal":
+            "accept_invitation":
+{ Args: { "p_token": string }; Returns: string
+                           },
+"accept_legal":
 { Args: { "p_ip_hmac"?: string,"p_privacy_version": string,"p_terms_version": string }; Returns: undefined
                            },
 "agent_usage_totals":
@@ -884,6 +907,11 @@ isOneToOne: false
 "create_autofill_token":
 { Args: { "p_label"?: string,"p_org": string }; Returns: string
                            },
+"create_invitation":
+{ Args: { "p_email": string,"p_org": string,"p_role": Database["public"]['Enums']["org_role"] }; Returns: {
+              "expires_at": string,"invitation_id": string,"token": string
+            }[]
+                           },
 "dashboard_counts":
 { Args: { "p_day_start": string,"p_month_start": string,"p_org": string }; Returns: Json
                            },
@@ -921,6 +949,11 @@ isOneToOne: false
 "hit_rate_limit_key":
 { Args: { "p_action": string,"p_key": string,"p_max"?: number,"p_window_seconds"?: number }; Returns: undefined
                            },
+"invitation_preview":
+{ Args: { "p_token": string }; Returns: {
+              "email": string,"expires_at": string,"invitation_id": string,"organisation_id": string,"organisation_name": string,"role": Database["public"]['Enums']["org_role"]
+            }[]
+                           },
 "list_members":
 { Args: { "p_org": string }; Returns: {
               "email": string,"full_name": string,"joined_at": string,"role": Database["public"]['Enums']["org_role"],"user_id": string
@@ -946,6 +979,11 @@ isOneToOne: false
 "rerun_bid":
 { Args: { "p_tender_id": string }; Returns: string
                            },
+"resend_invitation":
+{ Args: { "p_id": string }; Returns: {
+              "expires_at": string,"invitation_id": string,"token": string
+            }[]
+                           },
 "resolve_autofill_token":
 { Args: { "p_hash": string }; Returns: {
               "organisation_id": string,"role": Database["public"]['Enums']["org_role"],"token_id": string,"user_id": string
@@ -955,6 +993,9 @@ isOneToOne: false
 { Args: { "p_task_id": string }; Returns: undefined
                            },
 "revoke_autofill_token":
+{ Args: { "p_id": string }; Returns: undefined
+                           },
+"revoke_invitation":
 { Args: { "p_id": string }; Returns: undefined
                            },
 "set_agent_control":

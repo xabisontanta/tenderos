@@ -11,6 +11,7 @@ import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { formatUsd, humanize } from "@/lib/format";
 import { TeamMembers, type MemberRow } from "@/features/team/team-members";
+import { InvitationsPanel, type InvitationRow } from "@/features/team/invitations-panel";
 import { configuredModels } from "@/agents/runtime/model-routing";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -21,6 +22,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const s = ctx.settings;
   const supabase = await getServerSupabase();
   const { data: members, error: membersError } = await supabase.rpc("list_members", { p_org: ctx.organisation.id });
+  // Owners and admins see who has been invited (the table's policy hides it from everyone else).
+  const { data: invitations, error: invitationsError } = canAdminister(ctx.role)
+    ? await supabase
+        .from("organisation_invitations")
+        .select("id,email,role,created_at,expires_at")
+        .eq("organisation_id", ctx.organisation.id)
+        .is("accepted_at", null)
+        .is("revoked_at", null)
+        .order("created_at", { ascending: false })
+    : { data: [], error: null };
   const { data: mailboxes } = await supabase
     .from("email_accounts")
     .select("id,user_id,provider,from_address,smtp_host,status,last_error")
@@ -144,6 +155,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </p>
             ) : (
               <TeamMembers members={(members ?? []) as MemberRow[]} currentUserId={ctx.userId} currentRole={ctx.role} />
+            )}
+            {canAdminister(ctx.role) && (
+              <div className="mt-6 border-t pt-4">
+                {invitationsError ? (
+                  <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+                    Invitations could not be loaded. Try again in a moment.
+                  </p>
+                ) : (
+                  <InvitationsPanel invitations={(invitations ?? []) as InvitationRow[]} actorRole={ctx.role} />
+                )}
+              </div>
             )}
           </CardContent>
         </Card>

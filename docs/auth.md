@@ -125,6 +125,60 @@ The migration (019) refuses to run while any user has several memberships; it do
 pick one. If that ever fires on a real database, decide with the customer which
 organisation each listed user stays in, remove the other memberships, and run it again.
 
+### Teams and invitations
+
+The product is sold to companies and to the accountants, auditors and tender consultants who work inside a client's
+account. A person belongs to one organisation, so they **join the client's organisation as a member**; an auditor or
+accountant gets the read-only **viewer** role. Roles: Owner, Admin, Operator, Viewer (what each can do is in
+`docs/security.md`, and in plain words in Settings, Team).
+
+**Managing members** (migration 060). Settings, Team lists the members with a role menu and a remove button for owners
+and admins (`change_member_role`, `remove_member`, `list_members`). Email addresses are shown to owners and admins only.
+An organisation always keeps an owner; ownership is transferred by making the new person an owner and stepping down.
+Every member can leave the organisation (that is how someone invited elsewhere gets free). Details and the rules
+for who may do what: `docs/security.md`, "Team management".
+
+**Invitations** (migration 061).
+
+1. An owner or admin enters an address and a role in Settings, Team. Owners invite admins, operators and viewers; admins
+   invite operators and viewers; nobody invites an owner. `create_invitation` makes a token (`tinv_` and 64 hex digits),
+   stores only its SHA-256 hash, returns the token **once**, and expires the invitation after 7 days. Limits: 20 invitations an hour per
+   person, 50 pending per organisation, and any one address receives at most 5 a day from anywhere. A pending invitation
+   to the same address (any letter case) is refused; an expired one is retired when a new one is issued.
+2. The app emails it (`docs/email.md`, "Platform mailer") with the branded `teamInvitation` email. If the email cannot be
+   sent, the invitation still exists and the inviter is shown the link once. Resend rotates the token and renews the
+   week (the old link stops working); Withdraw ends it.
+3. The link is `${APP_URL}/invite/<token>`. `app/(auth)/invite/[token]/route.ts` puts the token in an **httpOnly,
+   SameSite=Lax cookie** (`tos_invite`, two hours, Secure under https) and redirects to `/invite`, so the token is not in
+   the address the visitor keeps. The response is not cached and sends no Referer. The plan named
+   `app/invite/[token]/page.tsx`; a page cannot set a cookie, so a route handler does it and the page is `/invite`.
+4. `/invite` shows the organisation, the role and the invited address (from `invitation_preview`, service role only).
+   The address is shown, **not trusted**. It never says whether the address has an account: "Create an account" and
+   "Sign in" are always both offered. Someone already signed in without an organisation goes on to `/onboarding`.
+5. `/onboarding` offers **Join <organisation>** instead of "create an organisation" while the cookie holds a live
+   invitation, and "Create one" stays available as a choice (`?own=1`). `accept_invitation` requires the caller's
+   **confirmed** address in `auth.users` and the address claim in their session token to both equal the invited one, takes the same
+   per-user advisory lock as `bootstrap_organisation`, and relies on the unique index for one organisation per user:
+   someone who already belongs elsewhere is told to leave first (Settings, Team, Leave). A wrong address is told "sent to a different
+   email address" without naming it. Opening the link again after joining is harmless.
+
+What was **not** done on purpose: the token never appears in logs (the log redactor knows the word `token`, and the email
+renderer's error text, which quotes the link, is not logged); a used, revoked, expired or unknown token is refused with
+one message (except "expired", which only a token holder can see). Rate limiting acceptance: a refused call rolls its
+own counter back, so the database counts only calls that succeed; the server action counts every attempt first
+(20 an hour). Tokens carry 256 bits, so guessing one is not a practical attack.
+
+**Personal data.** An invitation holds the invitee's address. It is deleted with the account it was addressed to (a
+trigger on `auth.users`, which also covers `erase_user`), purged 30 days after it was accepted, withdrawn or expired
+(`private.purge_invitations`, pg_cron `tenderos-purge-invitations`, daily 03:40 UTC), removed with the organisation,
+and included in both exports (`invitations` in the organisation's export, `invitations_received` and `invitations_sent`
+in a person's), never with the token hash. The audit rows (`invitation.created`, `.resent`, `.revoked`, `.accepted`)
+carry the invitation id and role, not the address.
+
+**Known limitation.** Someone who already created their own (sole-owner) organisation and is then invited elsewhere
+cannot leave it (an organisation must keep an owner) and so cannot accept until that organisation is erased or given to
+another owner. Support handles it with the erasure runbook.
+
 ### Guided onboarding
 
 After the organisation is created (`/onboarding`), owners and admins land on

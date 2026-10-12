@@ -92,6 +92,10 @@ describe("database hardening", () => {
       "change_tender_delivery",
       "change_member_role",
       "remove_member",
+      "create_invitation",
+      "resend_invitation",
+      "revoke_invitation",
+      "accept_invitation",
     ];
     const { rows } = await pool.query(`select proname, prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = any($1)`, [fns]);
     expect(rows.map((r) => r.proname).sort()).toEqual([...fns].sort());

@@ -4,7 +4,8 @@ import type { Database } from "@/types/database";
 
 // /api/autofill authenticates the browser helper with its own pairing code.
 // /terms and /privacy are linked from the sign-up form, so they must open signed out.
-const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth", "/api/autofill", "/terms", "/privacy"];
+// /invite is where an invitation email lands: the visitor has no account or session yet.
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth", "/api/autofill", "/terms", "/privacy", "/invite"];
 
 /**
  * Refreshes the Supabase session cookie on every request and redirects
