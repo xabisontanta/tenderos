@@ -39,7 +39,7 @@ export class CostMeter {
   assertCanSpend(estimatedInputUsd: number): void {
     if (this.cost + estimatedInputUsd > this.limits.maxTaskCostUsd) {
       throw new AiBudgetError(
-        `This task has spent $${this.cost.toFixed(4)} of its $${this.limits.maxTaskCostUsd.toFixed(2)} ceiling (AI_MAX_TASK_COST_USD); another model call was not started`,
+        `This task has spent $${this.cost.toFixed(4)} of its $${this.limits.maxTaskCostUsd.toFixed(4)} ceiling (the lower of AI_MAX_TASK_COST_USD and what is left of today's AI budget); another model call was not started`,
       );
     }
   }
