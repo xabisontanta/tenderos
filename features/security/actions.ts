@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/data/context";
-import { rateLimit, type ActionResult } from "@/lib/actions";
+import { rateLimit, toUserError, type ActionResult } from "@/lib/actions";
 import { cleanTotpCode, isQrDataUrl } from "@/lib/auth/mfa";
 import { mfaErrorMessage } from "@/lib/auth/mfa-errors";
 import { safeRedirectPath } from "@/lib/safe-redirect";
@@ -127,15 +127,39 @@ export async function cancelEnrolment(factorId: string): Promise<ActionResult> {
  * one that is switched on, so a stolen password alone cannot switch the second step off.
  */
 export async function removeFactor(factorId: string): Promise<ActionResult> {
-  await requireContext();
+  const ctx = await requireContext();
   const id = idSchema.safeParse(factorId);
   if (!id.success) return { ok: false, error: id.error.issues[0].message };
   const supabase = await getServerSupabase();
+  // While the organisation requires an authenticator, the last one stays: without it the person could not approve, send
+  // or change anything, and could not even switch the requirement off (that takes aal2 too).
+  if (ctx.settings?.require_mfa) {
+    const listed = await supabase.auth.mfa.listFactors();
+    const verified = (listed.data?.all ?? []).filter((f) => f.factor_type === "totp" && f.status === "verified");
+    if (verified.length <= 1 && verified.some((f) => f.id === id.data))
+      return { ok: false, error: "Your organisation requires an authenticator. Add another one before you remove this one." };
+  }
   const { error } = await supabase.auth.mfa.unenroll({ factorId: id.data });
   if (error) {
     log.warn("mfa unenrol failed", { code: error.code ?? "none" });
     return { ok: false, error: mfaErrorMessage(error, "Could not remove the authenticator. Try again in a moment.") };
   }
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
+ * The owner's switch, "Require MFA for everyone". The database does the work: only an owner, only from a session that has passed
+ * the authenticator challenge (so an owner without one cannot lock the organisation out, and a password alone cannot switch the
+ * protection off), rate limited, audited, and every member is notified. Switching it on also revokes browser pairing codes made
+ * without a second factor.
+ */
+export async function setRequireMfa(on: boolean): Promise<ActionResult> {
+  const ctx = await requireContext();
+  if (ctx.role !== "owner") return { ok: false, error: "Only an owner can change whether everyone must use an authenticator" };
+  const supabase = await getServerSupabase();
+  const { error } = await supabase.rpc("set_require_mfa", { p_org: ctx.organisation.id, p_on: on === true });
+  if (error) return { ok: false, error: toUserError(error, "Could not change the setting") };
   revalidatePath("/", "layout");
   return { ok: true };
 }

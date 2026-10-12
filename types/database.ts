@@ -199,14 +199,14 @@ isOneToOne: false
                   ]
                 },"autofill_tokens": {
                   Row: {
-                    "created_at": string,"expires_at": string,"id": string,"label": string,"last_used_at": string | null,"organisation_id": string,"revoked_at": string | null,"token_hash": string,"user_id": string
+                    "created_aal": string | null,"created_at": string,"expires_at": string,"id": string,"label": string,"last_used_at": string | null,"organisation_id": string,"revoked_at": string | null,"token_hash": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"expires_at"?: string,"id"?: string,"label": string,"last_used_at"?: string | null,"organisation_id": string,"revoked_at"?: string | null,"token_hash": string,"user_id": string
+                    "created_aal"?: string | null,"created_at"?: string,"expires_at"?: string,"id"?: string,"label": string,"last_used_at"?: string | null,"organisation_id": string,"revoked_at"?: string | null,"token_hash": string,"user_id": string
                   }
                   Update: {
-                    "created_at"?: string,"expires_at"?: string,"id"?: string,"label"?: string,"last_used_at"?: string | null,"organisation_id"?: string,"revoked_at"?: string | null,"token_hash"?: string,"user_id"?: string
+                    "created_aal"?: string | null,"created_at"?: string,"expires_at"?: string,"id"?: string,"label"?: string,"last_used_at"?: string | null,"organisation_id"?: string,"revoked_at"?: string | null,"token_hash"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -643,14 +643,14 @@ isOneToOne: false
                   ]
                 },"system_settings": {
                   Row: {
-                    "audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"onboarding_completed_at": string | null,"organisation_id": string,"per_tender_budget_usd": number,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_methods": (string)[],"watched_provinces": (string)[]
+                    "audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"onboarding_completed_at": string | null,"organisation_id": string,"per_tender_budget_usd": number,"require_mfa": boolean,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_methods": (string)[],"watched_provinces": (string)[]
                   }
                   ComputedFields: never
                   Insert: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id": string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
+                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id": string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Update: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id"?: string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
+                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id"?: string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Relationships: [
                     {
@@ -1006,6 +1006,9 @@ isOneToOne: false
                            },
 "set_kill_switch":
 { Args: { "p_engaged": boolean,"p_org": string,"p_reason": string }; Returns: undefined
+                           },
+"set_require_mfa":
+{ Args: { "p_on": boolean,"p_org": string }; Returns: undefined
                            },
 "set_watched_methods":
 { Args: { "p_methods": (string)[],"p_org": string }; Returns: undefined

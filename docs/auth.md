@@ -306,6 +306,45 @@ past the second step alone. The screens say so and ask people to add a second au
    second. If the device was stolen, also review the audit trail and revoke their browser pairing codes (Settings, Browser helper).
 6. **Record** the ticket, who verified, who approved, and when. Do not store the identity document.
 
+### Requiring MFA for an organisation (aal2 enforcement)
+
+An owner can switch on **Require MFA for everyone** in Settings, Security (`system_settings.require_mfa`, off by default, migration 063).
+While it is on, the actions below refuse any session that has not passed an authenticator challenge, that is, whose JWT `aal` claim is
+not `aal2`. Signing in and reading stay open, so someone who has not set one up can still get in and do that.
+
+- **Where the check lives.** `private.require_aal2(org)` raises SQLSTATE **P0403** when the organisation requires MFA and the session is
+  below aal2. It does nothing when there is no signed-in user (`auth.uid()` is null), so the worker, the service role and the agents are
+  unaffected. It is called, after each function's role check, by: `set_kill_switch`, `set_agent_control`, `decide_approval`,
+  `set_watched_provinces`, `set_watched_methods`, `register_company_document`, `verify_company_document`, `archive_company_document`,
+  `document_download`, `connect_email_account`, `disconnect_email_account`, `record_bid_delivery`, `rerun_bid`, `change_tender_delivery`,
+  `create_autofill_token`, `change_member_role`, `remove_member`, `create_invitation`, `revoke_invitation` and `resend_invitation`. Starting
+  and cancelling workflows, retrying tasks and creating tenders stay open: they are what operators do all day, and the dangerous steps
+  (approval, sending, delivery) are gated.
+- **How those functions were changed.** Migration 063 re-creates each one whole from its migrated definition (`pg_get_functiondef`) with
+  one added line, never by text replacement, and keeps the rate-limit lines (`tests/integration/hardening.test.ts` checks both the
+  `hit_rate_limit(` and the `require_aal2(` line in every one, so a later migration that copies an older version fails the test).
+- **Documents.** `private.can_read_document` (used by the Storage read policy and `document_download`) also needs aal2 for director IDs,
+  bank letters and proof of address, on top of the owner or admin role. Other documents stay readable at aal1 through Storage;
+  `document_download` needs aal2 for every document.
+- **Switching it.** `set_require_mfa` is for owners, rate limited and audited (`settings.require_mfa_on` or `_off`), and notifies every member.
+  The caller must be at aal2 **in both directions**: an owner who has not set up an authenticator cannot switch it on (nobody is locked out by
+  the person who turned it on, and the page says "set up yours first"), and a stolen password cannot switch it off. Switching it on revokes
+  browser pairing codes made below aal2 (`autofill_tokens.created_aal`; a pairing made before the column existed counts as below). The last
+  authenticator of a member cannot be removed while it is on.
+- **Lock-out risk, in plain words.** Members without an authenticator can sign in and read, but cannot approve, send, change settings,
+  manage the team, connect mailboxes, pair the browser helper or work with documents until they set one up in Settings, Security. Viewers
+  too, for documents. A banner in the app says so, and the toast for a refused action links to `/mfa`, which says to set one up when there is
+  none. Before switching it on: set up your own, and ask admins and operators to set up theirs. If someone cannot, support can reset a lost
+  authenticator (above) but cannot switch it off for the organisation: that needs an owner at aal2.
+- **Paths that skip the database's check.** `requireAal2(ctx)` (`lib/auth/require-aal2.ts`) repeats the rule, from the session's own `aal`,
+  where an action runs as the service role or does outside work first: `sendBidEmail`, `connectSmtp`, `registerDocument`,
+  `createAutofillToken` and `createBrowserPairing`, the organisation export download, and `/api/email/google/start` and `/callback`.
+  It refuses when the level cannot be read. `toUserError` maps P0403 to the same message ("Verify with your authenticator to do this."), and
+  the toast adds a "Verify now" link.
+- **Tested** with the claims set the way PostgREST sets them (`tests/integration/aal2.test.ts`: all twenty functions refuse aal1 with
+  P0403 and accept aal2, the switch, the pairing codes, documents and Storage, the worker); a real aal2 token needs a TOTP-enabled Auth server
+  (`tests/integration/mfa.test.ts`). `has_org_role` keeps its signature.
+
 ### Forms
 
 Auth forms return field errors and the submitted values (never the password),

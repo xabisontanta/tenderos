@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getAdminSupabase } from "@/lib/supabase/admin";
 import { canAdminister, requireContext } from "@/lib/data/context";
+import { requireAal2 } from "@/lib/auth/require-aal2";
 import { rateLimit, toUserError, type ActionResult } from "@/lib/actions";
 import { DOCUMENT_BUCKET } from "@/lib/domain/documents";
 import { MAX_EMAIL_ATTACHMENT_BYTES, type OutgoingAttachment } from "@/lib/email/compose";
@@ -31,6 +32,8 @@ const smtpSchema = z.object({
 export async function connectSmtp(input: z.input<typeof smtpSchema>): Promise<ActionResult> {
   const ctx = await requireContext();
   if (!canAdminister(ctx.role)) return { ok: false, error: "Only owners and admins can connect a mailbox" };
+  const verify = await requireAal2(ctx);
+  if (verify) return { ok: false, error: verify };
   const parsed = smtpSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
   const d = parsed.data;
@@ -89,6 +92,8 @@ const sendSchema = z.object({
 export async function sendBidEmail(input: z.input<typeof sendSchema>): Promise<ActionResult> {
   const ctx = await requireContext();
   if (!canAdminister(ctx.role)) return { ok: false, error: "Only owners and admins can send a bid" };
+  const verify = await requireAal2(ctx);
+  if (verify) return { ok: false, error: verify };
   const parsed = sendSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
   const d = parsed.data;

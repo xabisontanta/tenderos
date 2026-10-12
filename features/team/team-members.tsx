@@ -44,6 +44,7 @@ export function TeamMembers({ members, currentUserId, currentRole }: { members: 
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, OrgRole>>({});
   const captionId = useId();
 
   function applyRole(m: MemberRow, role: OrgRole) {
@@ -51,6 +52,8 @@ export function TeamMembers({ members, currentUserId, currentRole }: { members: 
     setNotice(null);
     start(async () => {
       const r = await changeMemberRole(m.user_id, role);
+      // Whatever the outcome, the menu goes back to showing what is saved.
+      setDrafts(({ [m.user_id]: _unused, ...rest }) => rest);
       if (r.ok) {
         const message = `${nameOf(m)} is now ${ROLE_DESCRIPTIONS[role].label}`;
         setNotice(message);
@@ -138,19 +141,32 @@ export function TeamMembers({ members, currentUserId, currentRole }: { members: 
                   </th>
                   <td className="py-2 pr-3">
                     {options.length > 0 ? (
-                      <NativeSelect
-                        aria-label={`Role of ${nameOf(m)}`}
-                        className="h-8 w-32"
-                        value={m.role}
-                        disabled={busy}
-                        onChange={(e) => onRoleChange(m, e.target.value as OrgRole)}
-                      >
-                        {options.map((r) => (
-                          <option key={r} value={r}>
-                            {ROLE_DESCRIPTIONS[r].label}
-                          </option>
-                        ))}
-                      </NativeSelect>
+                      <div className="flex items-center gap-2">
+                        {/* Choosing is not saving: with a keyboard, arrowing through the list fires a change at every option. */}
+                        <NativeSelect
+                          aria-label={`Role of ${nameOf(m)}`}
+                          className="h-8 w-32"
+                          value={drafts[m.user_id] ?? m.role}
+                          disabled={busy}
+                          onChange={(e) => setDrafts((d) => ({ ...d, [m.user_id]: e.target.value as OrgRole }))}
+                        >
+                          {options.map((r) => (
+                            <option key={r} value={r}>
+                              {ROLE_DESCRIPTIONS[r].label}
+                            </option>
+                          ))}
+                        </NativeSelect>
+                        {drafts[m.user_id] && drafts[m.user_id] !== m.role && (
+                          <Button
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => onRoleChange(m, drafts[m.user_id])}
+                            aria-label={`Save the new role for ${nameOf(m)}`}
+                          >
+                            Save
+                          </Button>
+                        )}
+                      </div>
                     ) : (
                       <Badge variant="outline">{ROLE_DESCRIPTIONS[m.role].label}</Badge>
                     )}

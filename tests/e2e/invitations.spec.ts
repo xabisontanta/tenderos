@@ -97,6 +97,17 @@ test("an owner invites an auditor, who creates an account, joins and sees the or
   await streamed(page);
   await expect(page.getByRole("rowheader", { name: /Thandi Auditor/ })).toContainText(auditorEmail);
   await expect(page.getByText("No pending invitations.")).toBeVisible();
+
+  // The owner changes the auditor's role (choosing a role is not saving it), then removes them after a confirmation.
+  const row = page.getByRole("row", { name: /Thandi Auditor/ });
+  await row.getByLabel("Role of Thandi Auditor").selectOption("operator");
+  await expect(page.getByRole("status").filter({ hasText: "is now" })).toHaveCount(0);
+  await row.getByRole("button", { name: "Save the new role for Thandi Auditor" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Thandi Auditor is now Operator" })).toBeVisible();
+  await row.getByRole("button", { name: "Remove Thandi Auditor" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Remove" }).click();
+  await expect(page.getByRole("rowheader", { name: /Thandi Auditor/ })).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "Thandi Auditor was removed" })).toBeVisible();
 });
 
 /** Follows the confirmation email when this stack has confirmations on; a stack without them signed the person in already. */

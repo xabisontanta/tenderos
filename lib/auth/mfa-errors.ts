@@ -5,6 +5,18 @@
  */
 export const VERIFY_FIRST = "Verify with your authenticator, then try again.";
 
+/**
+ * What a person is told when an organisation requires an authenticator and their session has not passed the challenge. The
+ * database raises it as SQLSTATE P0403 (`private.require_aal2`), `toUserError` maps that code to this text, and `requireAal2`
+ * returns it for the paths that skip the database's check. The toast recognises it and adds a link to /mfa.
+ */
+export const AAL2_MESSAGE = "Verify with your authenticator to do this.";
+
+/** Either of the "Verify with your authenticator..." messages above. */
+export function isAal2Message(message: unknown): boolean {
+  return typeof message === "string" && message.startsWith("Verify with your authenticator");
+}
+
 export interface AuthLikeError {
   code?: string;
   status?: number;

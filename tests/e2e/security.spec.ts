@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { totp } from "../support/totp";
-import { createOrgOwner, totpEnabled } from "./helpers/accounts";
+import { adminClient, createOrgOwner, totpEnabled } from "./helpers/accounts";
 import { signInThroughForm, streamed } from "./helpers/page";
 
 /**
@@ -40,6 +40,49 @@ test("Security shows the set-up form, /mfa has nothing to check yet, and a start
     .getByRole("alert")
     .filter({ hasText: /not switched on for this TenderOS server/ });
   await expect(qr.or(off)).toBeVisible();
+});
+
+/**
+ * "Require MFA for everyone", from the point of view of an owner who has not set an authenticator up. The requirement is switched
+ * on in the database (switching it on through the app needs a session that passed the challenge, which needs TOTP on the stack),
+ * so this runs on any stack. It shows what a person actually meets: why, and where to go.
+ */
+test("with MFA required, an owner without an authenticator is told why a privileged action stopped, and where to go", async ({ page }) => {
+  const owner = await createOrgOwner({ emailPrefix: "req" });
+  const { error } = await adminClient().from("system_settings").update({ require_mfa: true }).eq("organisation_id", owner.orgId);
+  expect(error).toBeNull();
+  await signInThroughForm(page, owner.email, owner.password);
+  await page.waitForURL((u) => u.pathname === "/");
+
+  // A banner says what is missing, without the person having to hit a wall first.
+  await expect(page.getByRole("status").filter({ hasText: /requires an authenticator app/ })).toBeVisible();
+
+  // The owner's switch shows it as on, and explains.
+  await page.goto("/settings");
+  await streamed(page);
+  const card = page.locator("#security");
+  await expect(card.getByRole("heading", { name: /Require MFA for everyone/ })).toBeVisible();
+  await expect(card.getByText("On", { exact: true }).last()).toBeVisible();
+  await expect(card.getByRole("button", { name: "Switch off" })).toBeVisible();
+
+  // A privileged action is refused by the database, shown in words, with a way to the challenge page.
+  await page.getByRole("button", { name: "Engage kill switch" }).click();
+  const dialog = page.getByRole("alertdialog");
+  await dialog.getByLabel(/Reason/).fill("Drill: checking the second factor");
+  await dialog.getByRole("button", { name: "Confirm" }).click();
+  const toast = page.getByRole("region", { name: /Notifications/ });
+  await expect(toast.getByText(/Verify with your authenticator to do this/)).toBeVisible();
+  await expect(toast.getByRole("link", { name: "Verify now" })).toHaveAttribute("href", /^\/mfa\?next=%2Fsettings/);
+  // (The kill switch's dialog stays open after a refusal, so the person can try again; close it to reach the link.)
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await toast.getByRole("link", { name: "Verify now" }).click();
+  await page.waitForURL("**/mfa?next=%2Fsettings");
+  await expect(page.getByText("No authenticator app set up")).toBeVisible();
+
+  // The kill switch did not engage.
+  const { data } = await adminClient().from("system_settings").select("kill_switch").eq("organisation_id", owner.orgId).single();
+  expect(data!.kill_switch).toBe(false);
 });
 
 test("an authenticator app: set it up, be asked for the code at sign-in, and open the page with it", async ({ page }) => {

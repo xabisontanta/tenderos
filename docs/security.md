@@ -120,6 +120,12 @@ nobody invites an owner. The token travels in an httpOnly SameSite=Lax cookie an
   attorney reviews them.
 - Open-redirect protection on the `next` parameter (`lib/safe-redirect.ts`):
   only same-origin paths, no `//`, backslashes or control characters.
+- Multi-factor authentication: anyone can add an authenticator app (TOTP); a password-only session of someone who has one is
+  sent to `/mfa` before any other page. An owner can **require** one for the whole organisation: while that is on, approving, sending,
+  changing settings, managing the team, connecting mailboxes, pairing the browser helper and working with documents all need a
+  session that passed the challenge (`aal2`), enforced in the database (`private.require_aal2`, SQLSTATE P0403, no-op for the worker)
+  and again in the server actions that run as the service role. Directors' IDs, bank letters and proof of address also need it
+  to be read. A lost authenticator is reset by support, never by the app (`docs/auth.md`, "Lost device").
 - Passwords: at least 12 characters with letters and digits, checked in the
   app and by Supabase Auth. Hosted projects must also require email
   confirmation and secure password change (Authentication settings).
@@ -150,6 +156,5 @@ a person or an organisation, exporting their data and handling a breach are in
 
 - Malware scanning of uploaded documents.
 - Removing unregistered uploads (files uploaded but never recorded).
-- MFA for owners and admins (S9 and S10 of `docs/plans/auth-signup.md`).
 - Sentry error reporting (`SENTRY_DSN`) and alerting.
 - Signed webhooks using `WORKFLOW_SECRET`.

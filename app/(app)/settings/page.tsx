@@ -12,6 +12,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { formatUsd, humanize } from "@/lib/format";
 import { TeamMembers, type MemberRow } from "@/features/team/team-members";
 import { SecuritySettings, type FactorRow } from "@/features/security/security-settings";
+import { RequireMfaSwitch } from "@/features/security/require-mfa-switch";
 import { InvitationsPanel, type InvitationRow } from "@/features/team/invitations-panel";
 import { configuredModels } from "@/agents/runtime/model-routing";
 
@@ -59,6 +60,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Settings" description={ctx.organisation.name} />
       {sp.email === "connected" && <p className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">Gmail connected.</p>}
+      {sp.email === "verify" && (
+        <p role="alert" className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          Your organisation requires an authenticator for this. Verify with your authenticator (or set one up under Security), then connect Gmail again.
+        </p>
+      )}
       {sp.email === "failed" && (
         <p className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
           Gmail was not connected. Try again and allow TenderOS to send email.
@@ -76,7 +82,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 Your authenticators could not be loaded. Try again in a moment.
               </p>
             ) : (
-              <SecuritySettings factors={factors} />
+              <div className="grid gap-4">
+                <SecuritySettings factors={factors} />
+                <RequireMfaSwitch on={s.require_mfa} isOwner={ctx.role === "owner"} hasAuthenticator={factors.some((f) => f.verified)} />
+              </div>
             )}
           </CardContent>
         </Card>

@@ -9,6 +9,8 @@ const CHALLENGE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const QR = "data:image/svg+xml;utf-8,<svg xmlns='http://www.w3.org/2000/svg'></svg>";
 
 const h = vi.hoisted(() => ({
+  role: "owner" as string,
+  requireMfa: false,
   user: { id: "11111111-1111-4111-8111-111111111111" } as { id: string } | null,
   rpc: vi.fn(),
   enroll: vi.fn(),
@@ -27,7 +29,12 @@ vi.mock("next/navigation", () => ({
   },
 }));
 vi.mock("@/lib/data/context", () => ({
-  requireContext: async () => ({ userId: "11111111-1111-4111-8111-111111111111", organisation: { id: "o1" }, settings: { require_mfa: false } }),
+  requireContext: async () => ({
+    userId: "11111111-1111-4111-8111-111111111111",
+    organisation: { id: "o1" },
+    role: h.role,
+    settings: { require_mfa: h.requireMfa },
+  }),
 }));
 vi.mock("@/lib/supabase/server", () => ({
   getServerSupabase: async () => ({
@@ -45,7 +52,7 @@ vi.mock("@/lib/log", () => ({
   },
 }));
 
-const { verifyChallenge, startEnrolment, confirmEnrolment, cancelEnrolment, removeFactor } = await import("@/features/security/actions");
+const { verifyChallenge, startEnrolment, confirmEnrolment, cancelEnrolment, removeFactor, setRequireMfa } = await import("@/features/security/actions");
 
 const form = (values: Record<string, string>) => {
   const fd = new FormData();
@@ -55,16 +62,16 @@ const form = (values: Record<string, string>) => {
 const factor = (id: string, status: "verified" | "unverified", type = "totp") => ({ id, status, factor_type: type, friendly_name: id.slice(0, 4) });
 
 beforeEach(() => {
+  h.role = "owner";
+  h.requireMfa = false;
   h.user = { id: U };
   h.logs.length = 0;
   h.revalidate.mockReset();
   h.rpc.mockReset().mockResolvedValue({ data: null, error: null });
-  h.enroll
-    .mockReset()
-    .mockResolvedValue({
-      data: { id: F1, type: "totp", friendly_name: "Authenticator app", totp: { qr_code: QR, secret: "JBSWY3DPEHPK3PXP", uri: "otpauth://totp/x" } },
-      error: null,
-    });
+  h.enroll.mockReset().mockResolvedValue({
+    data: { id: F1, type: "totp", friendly_name: "Authenticator app", totp: { qr_code: QR, secret: "JBSWY3DPEHPK3PXP", uri: "otpauth://totp/x" } },
+    error: null,
+  });
   h.challenge.mockReset().mockResolvedValue({ data: { id: CHALLENGE, type: "totp", expires_at: 1 }, error: null });
   h.verify.mockReset().mockResolvedValue({ data: { access_token: "t" }, error: null });
   h.unenroll.mockReset().mockResolvedValue({ data: { id: F1 }, error: null });
@@ -222,5 +229,54 @@ describe("cancelEnrolment and removeFactor", () => {
     expect(await removeFactor("x")).toMatchObject({ ok: false });
     expect(await cancelEnrolment("x")).toMatchObject({ ok: false });
     expect(h.unenroll).not.toHaveBeenCalled();
+  });
+});
+
+describe("removeFactor while the organisation requires an authenticator", () => {
+  it("will not remove the last one, which would lock the person out of what they are asked to verify for", async () => {
+    h.requireMfa = true;
+    h.listFactors.mockResolvedValue({ data: { all: [factor(F1, "verified")], totp: [factor(F1, "verified")] }, error: null });
+    const res = await removeFactor(F1);
+    expect(res).toMatchObject({ ok: false, error: expect.stringMatching(/requires an authenticator.*add another/i) });
+    expect(h.unenroll).not.toHaveBeenCalled();
+  });
+
+  it("removes one of several, and any when nothing is required", async () => {
+    h.requireMfa = true;
+    h.listFactors.mockResolvedValue({
+      data: { all: [factor(F1, "verified"), factor(F2, "verified")], totp: [factor(F1, "verified"), factor(F2, "verified")] },
+      error: null,
+    });
+    expect(await removeFactor(F1)).toEqual({ ok: true });
+    h.unenroll.mockClear();
+    h.requireMfa = false;
+    h.listFactors.mockResolvedValue({ data: { all: [factor(F1, "verified")], totp: [factor(F1, "verified")] }, error: null });
+    expect(await removeFactor(F1)).toEqual({ ok: true });
+    expect(h.unenroll).toHaveBeenCalledWith({ factorId: F1 });
+  });
+});
+
+describe("setRequireMfa (the owner's switch in Settings, Security)", () => {
+  it("asks the database to switch it, and refreshes the pages", async () => {
+    expect(await setRequireMfa(true)).toEqual({ ok: true });
+    expect(h.rpc).toHaveBeenCalledWith("set_require_mfa", { p_org: "o1", p_on: true });
+    expect(h.revalidate).toHaveBeenCalled();
+    await setRequireMfa(false);
+    expect(h.rpc).toHaveBeenCalledWith("set_require_mfa", { p_org: "o1", p_on: false });
+  });
+
+  it("is for the owner: anyone else is told so without a call to the database", async () => {
+    for (const role of ["admin", "operator", "viewer"]) {
+      h.role = role;
+      expect(await setRequireMfa(true), role).toMatchObject({ ok: false, error: expect.stringMatching(/only an owner/i) });
+    }
+    expect(h.rpc).not.toHaveBeenCalled();
+  });
+
+  it("shows the verify-first message when the session is below aal2, and hides anything unexpected", async () => {
+    h.rpc.mockResolvedValue({ data: null, error: { code: "P0403", message: "Verify with your authenticator to do this." } });
+    expect(await setRequireMfa(true)).toEqual({ ok: false, error: "Verify with your authenticator to do this." });
+    h.rpc.mockResolvedValue({ data: null, error: { code: "XX000", message: "relation boom" } });
+    expect(await setRequireMfa(true)).toEqual({ ok: false, error: "Could not change the setting" });
   });
 });
