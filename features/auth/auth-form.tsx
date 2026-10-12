@@ -1,50 +1,76 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { signIn, signUp, type FormState } from "./actions";
+import { resendConfirmation, signIn, signUp } from "./actions";
+import type { FormState } from "./form-state";
+import { CheckboxField, Feedback, TextField, useFocusFirstError } from "./form-parts";
+import { TurnstileField } from "./turnstile";
+import { LEGAL_PATHS } from "@/lib/legal/versions";
 
-export function AuthForm({ mode, next }: { mode: "login" | "signup"; next?: string }) {
+export interface CaptchaConfig {
+  mode: "app" | "supabase";
+  siteKey: string;
+}
+
+export function AuthForm({ mode, next, captcha }: { mode: "login" | "signup"; next?: string; captcha?: CaptchaConfig | null }) {
   const [state, action, pending] = useActionState<FormState, FormData>(mode === "login" ? signIn : signUp, {});
+  const [resent, resend, resending] = useActionState<FormState, FormData>(resendConfirmation, {});
+  const form = useRef<HTMLFormElement>(null);
+  useFocusFirstError(form, state);
+  useFocusFirstError(form, resent);
+  const errors = state.fieldErrors ?? {};
+  const values = state.values ?? {};
+  // A CAPTCHA token works once, so the widget needs a new one after either action.
+  const submissions = useMemo(() => [state, resent], [state, resent]);
+  const offerResend = state.code === "email_not_confirmed" || state.code === "confirmation_sent";
+
   return (
-    <form action={action} className="grid gap-4" noValidate>
-      {mode === "signup" && (
-        <div className="grid gap-1.5">
-          <Label htmlFor="fullName">Full name</Label>
-          <Input id="fullName" name="fullName" autoComplete="name" required />
-        </div>
-      )}
-      <div className="grid gap-1.5">
-        <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" autoComplete="email" required />
-      </div>
-      <div className="grid gap-1.5">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="password">Password</Label>
-          {mode === "login" && (
+    <form ref={form} action={action} className="grid gap-4" noValidate>
+      {mode === "signup" && <TextField id="fullName" label="Full name" autoComplete="name" required defaultValue={values.fullName} error={errors.fullName} />}
+      <TextField id="email" label="Email" type="email" autoComplete="email" required defaultValue={values.email} error={errors.email} />
+      <TextField
+        id="password"
+        label="Password"
+        type="password"
+        autoComplete={mode === "login" ? "current-password" : "new-password"}
+        required
+        error={errors.password}
+        hint={mode === "signup" ? "At least 12 characters, with a letter and a number." : undefined}
+        aside={
+          mode === "login" ? (
             <Link className="text-[11px] text-primary hover:underline" href="/forgot-password">
               Forgot password?
             </Link>
-          )}
-        </div>
-        <Input id="password" name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required />
-        {mode === "signup" && <p className="text-[11px] text-muted-foreground">At least 12 characters, with a letter and a number.</p>}
-      </div>
+          ) : undefined
+        }
+      />
+      {mode === "signup" && (
+        <CheckboxField id="acceptTerms" error={errors.acceptTerms} defaultChecked={values.acceptTerms === "on"}>
+          I agree to the{" "}
+          <Link className="text-primary underline-offset-2 hover:underline" href={LEGAL_PATHS.terms} target="_blank" rel="noopener">
+            Terms of Service
+          </Link>{" "}
+          and have read the{" "}
+          <Link className="text-primary underline-offset-2 hover:underline" href={LEGAL_PATHS.privacy} target="_blank" rel="noopener">
+            Privacy Notice
+          </Link>
+          .
+        </CheckboxField>
+      )}
       {next && <input type="hidden" name="next" value={next} />}
-      {state.error && (
-        <p role="alert" className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-          {state.error}
-        </p>
+      {captcha && <TurnstileField siteKey={captcha.siteKey} resetKey={submissions} />}
+      <Feedback state={state} />
+      {offerResend && (
+        <div className="grid gap-2">
+          <Button type="submit" variant="outline" size="sm" formAction={resend} disabled={pending || resending}>
+            {resending ? "Sending…" : "Send the confirmation email again"}
+          </Button>
+          <Feedback state={resent} />
+        </div>
       )}
-      {state.message && (
-        <p role="status" className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
-          {state.message}
-        </p>
-      )}
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending || resending}>
         {pending ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
       </Button>
       <p className="text-center text-xs text-muted-foreground">

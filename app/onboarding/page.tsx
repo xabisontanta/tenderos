@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getServerSupabase } from "@/lib/supabase/server";
+import { pendingLegalAcceptances } from "@/lib/legal/status";
 import { Logo } from "@/components/command-centre/logo";
 import { OnboardingForm } from "@/features/auth/onboarding-form";
 
@@ -12,7 +13,10 @@ export default async function OnboardingPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  const { data: membership } = await supabase.from("organisation_members").select("organisation_id").eq("user_id", user.id).limit(1).maybeSingle();
+  if ((await pendingLegalAcceptances(supabase)).length > 0) redirect("/legal/accept?next=/onboarding");
+  const { data: membership, error } = await supabase.from("organisation_members").select("organisation_id").eq("user_id", user.id).maybeSingle();
+  // Not "no organisation": a failed lookup must not offer to create another.
+  if (error) throw new Error("Could not load your organisation");
   if (membership) redirect("/");
 
   return (

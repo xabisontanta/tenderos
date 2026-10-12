@@ -77,6 +77,7 @@ describe("compliance from the company profile", () => {
     cidb_grade: null,
     sectors: [],
     provinces: [],
+    keywords: [],
     max_contract_value_zar: null,
     authorised_signatory: "A. Director",
     trading_name: null,

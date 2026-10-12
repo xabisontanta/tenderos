@@ -5,18 +5,13 @@ import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { canAdminister, requireContext } from "@/lib/data/context";
 import { toUserError } from "@/lib/actions";
-import { WATCHABLE_PROVINCES } from "@/features/discovery/provinces";
+import { blank, profileFocusShape, readProfileFocus } from "./schema";
 
 export interface CompanyFormState {
   ok?: boolean;
   error?: string;
   fieldErrors?: Record<string, string>;
 }
-
-const blank = (v: FormDataEntryValue | null) => {
-  const s = typeof v === "string" ? v.trim() : "";
-  return s === "" ? null : s;
-};
 
 const schema = z.object({
   legal_name: z.string().min(2).max(200).nullable(),
@@ -29,12 +24,8 @@ const schema = z.object({
   tax_pin_expires_at: z.iso.date("Use a date").nullable(),
   bbbee_level: z.coerce.number().int().min(1).max(8).nullable(),
   bbbee_expires_at: z.iso.date("Use a date").nullable(),
-  cidb_grade: z
-    .string()
-    .regex(/^[1-9][A-Z]{1,3}$/, "Use the grade as printed, e.g. 5CE")
-    .nullable(),
-  sectors: z.array(z.string().min(2).max(120)).max(30),
-  provinces: z.array(z.enum(WATCHABLE_PROVINCES.map((p) => p.value) as [string, ...string[]])),
+  // CIDB grade, sectors, provinces and keywords: one definition, shared with the setup wizard.
+  ...profileFocusShape,
   max_contract_value_zar: z.coerce.number().positive("Must be more than zero").nullable(),
   authorised_signatory: z.string().min(2).max(120).nullable(),
   trading_name: z.string().min(2).max(200).nullable(),
@@ -67,12 +58,7 @@ export async function saveCompanyProfile(_prev: CompanyFormState, formData: Form
     tax_pin_expires_at: blank(formData.get("tax_pin_expires_at")),
     bbbee_level: blank(formData.get("bbbee_level")),
     bbbee_expires_at: blank(formData.get("bbbee_expires_at")),
-    cidb_grade: blank(formData.get("cidb_grade"))?.toUpperCase() ?? null,
-    sectors: (blank(formData.get("sectors")) ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
-    provinces: formData.getAll("provinces").map(String),
+    ...readProfileFocus(formData),
     max_contract_value_zar: blank(formData.get("max_contract_value_zar"))?.replace(/[\s,R]/g, "") ?? null,
     authorised_signatory: blank(formData.get("authorised_signatory")),
     trading_name: blank(formData.get("trading_name")),

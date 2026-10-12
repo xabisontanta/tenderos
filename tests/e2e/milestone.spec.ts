@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { pickLink, waitForMail } from "./helpers/mailbox";
 
 /**
  * The first milestone, driven through the browser: sign up, create an
@@ -16,19 +17,58 @@ test("simulated tender runs from creation to approved submission", async ({ page
   const consoleErrors: string[] = [];
   page.on("console", (m) => m.type() === "error" && consoleErrors.push(m.text()));
 
+  const email = `e2e-${stamp}@example.test`;
   await page.goto("/signup");
   await page.getByLabel("Full name").fill("E2E Operator");
-  await page.getByLabel("Email").fill(`e2e-${stamp}@example.test`);
+  await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(`Sup3r-secret-${stamp}`);
+  // Creating an account needs consent to the terms and privacy notice, which are public pages.
+  await expect(page.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
+  await page.getByRole("checkbox", { name: /I agree to the Terms of Service/ }).check();
   await page.getByRole("button", { name: "Create account" }).click();
+
+  // With email confirmation on (supabase/config.toml, and every hosted project) the
+  // app asks the visitor to check their mailbox; the test reads that mailbox and opens
+  // the link. A stack that was started before confirmation was turned on signs the
+  // visitor in at once, and the wait ends on /onboarding.
+  const checkEmail = page.getByText(/check your email to confirm/i);
+  await Promise.race([page.waitForURL("**/onboarding"), checkEmail.waitFor()]);
+  if (!page.url().endsWith("/onboarding")) {
+    const mail = await waitForMail(email, { subject: /confirm/i });
+    const link = pickLink(mail, /\/auth\/(v1\/verify|confirm)/);
+    // Links to this app (the token_hash form) must open against the server under test.
+    await page.goto(new URL(link).pathname.startsWith("/auth/confirm") ? pickLink(mail, /\/auth\/confirm/, { origin: page.url() }) : link);
+  }
 
   await page.waitForURL("**/onboarding");
   await page.getByLabel("Company name").fill(`E2E Construction ${stamp}`);
   await page.getByRole("button", { name: "Create organisation" }).click();
-  // New organisations land on Discover to choose provinces.
+
+  // New organisations are asked four optional questions; this run answers them.
+  await page.waitForURL("**/onboarding/profile");
+  await expect(page.getByRole("heading", { name: "What do you supply?" })).toBeVisible();
+  // (exact: the chosen entries list carries a label that contains the same words)
+  await page.getByLabel("Sectors you work in", { exact: true }).fill("Construction");
+  await page.getByLabel("Sectors you work in", { exact: true }).press("Enter");
+  await expect(page.getByRole("button", { name: "Remove Construction" })).toBeVisible();
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByRole("heading", { name: "Where can you deliver?" })).toBeVisible();
+  await page.getByLabel("KwaZulu-Natal").check();
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByLabel("CIDB grade", { exact: true }).fill("5ce");
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByLabel("Keywords", { exact: true }).fill("road maintenance");
+  await page.getByLabel("Keywords", { exact: true }).press("Enter");
+  await page.getByRole("button", { name: "Save and finish" }).click();
+
+  // They land on Discover, already watching the chosen province, with automatic runs off.
   await page.waitForURL((u) => u.pathname === "/discover");
   await expect(page.getByRole("heading", { name: "Discover tenders" })).toBeVisible();
-  await expect(page.getByLabel("KwaZulu-Natal")).toBeVisible();
+  await expect(page.getByLabel("KwaZulu-Natal")).toBeChecked();
+  await page.goto("/company");
+  await expect(page.getByRole("button", { name: "Remove Construction" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove road maintenance" })).toBeVisible();
+  await expect(page.getByLabel("CIDB grade (construction only)")).toHaveValue("5CE");
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /dashboard|command/i }).first()).toBeVisible();
 

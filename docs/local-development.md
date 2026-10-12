@@ -10,6 +10,14 @@ npm run dev
 npm run worker       # second terminal
 ```
 
+New accounts must confirm their email address. Locally the confirmation email
+lands in the mail catcher (Mailpit): open the "Inbucket URL" from
+`npx supabase status` (http://127.0.0.1:56324 with the default ports), or read
+it from tests with `tests/e2e/helpers/mailbox.ts` (`MAILBOX_URL` overrides the
+address). Auth settings are read when the stack starts, so after pulling a
+change to `supabase/config.toml` (confirmations, redirect URLs) restart the
+stack. How auth works and what a hosted project needs: `docs/auth.md`.
+
 `npm run db:reset` recreates the database from migrations. After a schema
 change, run `npm run db:migrate` and `npm run db:types`.
 
@@ -34,11 +42,12 @@ npm run build && npm run test:e2e
 
 1. Create a Supabase project. Apply migrations with
    `npx supabase link --project-ref <ref>` and `npx supabase db push`.
-2. In Supabase Auth settings, set the site URL and redirect URL
-   (`<APP_URL>/auth/callback`), and turn on email confirmation.
+2. Configure Supabase Auth with the checklist in `docs/auth.md` (site URL and
+   redirect URLs, email confirmation, SMTP, CAPTCHA, templates).
 3. Deploy the web app (for example to Vercel) with:
    `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-   `SUPABASE_SERVICE_ROLE_KEY`, `APP_URL`.
+   `SUPABASE_SERVICE_ROLE_KEY`, `APP_URL`, `AUTH_RATE_LIMIT_SECRET`,
+   `TRUSTED_IP_HEADER` (and `CAPTCHA_MODE` with the Turnstile keys).
 4. Run the worker as a long-lived process (a container on Fly.io, Railway,
    Render or similar) with `DATABASE_URL` (session pooler or direct
    connection; `LISTEN` does not work through a transaction pooler),
