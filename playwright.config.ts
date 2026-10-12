@@ -1,4 +1,8 @@
+import { config } from "dotenv";
 import { defineConfig, devices } from "@playwright/test";
+
+// The tests read the local stack's address and keys, as the worker does.
+config({ path: [".env.local"], quiet: true });
 
 const PORT = Number(process.env.E2E_PORT ?? 3100);
 
@@ -27,5 +31,15 @@ export default defineConfig({
     url: `http://127.0.0.1:${PORT}/login`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      ...(process.env as Record<string, string>),
+      // Every link in an auth email or redirect is built from APP_URL (docs/auth.md);
+      // point it at the server under test, which supabase/config.toml allows.
+      APP_URL: `http://127.0.0.1:${PORT}`,
+      // `next start` runs as production, which requires both. No proxy sets a client
+      // address here, so only the per-email limits apply during the run.
+      AUTH_RATE_LIMIT_SECRET: process.env.AUTH_RATE_LIMIT_SECRET || "e2e-only-auth-rate-limit-secret-0123456789abcdef",
+      TRUSTED_IP_HEADER: process.env.TRUSTED_IP_HEADER || "x-forwarded-for",
+    },
   },
 });

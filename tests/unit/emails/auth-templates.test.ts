@@ -11,10 +11,12 @@ const built = buildAuthTemplates(resolveBrand(process.env));
 
 /** What each Supabase email must contain, from https://supabase.com/docs/guides/auth/auth-email-templates. */
 const REQUIRED: Record<string, string[]> = {
-  confirmation: ["{{ .ConfirmationURL }}", "{{ .Email }}"],
+  // Sign-up confirmation and password reset link to the app's /auth/confirm route
+  // with the token hash (docs/auth.md), so the link works in any browser.
+  confirmation: ["{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=email&amp;next=/onboarding", "{{ .Email }}"],
   invite: ["{{ .ConfirmationURL }}", "{{ .Email }}"],
   magic_link: ["{{ .ConfirmationURL }}", "{{ .Email }}"],
-  recovery: ["{{ .ConfirmationURL }}", "{{ .Email }}"],
+  recovery: ["{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=recovery&amp;next=/reset-password", "{{ .Email }}"],
   email_change: ["{{ .ConfirmationURL }}", "{{ .Email }}", "{{ .NewEmail }}"],
   reauthentication: ["{{ .Token }}"],
   password_changed: [],

@@ -28,7 +28,8 @@ npm run dev           # http://localhost:3000
 npm run worker        # in a second terminal: runs agent work
 ```
 
-Sign up, name your organisation, create a tender with "Simulation" ticked,
+Sign up, confirm your email (the message lands in the local mail catcher; see
+`docs/local-development.md`), name your organisation, create a tender with "Simulation" ticked,
 and press **Start simulated workflow**. Watch it in Office and Operations, then
 approve it on the Approvals page.
 
@@ -56,7 +57,10 @@ screenshots of each stage.
 Choose provinces on **Discover**. The Tender Scout reads every published
 tender on National Treasury eTenders, keeps the ones in those provinces and
 hands each to the Tender Director, who runs analysis, qualification,
-compliance, proposal, pricing and QA without anyone pressing a button. Scans
+compliance, proposal, pricing and QA without anyone pressing a button (automatic
+runs are off for a new organisation; switch them on in Discover). New
+organisations are guided through sectors, provinces, CIDB grade and keywords
+right after sign-up, and can skip that (`docs/auth.md`). Scans
 repeat every morning, and tenders already on file are updated when eTenders
 changes them (a moved closing date is flagged). Fill in **Company** and upload
 your CIPC, CSD, tax compliance and signed SBD documents on **Documents**:

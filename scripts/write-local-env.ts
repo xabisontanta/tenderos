@@ -26,6 +26,10 @@ const lines = [
   "APP_URL=http://localhost:3000",
   `ENCRYPTION_KEY=${randomBytes(32).toString("base64")}`,
   `WORKFLOW_SECRET=${randomBytes(24).toString("base64url")}`,
+  // Sign-in, sign-up and reset limits (docs/auth.md). Locally no proxy sets a
+  // client address, so only the per-email limits apply.
+  `AUTH_RATE_LIMIT_SECRET=${randomBytes(32).toString("hex")}`,
+  "TRUSTED_IP_HEADER=x-forwarded-for",
   "WORKER_CONCURRENCY=2",
   "SIMULATION_STEP_MS=4000",
   "LOG_LEVEL=info",

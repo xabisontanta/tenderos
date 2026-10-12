@@ -124,8 +124,12 @@ const LOCAL_HTTP = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/;
 
 /** Links in email must be https (or a Supabase placeholder, or mailto). http is for local development only. */
 export function isSafeHref(href: string, opts: { allowLocalHttp?: boolean } = {}): boolean {
-  if (!href || href !== href.trim() || /[\u0000-\u001f\u007f\s]/.test(href.replace(/^\{\{ \.[A-Za-z]+ \}\}/, ""))) return false;
-  if (PLACEHOLDER_URL.test(href)) return true;
+  if (!href || href !== href.trim()) return false;
+  // A Supabase template URL may embed more placeholders after the first, e.g.
+  // {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}. They are removed
+  // before the whitespace check because each contains spaces.
+  if (PLACEHOLDER_URL.test(href)) return !/[\u0000-\u001f\u007f\s]/.test(href.replace(/\{\{ \.[A-Za-z]+ \}\}/g, ""));
+  if (/[\u0000-\u001f\u007f\s]/.test(href)) return false;
   if (/^https:\/\/[^/\s]/i.test(href)) return true;
   if (/^mailto:[^\s]+$/i.test(href)) return true;
   return Boolean(opts.allowLocalHttp) && LOCAL_HTTP.test(href);

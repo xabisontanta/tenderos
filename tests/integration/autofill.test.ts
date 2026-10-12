@@ -455,9 +455,11 @@ describe("Apply with TenderOS", () => {
     expect((await planCall(null, tenderId)).status).toBe(401);
     expect((await planCall("nonsense", tenderId)).status).toBe(401);
     expect((await planCall(ownerToken, "not-a-uuid")).status).toBe(404);
-    const { data: temp } = await createToken(owner, "Revoked apply");
+    // The owner already holds the maximum of five active codes by now, so use
+    // a member with room.
+    const { data: temp } = await createToken(adminUser, "Revoked apply");
     const [row] = await resolve(temp!);
-    await owner.client.rpc("revoke_autofill_token", { p_id: row.token_id });
+    await adminUser.client.rpc("revoke_autofill_token", { p_id: row.token_id });
     expect((await planCall(temp!, tenderId)).status).toBe(401);
     expect((await reportCall(temp!, tenderId, REPORT)).status).toBe(401);
   });
