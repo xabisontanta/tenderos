@@ -2,7 +2,7 @@ import type { Pool } from "@/lib/db/pool";
 import { withTx } from "@/lib/db/pool";
 import type { Logger } from "@/lib/log";
 import { formatSast, provinceLabel } from "@/lib/format";
-import { fetchOpenTenders, mapEtendersRow, type DiscoveredTender, type Fetcher } from "@/agents/discovery/etenders";
+import { feedHealth, fetchOpenTenders, mapEtendersRow, type DiscoveredTender, type FeedStats, type Fetcher } from "@/agents/discovery/etenders";
 import { MIN_PREPARATION_HOURS } from "@/agents/qualification/logic";
 import type { JobOutcome } from "./engine";
 import * as db from "./store";
@@ -11,10 +11,17 @@ export interface DiscoveryDeps {
   fetcher: Fetcher;
   logger: Logger;
   now: () => Date;
+  /** Share of the portal's rows that may be unreadable before the scan fails (default 0.2). */
+  maxInvalidRatio?: number;
 }
 
 const MAX_EVENTS_PER_SCAN = 40;
 const MAX_FETCH_ATTEMPTS = 3;
+/** Tenders stored per transaction: a long scan does not hold one transaction (and its locks) open, and work already committed survives a later failure. */
+const STORE_CHUNK = 200;
+const DEFAULT_MAX_INVALID_RATIO = 0.2;
+
+type Tx = Parameters<Parameters<typeof withTx>[1]>[0];
 
 interface RunRow {
   id: string;
@@ -77,15 +84,28 @@ export async function runDiscovery(pool: Pool, runId: string, attempts: number, 
   const wanted = new Set(run.provinces);
   const methods = new Set(run.methods);
 
-  // 1. Read the portal.
+  // 1. Read the portal. Rows that cannot be used are counted, with the reason, never dropped silently.
   const found: DiscoveredTender[] = [];
+  const stats: FeedStats = { seen: 0, unreadable: 0, reasons: {} };
+  const count = (why: string, n = 1) => void (stats.reasons[why] = (stats.reasons[why] ?? 0) + n);
   let scanned = 0;
   try {
     for await (const page of fetchOpenTenders(deps.fetcher)) {
       scanned += page.rows.length;
+      stats.seen += page.seen;
+      stats.unreadable += page.unreadable;
+      for (const [why, n] of Object.entries(page.reasons)) count(why, n);
       for (const row of page.rows) {
         const m = mapEtendersRow(row, deps.now());
-        if (m.ok && wanted.has(m.tender.province) && methods.has(m.tender.submission_method)) found.push(m.tender);
+        if (!m.ok) {
+          // A tender that has closed is normal; one without a closing date or an issuing organisation is malformed.
+          if (m.reason !== "already closed") {
+            stats.unreadable++;
+            count(m.reason);
+          }
+          continue;
+        }
+        if (wanted.has(m.tender.province) && methods.has(m.tender.submission_method)) found.push(m.tender);
       }
       const pct = page.total ? Math.min(90, Math.round((scanned / page.total) * 90)) : 50;
       await pool.query("update public.tasks set progress = $2, progress_message = $3 where id = $1", [
@@ -105,95 +125,68 @@ export async function runDiscovery(pool: Pool, runId: string, attempts: number, 
     return { status: "completed" };
   }
 
-  // 2. Store what is new and report it.
+  // A feed we could barely read is a failed scan, not "completed, 0 matched".
+  const maxInvalid = deps.maxInvalidRatio ?? DEFAULT_MAX_INVALID_RATIO;
+  if (stats.unreadable > 0) log.warn("eTenders rows could not be used", { seen: stats.seen, unreadable: stats.unreadable, reasons: stats.reasons });
+  const feed = feedHealth(stats, maxInvalid);
+  if (!feed.ok) {
+    await failScan(pool, run, scout, taskId, `${feed.message} Nothing was stored.`, { seen: stats.seen, skipped: stats.unreadable, scanned });
+    return { status: "completed" };
+  }
+
+  // 2. Store what is new, a chunk of tenders per transaction and a savepoint per tender, so one row the database
+  //    refuses is skipped and counted instead of undoing the others.
+  const stored = await storeTenders(pool, run, sourceId, scout, taskId, found, log);
+  const skipped = stats.unreadable + stored.failed;
+  const storeHealth = found.length > 0 && stored.failed / found.length > maxInvalid + 1e-9;
+  if (storeHealth) {
+    const why = Object.entries(stored.reasons)
+      .map(([reason, n]) => `${n} × ${reason}`)
+      .join(", ");
+    await failScan(
+      pool,
+      run,
+      scout,
+      taskId,
+      `${stored.failed} of ${found.length} tenders could not be stored (${why}), more than the ${Math.round(maxInvalid * 100)}% allowed. ${stored.created} were stored.`,
+      { seen: stats.seen, skipped, scanned },
+    );
+    return { status: "completed" };
+  }
+
   const result = await withTx(
     pool,
     async (c) => {
-      let created = 0;
-      let refreshed = 0;
-      const createdIds: string[] = [];
-      // Tenders already on file: the same portal row (refresh it) or the same
-      // reference number entered another way (leave it alone).
-      const { rows: existing } = await c.query<{
-        id: string;
-        source_id: string | null;
-        source_ref: string | null;
-        reference_number: string | null;
-        closing_at: string;
-        status: string;
-      }>(
-        `select id, source_id, source_ref, reference_number, closing_at, status from public.tenders
-          where organisation_id = $1 and ((source_id = $2 and source_ref = any ($3)) or reference_number = any ($4))`,
-        [run.organisation_id, sourceId, found.map((t) => t.source_ref), found.flatMap((t) => (t.reference_number ? [t.reference_number] : []))],
-      );
-      const bySourceRef = new Map(existing.filter((e) => e.source_id === sourceId && e.source_ref).map((e) => [e.source_ref!, e]));
-      const byReference = new Map(existing.filter((e) => e.reference_number).map((e) => [e.reference_number!, e]));
-      for (const t of found) {
-        const prev = bySourceRef.get(t.source_ref);
-        if (prev) {
-          if (!FROZEN_STATUSES.has(prev.status) && (await refreshTender(c, prev, t, scout.id, taskId))) refreshed++;
-          continue;
-        }
-        if (t.reference_number && byReference.has(t.reference_number)) continue;
-        const { rows } = await c.query<{ id: string }>(
-          `insert into public.tenders (organisation_id, source_id, source_ref, reference_number, title, issuing_organisation, description,
-             province, sector, published_at, closing_at, briefing_at, briefing_compulsory, briefing_location, submission_method,
-             submission_destination, source_url, documents, is_simulation)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,false)
-           on conflict do nothing returning id`,
-          [
-            run.organisation_id,
-            sourceId,
-            t.source_ref,
-            t.reference_number,
-            t.title,
-            t.issuing_organisation,
-            t.description,
-            t.province,
-            t.sector,
-            t.published_at,
-            t.closing_at,
-            t.briefing_at,
-            t.briefing_compulsory,
-            t.briefing_location,
-            t.submission_method,
-            t.submission_destination,
-            t.source_url,
-            JSON.stringify(t.documents),
-          ],
-        );
-        if (!rows[0]) continue;
-        created++;
-        createdIds.push(rows[0].id);
-        if (created <= MAX_EVENTS_PER_SCAN) {
-          await db.emitEvent(c, {
-            organisationId: run.organisation_id,
-            type: "TENDER_DISCOVERED",
-            summary: `${scout.display_name} found "${t.title.slice(0, 160)}" (${provinceLabel(t.province)}, closes ${formatSast(t.closing_at)})`,
-            agentId: scout.id,
-            tenderId: rows[0].id,
-            taskId,
-            payload: { source: "etenders", source_ref: t.source_ref, reference: t.reference_number, contact: t.contact },
-          });
-        }
-      }
+      const { created, refreshed } = stored;
       await c.query(`update public.tasks set status = 'COMPLETED', progress = 100, completed_at = now(), progress_message = $2, output = $3 where id = $1`, [
         taskId,
-        `${found.length} open tenders in scope, ${created} new${refreshed ? `, ${refreshed} updated` : ""}`,
-        JSON.stringify({ scanned, matched: found.length, created, refreshed, provinces: run.provinces, source: "etenders" }),
+        `${found.length} open tenders in scope, ${created} new${refreshed ? `, ${refreshed} updated` : ""}${skipped ? `, ${skipped} rows skipped` : ""}`,
+        JSON.stringify({
+          scanned,
+          matched: found.length,
+          created,
+          refreshed,
+          rows_seen: stats.seen,
+          rows_skipped: skipped,
+          skip_reasons: { ...stats.reasons, ...stored.reasons },
+          provinces: run.provinces,
+          source: "etenders",
+        }),
       ]);
-      await c.query(`update public.discovery_runs set scanned = $2, matched = $3, created_tenders = $4 where id = $1`, [
+      await c.query(`update public.discovery_runs set scanned = $2, matched = $3, created_tenders = $4, rows_seen = $5, rows_skipped = $6 where id = $1`, [
         run.id,
         scanned,
         found.length,
         created,
+        stats.seen,
+        skipped,
       ]);
       await c.query("update public.system_settings set last_discovery_at = now() where organisation_id = $1", [run.organisation_id]);
-      const summary = `${scout.display_name} scanned ${scanned} published tenders: ${found.length} in ${run.provinces.map(provinceLabel).join(", ")}, ${created} new`;
+      const summary = `${scout.display_name} scanned ${scanned} published tenders: ${found.length} in ${run.provinces.map(provinceLabel).join(", ")}, ${created} new${skipped ? `, ${skipped} rows skipped` : ""}`;
       await db.emitEvent(c, { organisationId: run.organisation_id, type: "AGENT_COMPLETED_TASK", summary, agentId: scout.id, taskId });
       await db.setAgentActivity(c, scout.id, summary, null);
       await db.refreshAgent(c, scout.id);
-      return { created, createdIds };
+      return { created };
     },
     scout.id,
   );
@@ -207,10 +200,21 @@ export async function runDiscovery(pool: Pool, runId: string, attempts: number, 
     await db.emitEvent(c, {
       organisationId: run.organisation_id,
       type: "DISCOVERY_COMPLETED",
-      summary: `Scan finished: ${found.length} open tenders in scope, ${result.created} new` + (started ? `, ${started} handed to the Tender Director` : ""),
+      summary:
+        `Scan finished: ${found.length} open tenders in scope, ${result.created} new` +
+        (started ? `, ${started} handed to the Tender Director` : "") +
+        (skipped ? `, ${skipped} of ${stats.seen} rows could not be used` : ""),
       agentId: scout.id,
       taskId,
-      payload: { discovery_run_id: run.id, scanned, matched: found.length, created: result.created, started_workflows: started },
+      payload: {
+        discovery_run_id: run.id,
+        scanned,
+        matched: found.length,
+        created: result.created,
+        started_workflows: started,
+        rows_seen: stats.seen,
+        rows_skipped: skipped,
+      },
     });
     if (result.created > 0) {
       await db.notifyMembers(
@@ -226,6 +230,134 @@ export async function runDiscovery(pool: Pool, runId: string, attempts: number, 
   });
   log.info("discovery completed", { scanned, matched: found.length, created: result.created, started });
   return { status: "completed" };
+}
+
+interface StoreResult {
+  created: number;
+  refreshed: number;
+  /** Tenders the database refused. */
+  failed: number;
+  /** Why, as text → how many (an error code, never a value from the row). */
+  reasons: Record<string, number>;
+}
+
+/**
+ * Stores the tenders a scan found. STORE_CHUNK tenders share a transaction; each has its own savepoint, so a row
+ * the database refuses (a check, a trigger, a bad byte) is rolled back alone, counted, and the rest carry on.
+ */
+async function storeTenders(
+  pool: Pool,
+  run: RunRow,
+  sourceId: string,
+  scout: { id: string; display_name: string },
+  taskId: string,
+  found: DiscoveredTender[],
+  log: Logger,
+): Promise<StoreResult> {
+  const out: StoreResult = { created: 0, refreshed: 0, failed: 0, reasons: {} };
+  for (let i = 0; i < found.length; i += STORE_CHUNK) {
+    const chunk = found.slice(i, i + STORE_CHUNK);
+    await withTx(
+      pool,
+      async (c) => {
+        // Tenders already on file: the same portal row (refresh it) or the same
+        // reference number entered another way (leave it alone).
+        const { rows: existing } = await c.query<ExistingTender>(
+          `select id, source_id, source_ref, reference_number, closing_at, status from public.tenders
+            where organisation_id = $1 and ((source_id = $2 and source_ref = any ($3)) or reference_number = any ($4))`,
+          [run.organisation_id, sourceId, chunk.map((t) => t.source_ref), chunk.flatMap((t) => (t.reference_number ? [t.reference_number] : []))],
+        );
+        const known = {
+          bySourceRef: new Map(existing.filter((e) => e.source_id === sourceId && e.source_ref).map((e) => [e.source_ref!, e])),
+          byReference: new Map(existing.filter((e) => e.reference_number).map((e) => [e.reference_number!, e])),
+        };
+        for (const t of chunk) {
+          await c.query("savepoint scan_row");
+          try {
+            const outcome = await storeOne(c, run, sourceId, scout, taskId, t, known, out.created < MAX_EVENTS_PER_SCAN);
+            await c.query("release savepoint scan_row");
+            if (outcome === "created") out.created++;
+            else if (outcome === "refreshed") out.refreshed++;
+          } catch (err) {
+            await c.query("rollback to savepoint scan_row");
+            const { code, constraint } = err as { code?: string; constraint?: string };
+            const why = `database error ${code ?? "unknown"}${constraint ? ` on ${constraint}` : ""}`;
+            out.failed++;
+            out.reasons[why] = (out.reasons[why] ?? 0) + 1;
+            log.warn("tender not stored", { source_ref: t.source_ref, code, constraint });
+          }
+        }
+      },
+      scout.id,
+    );
+  }
+  return out;
+}
+
+interface ExistingTender {
+  id: string;
+  source_id: string | null;
+  source_ref: string | null;
+  reference_number: string | null;
+  closing_at: string;
+  status: string;
+}
+
+async function storeOne(
+  c: Tx,
+  run: RunRow,
+  sourceId: string,
+  scout: { id: string; display_name: string },
+  taskId: string,
+  t: DiscoveredTender,
+  known: { bySourceRef: Map<string, ExistingTender>; byReference: Map<string, ExistingTender> },
+  announce: boolean,
+): Promise<"created" | "refreshed" | "unchanged"> {
+  const prev = known.bySourceRef.get(t.source_ref);
+  if (prev) {
+    return !FROZEN_STATUSES.has(prev.status) && (await refreshTender(c, prev, t, scout.id, taskId)) ? "refreshed" : "unchanged";
+  }
+  if (t.reference_number && known.byReference.has(t.reference_number)) return "unchanged";
+  const { rows } = await c.query<{ id: string }>(
+    `insert into public.tenders (organisation_id, source_id, source_ref, reference_number, title, issuing_organisation, description,
+       province, sector, published_at, closing_at, briefing_at, briefing_compulsory, briefing_location, submission_method,
+       submission_destination, source_url, documents, is_simulation)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,false)
+     on conflict do nothing returning id`,
+    [
+      run.organisation_id,
+      sourceId,
+      t.source_ref,
+      t.reference_number,
+      t.title,
+      t.issuing_organisation,
+      t.description,
+      t.province,
+      t.sector,
+      t.published_at,
+      t.closing_at,
+      t.briefing_at,
+      t.briefing_compulsory,
+      t.briefing_location,
+      t.submission_method,
+      t.submission_destination,
+      t.source_url,
+      JSON.stringify(t.documents),
+    ],
+  );
+  if (!rows[0]) return "unchanged";
+  if (announce) {
+    await db.emitEvent(c, {
+      organisationId: run.organisation_id,
+      type: "TENDER_DISCOVERED",
+      summary: `${scout.display_name} found "${t.title.slice(0, 160)}" (${provinceLabel(t.province)}, closes ${formatSast(t.closing_at)})`,
+      agentId: scout.id,
+      tenderId: rows[0].id,
+      taskId,
+      payload: { source: "etenders", source_ref: t.source_ref, reference: t.reference_number, contact: t.contact },
+    });
+  }
+  return "created";
 }
 
 async function autoStartWorkflows(pool: Pool, run: RunRow, log: Logger): Promise<number> {
@@ -258,10 +390,20 @@ async function autoStartWorkflows(pool: Pool, run: RunRow, log: Logger): Promise
   return started;
 }
 
-async function failScan(pool: Pool, run: RunRow, scout: { id: string; display_name: string }, taskId: string, message: string) {
+/** Counts to keep on a failed scan: what the portal sent, what could not be used, what could be read. */
+interface FailedCounts {
+  seen: number;
+  skipped: number;
+  scanned: number;
+}
+
+async function failScan(pool: Pool, run: RunRow, scout: { id: string; display_name: string }, taskId: string, message: string, counts?: FailedCounts) {
   await withTx(pool, async (c) => {
     await c.query("update public.tasks set status = 'FAILED', failed_at = now(), error = $2 where id = $1", [taskId, message.slice(0, 2000)]);
-    await c.query("update public.discovery_runs set status = 'FAILED', completed_at = now(), error = $2 where id = $1", [run.id, message.slice(0, 2000)]);
+    await c.query(
+      "update public.discovery_runs set status = 'FAILED', completed_at = now(), error = $2, rows_seen = $3, rows_skipped = $4, scanned = $5 where id = $1",
+      [run.id, message.slice(0, 2000), counts?.seen ?? 0, counts?.skipped ?? 0, counts?.scanned ?? 0],
+    );
     await db.emitEvent(c, {
       organisationId: run.organisation_id,
       type: "DISCOVERY_FAILED",
@@ -293,13 +435,7 @@ const FROZEN_STATUSES = new Set(["SUBMITTED", "UNDER_EVALUATION", "AWARDED", "UN
  * briefing changes, new documents). A moved closing date also moves a pending
  * approval's expiry and is reported. Returns true when anything changed.
  */
-async function refreshTender(
-  c: Parameters<Parameters<typeof withTx>[1]>[0],
-  prev: { id: string; closing_at: string },
-  portal: DiscoveredTender,
-  scoutId: string,
-  taskId: string,
-): Promise<boolean> {
+async function refreshTender(c: Tx, prev: { id: string; closing_at: string }, portal: DiscoveredTender, scoutId: string, taskId: string): Promise<boolean> {
   // Once a bid is waiting for approval or delivery its delivery details are locked (migration 055): the
   // portal may move the closing date, but not the address, method or link the bid was approved with.
   const { rows: current } = await c.query<{
@@ -367,14 +503,7 @@ async function refreshTender(
  * The portal lists other delivery details than the ones a bid was put forward with. They are not applied,
  * so the person is told once for each distinct set of details the portal shows, not on every scan.
  */
-async function reportKeptDelivery(
-  c: Parameters<Parameters<typeof withTx>[1]>[0],
-  tenderId: string,
-  organisationId: string,
-  portal: DiscoveredTender,
-  scoutId: string,
-  taskId: string,
-): Promise<void> {
+async function reportKeptDelivery(c: Tx, tenderId: string, organisationId: string, portal: DiscoveredTender, scoutId: string, taskId: string): Promise<void> {
   const payload = {
     kept_delivery_details: true,
     portal: { submission_method: portal.submission_method, submission_destination: portal.submission_destination, source_url: portal.source_url },

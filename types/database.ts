@@ -323,14 +323,14 @@ isOneToOne: false
                   ]
                 },"discovery_runs": {
                   Row: {
-                    "completed_at": string | null,"created_at": string,"created_tenders": number,"error": string | null,"id": string,"matched": number,"methods": (string)[],"organisation_id": string,"provinces": (string)[],"requested_by": string | null,"scanned": number,"source": string,"started_at": string | null,"started_workflows": number,"status": Database["public"]['Enums']["discovery_status"],"trigger": string
+                    "completed_at": string | null,"created_at": string,"created_tenders": number,"error": string | null,"id": string,"matched": number,"methods": (string)[],"organisation_id": string,"provinces": (string)[],"requested_by": string | null,"rows_seen": number,"rows_skipped": number,"scanned": number,"source": string,"started_at": string | null,"started_workflows": number,"status": Database["public"]['Enums']["discovery_status"],"trigger": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id": string,"provinces": (string)[],"requested_by"?: string | null,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger": string
+                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id": string,"provinces": (string)[],"requested_by"?: string | null,"rows_seen"?: number,"rows_skipped"?: number,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger": string
                   }
                   Update: {
-                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id"?: string,"provinces"?: (string)[],"requested_by"?: string | null,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger"?: string
+                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id"?: string,"provinces"?: (string)[],"requested_by"?: string | null,"rows_seen"?: number,"rows_skipped"?: number,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger"?: string
                   }
                   Relationships: [
                     {

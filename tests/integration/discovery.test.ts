@@ -4,7 +4,7 @@ import { createLogger } from "@/lib/log";
 import { Worker } from "@/workflows/worker";
 import { DOCUMENT_BUCKET } from "@/lib/domain/documents";
 import { bootstrapOrg, createUser, drainOrg, env, type TestUser } from "./helpers";
-import { etendersFetcher, etendersRow, futureSaLocal } from "../fixtures/etenders";
+import { etendersFetcher, etendersRow, futureSaLocal, nulRow, unreadableRows, untitledRow } from "../fixtures/etenders";
 
 let pool: Pool;
 let owner: TestUser;
@@ -170,5 +170,120 @@ describe("province discovery", () => {
     const { data: run } = await owner.client.from("discovery_runs").select("status, error").eq("id", runId!).single();
     expect(run!.status).toBe("FAILED");
     expect(run!.error).toMatch(/HTTP 503/);
+  });
+});
+
+describe("scan resilience", () => {
+  let scout: TestUser;
+  let scoutOrg: string;
+  let n = 960000;
+  const good = (count: number, over: Record<string, unknown> = {}) =>
+    Array.from({ length: count }, () => etendersRow({ id: ++n, tender_No: `RES-${n}`, province: "Gauteng", ...over }));
+
+  async function scan(feed: unknown[], maxInvalidRatio?: number) {
+    const w = new Worker(pool, {
+      concurrency: 1,
+      simulationStepMs: 0,
+      logger: createLogger({ service: "test" }, "error"),
+      fetcher: etendersFetcher(feed).fetcher,
+      discovery: maxInvalidRatio === undefined ? undefined : { maxInvalidRatio },
+    });
+    // start_discovery allows six scans in five minutes; these tests run more.
+    await pool.query(`delete from private.rate_limits where key like $1`, [`${scout.id}:start_discovery%`]);
+    const started = await scout.client.rpc("start_discovery", { p_org: scoutOrg, p_provinces: ["GAUTENG"] });
+    expect(started.error).toBeNull();
+    await drainOrg(w, pool, scoutOrg);
+    const { rows } = await pool.query(
+      `select status, error, scanned, matched, created_tenders, rows_seen, rows_skipped from public.discovery_runs where id = $1`,
+      [started.data],
+    );
+    return rows[0];
+  }
+  const tenderCount = async () =>
+    (await pool.query(`select count(*)::int as n from public.tenders where organisation_id = $1`, [scoutOrg])).rows[0].n as number;
+
+  beforeAll(async () => {
+    scout = await createUser("resilient");
+    scoutOrg = await bootstrapOrg(scout);
+  });
+
+  it("keeps the rest of the scan when some rows are dirty: strips NUL, titles the untitled, counts the unreadable", async () => {
+    const feed = [...good(30), nulRow({ id: 960901 }), untitledRow({ id: 960902, province: "Gauteng" }), ...unreadableRows()];
+    const run = await scan(feed);
+    // 6 of the 38 rows cannot be used (3 unreadable, no closing date, an unparseable date, no organisation): 16 percent.
+    expect(run).toMatchObject({ status: "COMPLETED", error: null, rows_seen: 38, rows_skipped: 6, scanned: 35, matched: 32, created_tenders: 32 });
+
+    const { rows: nul } = await pool.query(
+      `select title, reference_number, issuing_organisation, documents from public.tenders where organisation_id = $1 and source_ref = '960901'`,
+      [scoutOrg],
+    );
+    expect(nul[0]).toMatchObject({ title: "Supply of pipes", reference_number: "NUL-1", issuing_organisation: "Water Department" });
+    expect(nul[0].documents[0].name).toBe("spec.pdf");
+    const { rows: untitled } = await pool.query(`select title from public.tenders where organisation_id = $1 and source_ref = '960902'`, [scoutOrg]);
+    expect(untitled[0].title).toBe("eTenders 960902");
+
+    const { rows: done } = await pool.query(
+      `select payload from public.agent_events where organisation_id = $1 and event_type = 'DISCOVERY_COMPLETED' order by created_at desc limit 1`,
+      [scoutOrg],
+    );
+    expect(done[0].payload).toMatchObject({ rows_seen: 38, rows_skipped: 6 });
+  });
+
+  it("fails the scan, saying why, when most of the feed cannot be read, instead of completing with nothing", async () => {
+    const before = await tenderCount();
+    const drifted = Array.from({ length: 10 }, (_, i) => etendersRow({ id: { moved: i } }));
+    const run = await scan(drifted);
+    expect(run).toMatchObject({ status: "FAILED", rows_seen: 10, rows_skipped: 10, matched: 0, created_tenders: 0 });
+    expect(run.error).toMatch(/10 rows and 10 \(100%\) could not be read/);
+    expect(run.error).toMatch(/more than the 20% allowed/);
+    expect(run.error).toMatch(/Nothing was stored/);
+    expect(await tenderCount()).toBe(before);
+    const { rows: note } = await pool.query(
+      `select 1 from public.notifications where organisation_id = $1 and kind = 'DISCOVERY_FAILED' and body like '%could not be read%'`,
+      [scoutOrg],
+    );
+    expect(note.length).toBeGreaterThan(0);
+  });
+
+  it("lets an operator choose how much unreadable data to tolerate", async () => {
+    const mixed = () => [...good(7), ...Array.from({ length: 3 }, (_, i) => etendersRow({ id: { moved: i } }))];
+    expect((await scan(mixed())).status).toBe("FAILED"); // 30 percent against the 20 percent default
+    expect(await scan(mixed(), 0.5)).toMatchObject({ status: "COMPLETED", rows_seen: 10, rows_skipped: 3 });
+    expect((await scan(mixed(), 0)).status).toBe("FAILED");
+  });
+
+  describe("a tender the database refuses", () => {
+    beforeAll(async () => {
+      await pool.query(`
+        create or replace function public.test_refuse_tender() returns trigger language plpgsql as $$
+        begin
+          if new.reference_number like 'REFUSE-%' then raise exception 'refused by the test' using errcode = '23514'; end if;
+          return new;
+        end $$`);
+      await pool.query(`drop trigger if exists test_refuse_tender on public.tenders`);
+      await pool.query(`create trigger test_refuse_tender before insert on public.tenders for each row execute function public.test_refuse_tender()`);
+    });
+    afterAll(async () => {
+      await pool.query(`drop trigger if exists test_refuse_tender on public.tenders`);
+      await pool.query(`drop function if exists public.test_refuse_tender()`);
+    });
+
+    it("does not roll back the others: that row is skipped and counted, the rest are stored", async () => {
+      const feed = [...good(30), etendersRow({ id: 960950, tender_No: "REFUSE-1", province: "Gauteng" })];
+      const run = await scan(feed);
+      expect(run).toMatchObject({ status: "COMPLETED", rows_seen: 31, rows_skipped: 1, matched: 31, created_tenders: 30 });
+      const { rows } = await pool.query(`select reference_number from public.tenders where organisation_id = $1 and reference_number like 'REFUSE-%'`, [
+        scoutOrg,
+      ]);
+      expect(rows).toEqual([]);
+    });
+
+    it("fails the scan when the database refuses most of what it was given", async () => {
+      const feed = Array.from({ length: 10 }, (_, i) => etendersRow({ id: 961000 + i, tender_No: `REFUSE-${i}`, province: "Gauteng" }));
+      const run = await scan(feed);
+      expect(run).toMatchObject({ status: "FAILED", rows_seen: 10, rows_skipped: 10, created_tenders: 0 });
+      expect(run.error).toMatch(/could not be stored/);
+      expect(run.error).toMatch(/23514/);
+    });
   });
 });

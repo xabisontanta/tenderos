@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { fetchOpenTenders, mapEtendersRow, provinceCode, saTime } from "@/agents/discovery/etenders";
+import { feedHealth, fetchOpenTenders, mapEtendersRow, maxInvalidRatioFromEnv, provinceCode, sanitizeText, saTime } from "@/agents/discovery/etenders";
 import { documentEvidence, evaluateCompliance, isComplete, profileEvidence } from "@/agents/compliance/logic";
 import type { CompanyProfile } from "@/agents/runtime/types";
-import { etendersFetcher, etendersRow, futureSaLocal } from "../fixtures/etenders";
+import { etendersFetcher, etendersRow, futureSaLocal, nulRow, unreadableRows, untitledRow } from "../fixtures/etenders";
+
+// Anything Postgres refuses in text or jsonb, plus the other control characters people paste in from Word and PDFs.
+const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/;
+// Half of a surrogate pair: valid in a JS string, refused by jsonb.
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
 describe("eTenders connector", () => {
   it("maps province names from the portal", () => {
@@ -60,6 +65,130 @@ describe("eTenders connector", () => {
   it("fails loudly when the portal errors", async () => {
     const gen = fetchOpenTenders(async () => ({ ok: false, status: 503, json: async () => ({}) }));
     await expect(gen.next()).rejects.toThrow(/HTTP 503/);
+  });
+});
+
+describe("eTenders connector: dirty input", () => {
+  const read = async (rows: unknown[]) => {
+    const pages: Array<{ rows: unknown[]; total: number; seen: number; unreadable: number; reasons: Record<string, number> }> = [];
+    for await (const page of fetchOpenTenders(etendersFetcher(rows).fetcher)) pages.push(page);
+    return pages;
+  };
+
+  it("strips NUL and other control characters, keeping line breaks in descriptions", () => {
+    expect(sanitizeText("Pipes\u0000 and\u0007 valves\u001b[31m")).toBe("Pipes and valves[31m");
+    expect(sanitizeText("line one\nline two\ttabbed")).toBe("line one\nline two\ttabbed");
+    expect(sanitizeText("﻿BOM and zero​width")).toBe("BOM and zerowidth");
+    expect(sanitizeText("lone \uD800 surrogate and a pair \u{1F600}")).toBe("lone  surrogate and a pair \u{1F600}");
+  });
+
+  it("leaves no control character in any text field, the contact details or the documents", () => {
+    const m = mapEtendersRow(nulRow() as never, new Date());
+    expect(m.ok).toBe(true);
+    if (!m.ok) return;
+    const everything = JSON.stringify(m.tender);
+    expect(CONTROL.test(everything.replace(/\\n/g, " "))).toBe(false);
+    // JSON.stringify would write NUL as \u0000, which jsonb refuses.
+    expect(everything).not.toMatch(/\\u00(0[0-8bcBC]|1[0-9a-fA-F]|7f|[89][0-9a-fA-F])/);
+    expect(m.tender.title).toBe("Supply of pipes");
+    expect(m.tender.reference_number).toBe("NUL-1");
+    expect(m.tender.issuing_organisation).toBe("Water Department");
+    expect(m.tender.documents[0].name).toBe("spec.pdf");
+    expect(m.tender.contact).toEqual({ person: "Pat", email: "pat@example.org", telephone: "011-1" });
+  });
+
+  it("falls back to the reference, then to the portal id, when the description gives no usable title", () => {
+    const untitled = mapEtendersRow(untitledRow() as never, new Date());
+    expect(untitled.ok && untitled.tender.title).toBe("eTenders 800002");
+    const byReference = mapEtendersRow(untitledRow({ tender_No: "GT-2026-17" }) as never, new Date());
+    expect(byReference.ok && byReference.tender.title).toBe("GT-2026-17");
+    const shortReference = mapEtendersRow(untitledRow({ tender_No: "A1", description: "  \r\n\u0000 " }) as never, new Date());
+    expect(shortReference.ok && shortReference.tender.title).toBe("eTenders 800002");
+    const secondLine = mapEtendersRow(etendersRow({ description: "ab\r\nSupply of valves" }) as never, new Date());
+    expect(secondLine.ok && secondLine.tender.title).toBe("Supply of valves");
+  });
+
+  it("always produces a title the database accepts (3 to 300 characters) and a reference of at most 120", () => {
+    const messy = ["", " ", "\u0000", "N/A", "n/a", "ab", "\r\n\r\n", "x".repeat(5000), "\u{1F600}".repeat(400), "A\u0000B\u0000C"];
+    for (const description of messy) {
+      for (const tender_No of [...messy, null]) {
+        const m = mapEtendersRow(etendersRow({ id: 7, description, tender_No }) as never, new Date());
+        expect(m.ok, JSON.stringify({ description: description.slice(0, 10), tender_No })).toBe(true);
+        if (!m.ok) continue;
+        expect(m.tender.title.length).toBeGreaterThanOrEqual(3);
+        expect(m.tender.title.length).toBeLessThanOrEqual(300);
+        expect(CONTROL.test(m.tender.title)).toBe(false);
+        expect(LONE_SURROGATE.test(m.tender.title), "a truncation must not split an emoji in half").toBe(false);
+        expect((m.tender.reference_number ?? "x").length).toBeLessThanOrEqual(120);
+      }
+    }
+  });
+
+  it("falls back to the other organisation field when the first is empty, and reports what is missing", () => {
+    const m = mapEtendersRow(etendersRow({ department: "", organ_of_State: "City of Tshwane" }) as never, new Date());
+    expect(m.ok && m.tender.issuing_organisation).toBe("City of Tshwane");
+    expect(mapEtendersRow(etendersRow({ department: null, organ_of_State: "" }) as never, new Date())).toEqual({
+      ok: false,
+      reason: "no issuing organisation",
+    });
+    expect(mapEtendersRow(etendersRow({ closing_Date: null }) as never, new Date())).toEqual({ ok: false, reason: "no closing date" });
+  });
+
+  it("counts rows it cannot read instead of dropping them silently or failing the page", async () => {
+    const pages = await read([etendersRow({ id: 1 }), ...unreadableRows(), etendersRow({ id: 2 })]);
+    expect(pages).toHaveLength(1);
+    const [page] = pages;
+    expect(page.seen).toBe(2 + unreadableRows().length);
+    expect(page.unreadable).toBe(3); // an object id, a null id, a row that is not an object
+    expect(page.rows).toHaveLength(page.seen - page.unreadable);
+    expect(Object.keys(page.reasons).join("\n")).toMatch(/^id: /m);
+    expect(Object.values(page.reasons).reduce((a, b) => a + b, 0)).toBe(page.unreadable);
+  });
+
+  it("tolerates harmless drift: numeric ids as text, numbers where text was, and a broken document list", async () => {
+    const pages = await read([
+      etendersRow({ id: "173690" }),
+      etendersRow({ id: 5, closing_Date: 20261016, tender_No: 4711 }),
+      etendersRow({ id: 6, supportDocument: "oops" }),
+      etendersRow({ id: 7, province: { name: "Gauteng" } }),
+    ]);
+    expect(pages[0].unreadable).toBe(0);
+    expect(pages[0].rows).toHaveLength(4);
+    const mapped = pages[0].rows.map((r) => mapEtendersRow(r as never, new Date()));
+    expect(mapped[0].ok && mapped[0].tender.source_ref).toBe("173690");
+    expect(mapped[1]).toEqual({ ok: false, reason: "no closing date" }); // a number is not a time we can trust
+    expect(mapped[2].ok && mapped[2].tender.documents).toEqual([]);
+    expect(mapped[3].ok && mapped[3].tender.province).toBe("UNKNOWN");
+  });
+
+  it("does not report a closed tender as unreadable", () => {
+    expect(mapEtendersRow(etendersRow({ closing_Date: futureSaLocal(-3) }) as never, new Date())).toEqual({ ok: false, reason: "already closed" });
+  });
+});
+
+describe("feed health", () => {
+  it("passes a feed with up to the allowed share of unreadable rows", () => {
+    expect(feedHealth({ seen: 100, unreadable: 20, reasons: {} }, 0.2)).toEqual({ ok: true });
+    expect(feedHealth({ seen: 0, unreadable: 0, reasons: {} }, 0.2)).toEqual({ ok: true });
+    expect(feedHealth({ seen: 3, unreadable: 0, reasons: {} }, 0)).toEqual({ ok: true });
+  });
+
+  it("fails a feed above it, saying how many and why, so a scan never reports 0 matched for a feed it could not read", () => {
+    const h = feedHealth({ seen: 100, unreadable: 21, reasons: { "id: expected a number": 18, "no closing date": 3 } }, 0.2);
+    expect(h.ok).toBe(false);
+    if (h.ok) return;
+    expect(h.message).toMatch(/100 rows/);
+    expect(h.message).toMatch(/21 \(21%\)/);
+    expect(h.message).toMatch(/more than the 20% allowed/);
+    expect(h.message).toMatch(/18 × id: expected a number/);
+  });
+
+  it("reads the allowed share from DISCOVERY_MAX_INVALID_PCT, with 20 percent as the default", () => {
+    expect(maxInvalidRatioFromEnv({})).toBe(0.2);
+    expect(maxInvalidRatioFromEnv({ DISCOVERY_MAX_INVALID_PCT: "35" })).toBe(0.35);
+    expect(maxInvalidRatioFromEnv({ DISCOVERY_MAX_INVALID_PCT: "0" })).toBe(0);
+    expect(maxInvalidRatioFromEnv({ DISCOVERY_MAX_INVALID_PCT: "100" })).toBe(1);
+    for (const bad of ["", "abc", "-5", "150", "NaN"]) expect(maxInvalidRatioFromEnv({ DISCOVERY_MAX_INVALID_PCT: bad }), bad).toBe(0.2);
   });
 });
 

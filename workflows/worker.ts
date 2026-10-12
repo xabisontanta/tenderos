@@ -13,6 +13,8 @@ export interface WorkerOptions {
   idlePollMs?: number;
   /** HTTP client for tender source connectors (tests inject a fake). */
   fetcher?: Fetcher;
+  /** Scan tuning. Production reads DISCOVERY_MAX_INVALID_PCT; tests set it directly. */
+  discovery?: { maxInvalidRatio?: number };
   /** AI wiring (model client, tender document source, environment). Tests inject fakes; production uses the defaults. */
   ai?: EngineAiOptions;
 }
@@ -36,7 +38,13 @@ export class Worker {
     private readonly pool: Pool,
     private readonly opts: WorkerOptions,
   ) {
-    this.engine = new WorkflowEngine(pool, { simulationStepMs: opts.simulationStepMs, logger: opts.logger, fetcher: opts.fetcher, ai: opts.ai });
+    this.engine = new WorkflowEngine(pool, {
+      simulationStepMs: opts.simulationStepMs,
+      logger: opts.logger,
+      fetcher: opts.fetcher,
+      discovery: opts.discovery,
+      ai: opts.ai,
+    });
   }
 
   async start(): Promise<void> {

@@ -60,6 +60,17 @@ only facts present in the portal row, deduplicates on the portal id, and, when
 `auto_run_workflows` is on, starts the `tender_bid` workflow on up to
 `max_auto_workflows_per_scan` tenders that still leave 48 hours to bid.
 
+The portal's data is not trusted. Every text field has control characters (NUL
+included, which Postgres refuses) stripped; a tender with no usable description
+or reference is titled `eTenders <id>`; a field of the wrong shape counts as
+missing. Rows that cannot become a tender (unreadable, no closing date, no
+issuing organisation, refused by the database) are counted, never dropped
+silently: `discovery_runs.rows_seen` and `rows_skipped`. If more than
+`DISCOVERY_MAX_INVALID_PCT` percent (default 20) of the rows are unusable the
+scan fails with that explanation, instead of completing with "0 matched".
+Tenders are stored a chunk at a time with a savepoint per tender, so one row the
+database refuses is skipped and the others are kept.
+
 With AI switched on (section 11), five steps of the `tender_bid` plan run a
 model instead of rules: the Tender Analyst, the Qualification Agent's fit
 assessment, the Proposal Writer, the Pricing Analyst and the QA Reviewer. Each
