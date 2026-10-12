@@ -2,12 +2,25 @@
   "manifest_version": 3,
   "name": "TenderOS browser helper",
   "short_name": "TenderOS",
-  "version": "0.1.0",
-  "description": "Fills tender portal forms with your company's TenderOS details and documents. You check every field and submit it yourself.",
+  "version": "0.2.0",
+  "description": "Opens your tender portal from TenderOS, fills your company's details and attaches your verified documents. You check every field and submit it yourself.",
   "minimum_chrome_version": "116",
   "permissions": ["activeTab", "scripting", "storage"],
-  "host_permissions": ["https://tenderos-six.vercel.app/*", "http://localhost:3000/*"],
-  "optional_host_permissions": ["https://*/*"],
+  "host_permissions": ["https://tenderos-six.vercel.app/*", "https://www.etenders.gov.za/*", "https://etenders.gov.za/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://tenderos-six.vercel.app/*"],
+      "js": ["src/bridge.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/bridge-main.js", "src/protocol.js", "src/config.js"],
+      "matches": ["https://tenderos-six.vercel.app/*"]
+    }
+  ],
   "background": {
     "service_worker": "src/background.js",
     "type": "module"
