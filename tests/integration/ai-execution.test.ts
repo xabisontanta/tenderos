@@ -69,6 +69,8 @@ const costRows = async (runId: string) =>
 
 describe("AI execution on real tenders", () => {
   it("records real tokens and cost for AI steps, which is what the daily budget gate reads", async () => {
+    // One organisation per user is enforced in the database, so every test gets its own owner.
+    owner = await createUser("ai-owner");
     const orgId = await bootstrapOrg(owner);
     await pool.query(
       `insert into public.company_profiles (organisation_id, legal_name, cidb_grade, sectors, provinces) values ($1, 'Umzansi Civils (Pty) Ltd', '6CE', '{Construction}', '{LIMPOPO}')`,
@@ -99,6 +101,8 @@ describe("AI execution on real tenders", () => {
   });
 
   it("stays rules-only, at no cost, when AI is not switched on", async () => {
+    // One organisation per user is enforced in the database, so every test gets its own owner.
+    owner = await createUser("ai-owner");
     const orgId = await bootstrapOrg(owner);
     const { runId } = await realRun(orgId);
     await drainOrg(aiWorker({ ...AI_ENV, AI_ENABLED: "false" }), pool, orgId);
@@ -108,16 +112,23 @@ describe("AI execution on real tenders", () => {
   });
 
   it("refuses to run AI steps when the key is missing instead of falling back to rules", async () => {
+    // One organisation per user is enforced in the database, so every test gets its own owner.
+    owner = await createUser("ai-owner");
     const orgId = await bootstrapOrg(owner);
     const { runId } = await realRun(orgId);
     await drainOrg(aiWorker({ ...AI_ENV, ANTHROPIC_API_KEY: "" }), pool, orgId);
     const { rows } = await pool.query(`select status, error from public.tasks where workflow_run_id = $1 and step_key = 'analysis'`, [runId]);
     expect(rows[0].status).toBe("FAILED");
     expect(rows[0].error).toMatch(/ANTHROPIC_API_KEY/);
-    expect(await costRows(runId)).toEqual([]);
+    // Steps before the refused one (intake) ran rules-only at no cost; nothing was billed to the AI provider.
+    const rowsAfter = await costRows(runId);
+    expect(rowsAfter.filter((r) => r.provider === "anthropic")).toEqual([]);
+    expect(rowsAfter.every((r) => r.cost_usd === 0)).toBe(true);
   });
 
   it("stops the next AI step once the daily budget is spent", async () => {
+    // One organisation per user is enforced in the database, so every test gets its own owner.
+    owner = await createUser("ai-owner");
     const orgId = await bootstrapOrg(owner);
     await pool.query(`update public.system_settings set daily_ai_budget_usd = 0.005 where organisation_id = $1`, [orgId]);
     const { runId } = await realRun(orgId);
@@ -132,6 +143,8 @@ describe("AI execution on real tenders", () => {
   });
 
   it("refuses a tool that is not on the agent's stored list and logs a WARNING", async () => {
+    // One organisation per user is enforced in the database, so every test gets its own owner.
+    owner = await createUser("ai-owner");
     const orgId = await bootstrapOrg(owner);
     await pool.query(`update public.agents set allowed_tools = '{}' where organisation_id = $1 and slug = 'tender_analyst'`, [orgId]);
     const { runId } = await realRun(orgId);
@@ -147,6 +160,8 @@ describe("AI execution on real tenders", () => {
 
 describe("stored tool lists", () => {
   it("match the registry for every agent a new organisation gets", async () => {
+    // One organisation per user is enforced in the database, so every test gets its own owner.
+    owner = await createUser("ai-owner");
     const orgId = await bootstrapOrg(owner);
     const { rows } = await pool.query(`select slug, allowed_tools from public.agents where organisation_id = $1`, [orgId]);
     for (const def of AGENTS) {
