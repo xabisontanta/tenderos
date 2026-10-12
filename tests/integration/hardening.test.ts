@@ -88,6 +88,7 @@ describe("database hardening", () => {
       "create_autofill_token",
       "revoke_autofill_token",
       "accept_legal",
+      "complete_onboarding",
     ];
     const { rows } = await pool.query(`select proname, prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = any($1)`, [fns]);
     expect(rows.map((r) => r.proname).sort()).toEqual([...fns].sort());

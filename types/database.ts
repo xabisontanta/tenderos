@@ -251,14 +251,14 @@ isOneToOne: false
                   ]
                 },"company_profiles": {
                   Row: {
-                    "authorised_signatory": string | null,"bbbee_expires_at": string | null,"bbbee_level": number | null,"cidb_grade": string | null,"contact_email": string | null,"contact_person": string | null,"contact_phone": string | null,"csd_number": string | null,"legal_name": string | null,"max_contract_value_zar": number | null,"organisation_id": string,"physical_address": string | null,"postal_address": string | null,"provinces": (string)[],"registration_number": string | null,"sectors": (string)[],"tax_pin": string | null,"tax_pin_expires_at": string | null,"trading_name": string | null,"updated_at": string,"updated_by": string | null,"vat_number": string | null,"website": string | null
+                    "authorised_signatory": string | null,"bbbee_expires_at": string | null,"bbbee_level": number | null,"cidb_grade": string | null,"contact_email": string | null,"contact_person": string | null,"contact_phone": string | null,"csd_number": string | null,"keywords": (string)[],"legal_name": string | null,"max_contract_value_zar": number | null,"organisation_id": string,"physical_address": string | null,"postal_address": string | null,"provinces": (string)[],"registration_number": string | null,"sectors": (string)[],"tax_pin": string | null,"tax_pin_expires_at": string | null,"trading_name": string | null,"updated_at": string,"updated_by": string | null,"vat_number": string | null,"website": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"contact_email"?: string | null,"contact_person"?: string | null,"contact_phone"?: string | null,"csd_number"?: string | null,"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id": string,"physical_address"?: string | null,"postal_address"?: string | null,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"trading_name"?: string | null,"updated_at"?: string,"updated_by"?: string | null,"vat_number"?: string | null,"website"?: string | null
+                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"contact_email"?: string | null,"contact_person"?: string | null,"contact_phone"?: string | null,"csd_number"?: string | null,"keywords"?: (string)[],"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id": string,"physical_address"?: string | null,"postal_address"?: string | null,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"trading_name"?: string | null,"updated_at"?: string,"updated_by"?: string | null,"vat_number"?: string | null,"website"?: string | null
                   }
                   Update: {
-                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"contact_email"?: string | null,"contact_person"?: string | null,"contact_phone"?: string | null,"csd_number"?: string | null,"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id"?: string,"physical_address"?: string | null,"postal_address"?: string | null,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"trading_name"?: string | null,"updated_at"?: string,"updated_by"?: string | null,"vat_number"?: string | null,"website"?: string | null
+                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"contact_email"?: string | null,"contact_person"?: string | null,"contact_phone"?: string | null,"csd_number"?: string | null,"keywords"?: (string)[],"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id"?: string,"physical_address"?: string | null,"postal_address"?: string | null,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"trading_name"?: string | null,"updated_at"?: string,"updated_by"?: string | null,"vat_number"?: string | null,"website"?: string | null
                   }
                   Relationships: [
                     {
@@ -629,14 +629,14 @@ isOneToOne: false
                   ]
                 },"system_settings": {
                   Row: {
-                    "audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"organisation_id": string,"per_tender_budget_usd": number,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_methods": (string)[],"watched_provinces": (string)[]
+                    "audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"onboarding_completed_at": string | null,"organisation_id": string,"per_tender_budget_usd": number,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_methods": (string)[],"watched_provinces": (string)[]
                   }
                   ComputedFields: never
                   Insert: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"organisation_id": string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
+                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id": string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Update: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"organisation_id"?: string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
+                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id"?: string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Relationships: [
                     {
@@ -871,6 +871,9 @@ isOneToOne: false
                            },
 "cancel_workflow":
 { Args: { "p_reason": string,"p_run_id": string }; Returns: undefined
+                           },
+"complete_onboarding":
+{ Args: { "p_org": string }; Returns: undefined
                            },
 "connect_email_account":
 { Args: { "p_display_name": string,"p_from": string,"p_org": string,"p_provider": Database["public"]['Enums']["email_provider"],"p_secret": string,"p_smtp_host"?: string,"p_smtp_port"?: number,"p_smtp_username"?: string }; Returns: string

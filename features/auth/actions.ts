@@ -195,7 +195,8 @@ export async function createOrganisation(_: FormState, formData: FormData): Prom
     ...registryPayload(),
   } as never);
   if (error) return { error: toUserError(error, "Could not create the organisation"), values };
-  redirect("/discover");
+  // The optional setup questions come next; skipping them leaves a working account.
+  redirect("/onboarding/profile");
 }
 
 export async function signOut(): Promise<void> {

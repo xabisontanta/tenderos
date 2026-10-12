@@ -125,6 +125,34 @@ The migration (019) refuses to run while any user has several memberships; it do
 pick one. If that ever fires on a real database, decide with the customer which
 organisation each listed user stays in, remove the other memberships, and run it again.
 
+### Guided onboarding
+
+After the organisation is created (`/onboarding`), owners and admins land on
+`/onboarding/profile`: four optional questions that tell the Tender Scout where to
+look.
+
+| Question                              | Stored in                                                                                                         | Rule                                                     |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Sectors (free text, with suggestions) | `company_profiles.sectors`                                                                                        | up to 30, 2 to 120 characters each                       |
+| Provinces                             | `company_profiles.provinces` and the Tender Scout's watched provinces (`set_watched_provinces`, **auto-run off**) | the provinces the scout can watch                        |
+| CIDB grade                            | `company_profiles.cidb_grade`                                                                                     | `^[1-9][A-Z]{1,3}$`, e.g. `5CE`                          |
+| Keywords                              | `company_profiles.keywords` (migration 020)                                                                       | up to 50, 2 to 60 characters each, no control characters |
+
+- One zod definition (`features/company/schema.ts`) validates these on the wizard and on the
+  Company page, and migrations 009 and 020 repeat the rules as constraints.
+- **Skippable.** "Skip for now" saves nothing but the fact that the wizard was seen
+  (`system_settings.onboarding_completed_at`, set by `complete_onboarding`, owners and
+  admins, rate limited). The account then works as it does today: no provinces watched, so
+  nothing is scanned until someone picks provinces on Discover. Until the wizard is finished or
+  skipped, the dashboard shows a "Finish setting up" prompt for owners and admins. "Save and
+  finish" writes only what was filled in, so blanks never erase what the Company page holds.
+- **Automatic workflows are off for new organisations** (migration 020 changes the column
+  default from on to off; existing organisations keep their setting). Previously a skipped wizard
+  followed by choosing provinces left the scout starting bids on up to 25 tenders per scan
+  without anyone asking. The wizard saves provinces with auto-run explicitly off too.
+- The wizard keeps what was typed after a problem, moves to the step with the problem and focuses
+  the field; steps have headings that take focus, and added or removed entries are announced.
+
 ### Abuse controls: rate limits and CAPTCHA
 
 Sign-in, sign-up, password reset and resending a confirmation email are

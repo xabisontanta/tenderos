@@ -43,10 +43,32 @@ test("simulated tender runs from creation to approved submission", async ({ page
   await page.waitForURL("**/onboarding");
   await page.getByLabel("Company name").fill(`E2E Construction ${stamp}`);
   await page.getByRole("button", { name: "Create organisation" }).click();
-  // New organisations land on Discover to choose provinces.
+
+  // New organisations are asked four optional questions; this run answers them.
+  await page.waitForURL("**/onboarding/profile");
+  await expect(page.getByRole("heading", { name: "What do you supply?" })).toBeVisible();
+  // (exact: the chosen entries list carries a label that contains the same words)
+  await page.getByLabel("Sectors you work in", { exact: true }).fill("Construction");
+  await page.getByLabel("Sectors you work in", { exact: true }).press("Enter");
+  await expect(page.getByRole("button", { name: "Remove Construction" })).toBeVisible();
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByRole("heading", { name: "Where can you deliver?" })).toBeVisible();
+  await page.getByLabel("KwaZulu-Natal").check();
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByLabel("CIDB grade", { exact: true }).fill("5ce");
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByLabel("Keywords", { exact: true }).fill("road maintenance");
+  await page.getByLabel("Keywords", { exact: true }).press("Enter");
+  await page.getByRole("button", { name: "Save and finish" }).click();
+
+  // They land on Discover, already watching the chosen province, with automatic runs off.
   await page.waitForURL((u) => u.pathname === "/discover");
   await expect(page.getByRole("heading", { name: "Discover tenders" })).toBeVisible();
-  await expect(page.getByLabel("KwaZulu-Natal")).toBeVisible();
+  await expect(page.getByLabel("KwaZulu-Natal")).toBeChecked();
+  await page.goto("/company");
+  await expect(page.getByRole("button", { name: "Remove Construction" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove road maintenance" })).toBeVisible();
+  await expect(page.getByLabel("CIDB grade (construction only)")).toHaveValue("5CE");
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /dashboard|command/i }).first()).toBeVisible();
 
