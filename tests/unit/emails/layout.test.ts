@@ -41,9 +41,7 @@ describe("isSafeHref", () => {
     "{{ .SiteURL }}/privacy",
     "{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/onboarding",
     "mailto:help@example.co.za",
-  ])("accepts %s", (href) =>
-    expect(isSafeHref(href)).toBe(true),
-  );
+  ])("accepts %s", (href) => expect(isSafeHref(href)).toBe(true));
   it.each(["javascript:alert(1)", "data:text/html;base64,AAAA", "//evil.example", "http://evil.example/x", "ftp://x", "", "  https://x.example"])(
     "rejects %s",
     (href) => expect(isSafeHref(href)).toBe(false),
