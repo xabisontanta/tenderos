@@ -63,3 +63,5 @@ supabase/.temp
 !/emails/preview/screenshots/bid-delivered.dark.desktop.png
 !/emails/preview/screenshots/closing-reminders.light.desktop.png
 !/emails/preview/screenshots/welcome.dark.mobile.png
+# built browser helper (npm run build:extension)
+/extension/dist/

@@ -382,3 +382,236 @@ describe("browser helper API", () => {
     expect(after.bids.find((b) => b.submission_id === sub!.id)).toBeUndefined();
   });
 });
+
+describe("Apply with TenderOS", () => {
+  let ownerToken: string;
+  let operatorToken: string;
+  let tenderId: string;
+  let submissionId: string;
+  let docs: Record<"cipc" | "tax" | "ids" | "bank", string>;
+
+  const planCall = (token: string | null, id: string, query = "") =>
+    import("@/app/api/autofill/tenders/[id]/apply-plan/route").then(({ GET }) =>
+      GET(bearer(token, `/api/autofill/tenders/${id}/apply-plan${query}`), { params: Promise.resolve({ id }) }),
+    );
+  const reportCall = (token: string | null, id: string, body: unknown, contentType: string | null = "application/json") =>
+    import("@/app/api/autofill/tenders/[id]/apply-report/route").then(({ POST }) =>
+      POST(
+        new Request(`http://localhost:3000/api/autofill/tenders/${id}/apply-report`, {
+          method: "POST",
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(contentType ? { "Content-Type": contentType } : {}) },
+          body: typeof body === "string" ? body : JSON.stringify(body),
+        }),
+        { params: Promise.resolve({ id }) },
+      ),
+    );
+  const REPORT = { host: "www.etenders.gov.za", fields: 9, documents: 2, left: 4, sensitive: false, confirmed_host: false };
+
+  beforeAll(async () => {
+    docs = {
+      cipc: await addDocument(owner, "cipc_registration", "Apply CIPC"),
+      tax: await addDocument(owner, "tax_compliance", "Apply TCS", inDays(200)),
+      ids: await addDocument(owner, "director_ids", "Apply director IDs"),
+      bank: await addDocument(owner, "bank_confirmation", "Apply bank letter"),
+    };
+    ownerToken = (await createToken(owner, "Apply owner")).data!;
+    operatorToken = (await createToken(operator, "Apply operator")).data!;
+    const profile = await owner.client
+      .from("company_profiles")
+      .upsert({ organisation_id: orgId, legal_name: "Acme Trading (Pty) Ltd", csd_number: "MAAA0123456" }, { onConflict: "organisation_id" });
+    expect(profile.error).toBeNull();
+
+    const tender = await createTender(owner.client, orgId, {
+      is_simulation: false,
+      reference_number: `APPLY-${Date.now()}`,
+      submission_method: "ELECTRONIC_PORTAL",
+      submission_destination: "https://www.etenders.gov.za (eSubmission)",
+      source_url: "https://www.etenders.gov.za/home/Download?blobName=x.pdf",
+    });
+    tenderId = tender.id;
+    const started = await owner.client.rpc("start_tender_workflow", { p_tender_id: tender.id });
+    expect(started.error).toBeNull();
+    await drainOrg(worker, pool, orgId);
+    const { data: approval } = await owner.client.from("approvals").select("id").eq("workflow_run_id", started.data!).single();
+    expect((await owner.client.rpc("decide_approval", { p_approval_id: approval!.id, p_approve: true, p_comments: "Apply" })).error).toBeNull();
+    await drainOrg(worker, pool, orgId);
+    const { data: sub } = await owner.client.from("submission_records").select("id, status").eq("workflow_run_id", started.data!).single();
+    expect(sub!.status).toBe("ACTION_REQUIRED");
+    submissionId = sub!.id;
+    // A known bid pack: two ordinary documents and two personal ones.
+    const pack = [
+      { key: "cipc", label: "CIPC registration", document_id: docs.cipc },
+      { key: "tax", label: "SARS tax compliance", document_id: docs.tax },
+      { key: "ids", label: "Director IDs", document_id: docs.ids },
+      { key: "bank", label: "Bank letter", document_id: docs.bank },
+    ];
+    await pool.query(
+      `update public.tasks set output = jsonb_set(output, '{attachments}', $2::jsonb) where workflow_run_id = $1 and type = 'submission.execute' and status = 'COMPLETED'`,
+      [started.data!, JSON.stringify(pack)],
+    );
+  });
+
+  it("refuses a missing, malformed or revoked code and a tender that is not a uuid", async () => {
+    expect((await planCall(null, tenderId)).status).toBe(401);
+    expect((await planCall("nonsense", tenderId)).status).toBe(401);
+    expect((await planCall(ownerToken, "not-a-uuid")).status).toBe(404);
+    const { data: temp } = await createToken(owner, "Revoked apply");
+    const [row] = await resolve(temp!);
+    await owner.client.rpc("revoke_autofill_token", { p_id: row.token_id });
+    expect((await planCall(temp!, tenderId)).status).toBe(401);
+    expect((await reportCall(temp!, tenderId, REPORT)).status).toBe(401);
+  });
+
+  it("returns the portal, the facts and only the bid pack documents the role may attach", async () => {
+    const res = await planCall(operatorToken, tenderId);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("access-control-allow-origin")).toBeNull();
+    const plan = await res.json();
+    expect(plan).toMatchObject({
+      version: 1,
+      submission_id: submissionId,
+      portal: { url: "https://www.etenders.gov.za/", host: "www.etenders.gov.za" },
+      member: { role: "operator" },
+      include_sensitive: false,
+    });
+    expect(plan.tender.id).toBe(tenderId);
+    expect(plan.profile.legal_name).toBe("Acme Trading (Pty) Ltd");
+    expect(plan.profile.vat_number).toBeNull();
+    expect(plan.documents.map((d: { id: string }) => d.id).sort()).toEqual([docs.cipc, docs.tax].sort());
+    expect(plan.skipped_documents.map((s: { label: string }) => s.label).sort()).toEqual(["Bank letter", "Director IDs"]);
+    expect(JSON.stringify(plan)).not.toContain("storage_path");
+
+    // An operator asking for personal documents still does not get them.
+    const asked = await (await planCall(operatorToken, tenderId, "?sensitive=1")).json();
+    expect(asked.include_sensitive).toBe(false);
+    expect(asked.documents.some((d: { sensitive: boolean }) => d.sensitive)).toBe(false);
+  });
+
+  it("includes personal documents only for an owner or admin who ticks the option", async () => {
+    const off = await (await planCall(ownerToken, tenderId)).json();
+    expect(off.include_sensitive).toBe(false);
+    expect(off.documents.map((d: { id: string }) => d.id).sort()).toEqual([docs.cipc, docs.tax].sort());
+    expect(off.skipped_documents).toEqual(
+      expect.arrayContaining([
+        { label: "Director IDs", reason: "sensitive_not_requested" },
+        { label: "Bank letter", reason: "sensitive_not_requested" },
+      ]),
+    );
+
+    const on = await (await planCall(ownerToken, tenderId, "?sensitive=1")).json();
+    expect(on.include_sensitive).toBe(true);
+    expect(on.documents.map((d: { id: string }) => d.id).sort()).toEqual([docs.cipc, docs.tax, docs.ids, docs.bank].sort());
+    expect(on.documents.filter((d: { sensitive: boolean }) => d.sensitive)).toHaveLength(2);
+  });
+
+  it("does not reveal tenders of other organisations or tenders with no approved bid waiting", async () => {
+    const other = await createTender(outsider.client, outsiderOrg, { is_simulation: false });
+    expect((await planCall(ownerToken, other.id)).status).toBe(404);
+    const idle = await createTender(owner.client, orgId, { is_simulation: false, reference_number: `IDLE-${Date.now()}` });
+    const res = await planCall(ownerToken, idle.id);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/no approved bid waiting/);
+  });
+
+  it("says plainly when the tender has no portal address the helper can open", async () => {
+    await pool.query(`update public.tenders set submission_destination = 'Hand delivery at the municipal offices', source_url = null where id = $1`, [
+      tenderId,
+    ]);
+    const res = await planCall(ownerToken, tenderId);
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toMatch(/web address/);
+    await pool.query(`update public.tenders set submission_destination = 'https://www.etenders.gov.za (eSubmission)' where id = $1`, [tenderId]);
+    expect((await planCall(ownerToken, tenderId)).status).toBe(200);
+  });
+
+  it("records a report as an audit event and a tender event, with counts and host only", async () => {
+    const res = await reportCall(operatorToken, tenderId, REPORT);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    const { rows: audit } = await pool.query(
+      `select actor_type, actor_user_id, resource_type, metadata from public.audit_logs
+        where organisation_id = $1 and action = 'autofill.form_prepared' and resource_id = $2`,
+      [orgId, tenderId],
+    );
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      actor_type: "user",
+      actor_user_id: operator.id,
+      resource_type: "tender",
+      metadata: { host: "www.etenders.gov.za", fields: 9, documents: 2, left: 4, sensitive: false, confirmed_host: false, via: "browser_helper" },
+    });
+    const { rows: events } = await pool.query(
+      `select event_type, actor_user_id, summary, payload from public.agent_events where organisation_id = $1 and tender_id = $2 and event_type = 'BID_FORM_PREPARED'`,
+      [orgId, tenderId],
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ actor_user_id: operator.id, payload: { fields: 9, documents: 2 } });
+    expect(events[0].summary).toMatch(/9 fields, 2 documents/);
+    // Members read the event through RLS; it carries no field values.
+    const { data: visible } = await viewer.client
+      .from("agent_events")
+      .select("event_type, payload")
+      .eq("tender_id", tenderId)
+      .eq("event_type", "BID_FORM_PREPARED");
+    expect(visible).toHaveLength(1);
+  });
+
+  it("refuses bad reports and reports it should not accept", async () => {
+    expect((await reportCall(null, tenderId, REPORT)).status).toBe(401);
+    expect((await reportCall(operatorToken, tenderId, REPORT, "text/plain")).status).toBe(415);
+    expect((await reportCall(operatorToken, tenderId, "{not json")).status).toBe(422);
+    expect((await reportCall(operatorToken, tenderId, { ...REPORT, fields: -1 })).status).toBe(422);
+    expect((await reportCall(operatorToken, tenderId, { ...REPORT, file_names: ["ids.pdf"] })).status).toBe(422);
+    expect((await reportCall(operatorToken, tenderId, { ...REPORT, host: "https://evil.example/" })).status).toBe(422);
+    expect((await reportCall(operatorToken, "not-a-uuid", REPORT)).status).toBe(404);
+    expect((await reportCall(operatorToken, tenderId, "x".repeat(5000))).status).toBe(413);
+    // Personal documents are an owner/admin choice.
+    expect((await reportCall(operatorToken, tenderId, { ...REPORT, sensitive: true })).status).toBe(403);
+    expect((await reportCall(ownerToken, tenderId, { ...REPORT, sensitive: true })).status).toBe(200);
+    // Another organisation's tender, and a tender with no bid waiting, record nothing.
+    const other = await createTender(outsider.client, outsiderOrg, { is_simulation: false });
+    expect((await reportCall(ownerToken, other.id, REPORT)).status).toBe(409);
+    const { rows } = await pool.query(`select count(*)::int as n from public.audit_logs where action = 'autofill.form_prepared' and resource_id = $1`, [
+      other.id,
+    ]);
+    expect(rows[0].n).toBe(0);
+  });
+
+  it("is rate-limited inside the database per pairing code", async () => {
+    const { data: token } = await createToken(adminUser, "Report limit");
+    const [row] = await resolve(token!);
+    let limited = false;
+    for (let i = 0; i < 25 && !limited; i++) {
+      const r = await admin().rpc("autofill_record_prepared", {
+        p_token_id: row.token_id,
+        p_tender_id: tenderId,
+        p_host: "www.etenders.gov.za",
+        p_fields: 1,
+        p_documents: 0,
+        p_left: 0,
+        p_sensitive: false,
+        p_confirmed_host: false,
+      });
+      if (r.error?.code === "P0429") limited = true;
+      else expect(r.error).toBeNull();
+    }
+    expect(limited).toBe(true);
+    // Browsers cannot call it at all.
+    expect(
+      (
+        await owner.client.rpc("autofill_record_prepared", {
+          p_token_id: row.token_id,
+          p_tender_id: tenderId,
+          p_host: "www.etenders.gov.za",
+          p_fields: 1,
+          p_documents: 0,
+          p_left: 0,
+          p_sensitive: false,
+          p_confirmed_host: false,
+        })
+      ).error,
+    ).not.toBeNull();
+  });
+});

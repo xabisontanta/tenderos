@@ -175,6 +175,24 @@ footer {
   padding-top: 8px;
 }
 
+.card {
+  padding: 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+}
+
+p {
+  margin: 0;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
 a {
   color: inherit;
 }
