@@ -194,6 +194,16 @@ describe("append-only tables", () => {
 });
 
 describe("deleting a user who has acted", () => {
+  it("is not blocked by any foreign key to a user or an organisation, now or in a later migration", async () => {
+    const { rows } = await pool.query(
+      `select conrelid::regclass::text as tbl, conname from pg_constraint
+        where contype = 'f' and connamespace = 'public'::regnamespace
+          and confrelid in ('auth.users'::regclass, 'public.organisations'::regclass)
+          and confdeltype in ('r', 'a')`,
+    );
+    expect(rows, "make it on delete set null or cascade, or erasure fails for everyone who ever used the feature").toEqual([]);
+  });
+
   it("no longer fails (audit trail, events and sent email keep their rows)", async () => {
     const s = await sceneWithActedMember("del");
     const auditBefore = await count(`select 1 from public.audit_logs where organisation_id = $1`, [s.orgId]);

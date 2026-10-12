@@ -35,17 +35,18 @@ approve it on the Approvals page.
 
 ## Scripts
 
-| Script                                                                | What it does                                                |
-| --------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `dev`, `build`, `start`                                               | Next.js                                                     |
-| `worker`                                                              | Background job worker (agent execution)                     |
-| `build:edge-worker`                                                   | Bundles the worker as the `tenderos-worker` Edge Function   |
-| `lint`, `typecheck`, `format`, `format:check`                         | Code quality                                                |
-| `test` / `test:unit`                                                  | Unit tests (business rules, state machine, permissions)     |
-| `test:integration`                                                    | Against local Supabase: workflow, RLS, roles, failure paths |
-| `test:e2e`                                                            | Playwright, against a production build plus a real worker   |
-| `db:start`, `db:stop`, `db:reset`, `db:migrate`, `db:types`, `db:env` | Database                                                    |
-| `ci`                                                                  | lint, typecheck, unit tests and build                       |
+| Script                                                                | What it does                                                         |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `dev`, `build`, `start`                                               | Next.js                                                              |
+| `worker`                                                              | Background job worker (agent execution)                              |
+| `build:edge-worker`                                                   | Bundles the worker as the `tenderos-worker` Edge Function            |
+| `popia`                                                               | Data-subject requests: export and erase (`docs/popia-operations.md`) |
+| `lint`, `typecheck`, `format`, `format:check`                         | Code quality                                                         |
+| `test` / `test:unit`                                                  | Unit tests (business rules, state machine, permissions)              |
+| `test:integration`                                                    | Against local Supabase: workflow, RLS, roles, failure paths          |
+| `test:e2e`                                                            | Playwright, against a production build plus a real worker            |
+| `db:start`, `db:stop`, `db:reset`, `db:migrate`, `db:types`, `db:env` | Database                                                             |
+| `ci`                                                                  | lint, typecheck, unit tests and build                                |
 
 `test:integration` and `test:e2e` refuse to run against a non-local database.
 For e2e, run `npm run build` first; if Playwright's bundled browser is not

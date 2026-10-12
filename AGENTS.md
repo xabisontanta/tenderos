@@ -270,7 +270,15 @@ person to review.
 
 - `agent_events` is the user-visible, append-only event stream.
 - `audit_logs` is the append-only compliance trail (who did what, as which
-  actor). Updates and deletes are rejected by trigger.
+  actor). Updates, deletes and truncates are rejected by trigger, with two
+  exceptions: clearing the actor when an account is deleted, and the erasure and
+  retention functions (`erase_user`, `erase_organisation`,
+  `private.run_retention_purge`), which de-identify or delete under
+  `app.erasure`. Erasure keeps the trail but removes names, addresses, ids and
+  what people typed; the runbook is `docs/popia-operations.md`. A new table that
+  holds personal data must be covered by `erase_user` and the exports, and a new
+  foreign key to `auth.users` must be `on delete set null` or `cascade`, never
+  `restrict`.
 - Process logs use `lib/log.ts`: JSON lines with secret redaction. Never log
   tokens, keys, document contents or personal data. Every model call writes
   one `ai.call` line with the model, token counts, cost, the prompt's block
