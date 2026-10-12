@@ -97,9 +97,11 @@ runs, the event stream and the audit log, and the members' names and roles (not 
   approval comments are replaced.
 - Writes one audit entry, `popia.user_erased`, holding a random pseudonym, your reference and counts. It
   holds no name, address or user id.
-- **Refuses** when the person is the only owner of an organisation that has other members (make someone else
-  an owner first; there is no screen for this yet, so update `organisation_members.role` by hand), and when
-  they are the only member (erase the organisation instead).
+- **Refuses** when the person is the only owner of an organisation that has other members (an owner of that
+  organisation makes someone else an owner first, in Settings, Team: change the role to Owner, which is the
+  ownership transfer; it never needs a database edit), and when they are the only member (erase the
+  organisation instead). A member who has already been removed in Settings, Team has no membership left and
+  can be erased directly; removing them revoked their browser pairing codes and disconnected their mailboxes.
 
 **An organisation** (`erase-org`)
 

@@ -869,6 +869,9 @@ isOneToOne: false
 "cancel_workflow":
 { Args: { "p_reason": string,"p_run_id": string }; Returns: undefined
                            },
+"change_member_role":
+{ Args: { "p_org": string,"p_role": Database["public"]['Enums']["org_role"],"p_user": string }; Returns: undefined
+                           },
 "change_tender_delivery":
 { Args: { "p_changes": Json,"p_reason": string,"p_tender_id": string }; Returns: Json
                            },
@@ -918,6 +921,11 @@ isOneToOne: false
 "hit_rate_limit_key":
 { Args: { "p_action": string,"p_key": string,"p_max"?: number,"p_window_seconds"?: number }; Returns: undefined
                            },
+"list_members":
+{ Args: { "p_org": string }; Returns: {
+              "email": string,"full_name": string,"joined_at": string,"role": Database["public"]['Enums']["org_role"],"user_id": string
+            }[]
+                           },
 "mark_notifications_read":
 { Args: { "p_ids": (string)[] }; Returns: undefined
                            },
@@ -931,6 +939,9 @@ isOneToOne: false
                            },
 "register_company_document":
 { Args: { "p_doc_type": string,"p_expires_at"?: string,"p_org": string,"p_path": string,"p_title": string }; Returns: string
+                           },
+"remove_member":
+{ Args: { "p_org": string,"p_user": string }; Returns: undefined
                            },
 "rerun_bid":
 { Args: { "p_tender_id": string }; Returns: string

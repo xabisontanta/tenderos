@@ -28,9 +28,27 @@ append-only record of every consequential action.
 | Open director IDs, bank letters, proof of address                                   | ✓     | ✓     |          |        |
 | Connect a sending mailbox, email or record a bid                                    | ✓     | ✓     |          |        |
 | Change a bid's delivery details after it went for approval (withdraws the approval) | ✓     | ✓     |          |        |
+| Change operators' and viewers' roles, remove operators and viewers                  | ✓     | ✓     |          |        |
+| Make someone an owner or an admin, change or remove an owner or an admin            | ✓     |       |          |        |
+| Leave the organisation (never the last owner)                                       | ✓     | ✓     | ✓        | ✓      |
 
 The UI hides controls a role cannot use, but the RPC is the enforcement point.
 Integration tests cover role refusals and cross-tenant isolation.
+
+### Team management
+
+`change_member_role`, `remove_member` and `list_members` (migration 060) are the only ways to change
+membership from a browser; `organisation_members` has no write grant. Both writers are rate limited and audited
+(`member.role_changed`, `member.removed`). An admin can step another admin down or remove one, but only an owner
+can make anyone an owner or an admin, and nobody but an owner touches an owner. An organisation always keeps an
+owner: the functions check it under an advisory lock and a lock on the owners' rows, so two owners demoting each
+other at once cannot leave none, and a trigger (`organisation_members_keep_owner`) refuses every other path
+(direct SQL, a user deletion) unless the organisation row is already gone or the POPIA erasure functions are
+running (`app.erasure`). Ownership is transferred by making the new person an owner and then stepping down.
+Removing a member revokes their browser pairing codes and disconnects their mailboxes (the credential in
+Vault goes with the mailbox row); dropping from admin to operator or viewer disconnects the mailboxes too, since
+only owners and admins connect one. Email addresses come from `auth.users` through `list_members` and are sent
+to owners and admins only.
 
 ## Agents
 
