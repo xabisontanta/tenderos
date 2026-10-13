@@ -267,6 +267,41 @@ cites nothing for, or cites incomplete content for, is an open issue. The model
 cannot produce a `FAIL` and cannot remove an issue. No analysed requirements is
 itself an open issue.
 
+### Bid content: where a person takes over (`lib/domain/bid-content.ts`, `features/bid/`)
+
+The Proposal Writer's and Pricing Analyst's outputs are drafts. On a real tender the worker seeds them into editable tables
+when each step completes (`workflows/bid-content.ts`, migration 072), and from then on the person's work is the bid.
+
+- **Proposal tab.** Each section shows its status (`DRAFT`, `MISSING_INFORMATION`, `REVIEWED`), an "AI-generated draft" flag
+  while the text is the AI's and nobody has changed it, the company facts and tender requirements the draft cites, what is
+  still needed, any warning, who last edited and who reviewed it and when, and the history of versions. Saving text makes it
+  the person's (flag off, review cleared). **Mark as reviewed** is the person's statement that the section is right and
+  complete; it needs text. Only a reviewed section counts as complete (`DRAFTED`) when QA and the Submission Officer read the
+  proposal; an unreviewed draft, however the AI labelled it, is `REQUIRES_CONFIRMATION`.
+- **Pricing tab.** Lines come from the analysed price schedule (description, unit and the quantity as printed, the tender's own
+  line and page); a person can add lines of their own and remove only those. A person types the unit price (excluding VAT, in
+  rands, stored as whole cents) and, where they have one, the supplier's quote reference; where the tender prints no quantity
+  they enter one, but a printed quantity cannot be changed. The database computes each line's amount (quantity times unit
+  price, rounded half up to a cent) and VAT at 15 percent (rounded half up per line), and `bid_pricing_totals` sums the lines
+  in integer cents, so the totals always equal the lines shown; nothing is computed in the browser and
+  `lib/domain/bid-money.ts` (BigInt) is tested against the database on the same cases. A banner says figures are never
+  produced by AI. A person confirms the schedule when every line has a quantity and a price (R0.00 is allowed); changing any
+  figure afterwards takes the confirmation away. A confirmed, complete schedule is `READY_FOR_APPROVAL` to QA; anything else is
+  `REQUIRES_CONFIRMATION`.
+- **Writes** go through `save_proposal_section`, `set_proposal_section_review`, `save_pricing_line`, `add_pricing_line`,
+  `remove_pricing_line` and `set_pricing_confirmed`: owners, admins and operators; rate limited; behind the second factor when
+  required; every change audited (lengths and amounts, not the text) and kept as a version with who and when; a version
+  check refuses an edit made from an out-of-date screen.
+- **What an edit does to the bid.** Editing while the bid waits for approval withdraws the approval and sends the tender back to
+  `PREPARING_BID` (as changing the delivery details does); the person then presses **Prepare bid again**, QA runs on the
+  new content and the approver sees it afresh. An approved, delivered or closed bid cannot be edited. A re-run of the
+  Proposal Writer or Pricing Analyst never overwrites a section a person edited or reviewed, or a figure a person entered.
+- **How QA reads it.** The engine overlays the person's content on the step outputs a task receives
+  (`overlayBidContent`), so the rule checks, the coverage evidence (`section:` and `pricing:` ids, complete only when reviewed
+  or confirmed) and the Submission Officer's package hash all see what the person wrote. Simulated tenders are unchanged.
+- **Not built:** attaching quote documents to a line, per-line VAT treatment, a diff between versions, and editing the
+  outline (the six sections are fixed).
+
 ### Web research (Scout and Intelligence Analyst)
 
 `researchWeb` (`agents/runtime/ai/web-research.ts`) uses Anthropic's
@@ -391,8 +426,8 @@ quotes from the same constants (so they cannot drift), and add it to
   installed version by `scripts/build-edge-worker.mjs`). Rebuild with
   `npm run build:edge-worker` after changing the SDK version.
 - Not built yet: text extraction from PDFs (so quotes can be verified), reading
-  Word, Excel and zip files, proposal and pricing editing screens, ZAR cost
-  display, monthly and per-tender budgets, and a workflow step that calls web
+  Word, Excel and zip files, a way for a person to confirm an unverified
+  requirement, ZAR cost display, monthly and per-tender budgets, and a workflow step that calls web
   research.
 - A document the portal lists but TenderOS could not fetch shows on the tender's
   Documents tab with the reason; the job's own failures show in the worker log

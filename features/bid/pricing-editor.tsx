@@ -89,8 +89,9 @@ export function PricingEditor({
   return (
     <section aria-label="Pricing" className="grid gap-3">
       <p role="note" className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-[12px]">
-        <strong className="font-medium">Prices are entered by a person.</strong> TenderOS and its AI never produce a price, a rate or a total: every figure below was
-        typed in by someone in your team, and the amounts are worked out from those figures. Enter unit prices excluding VAT; VAT at {SA_VAT_PERCENT}% is added for you.
+        <strong className="font-medium">Prices are entered by a person.</strong> TenderOS and its AI never produce a price, a rate or a total: every figure
+        below was typed in by someone in your team, and the amounts are worked out from those figures. Enter unit prices excluding VAT; VAT at {SA_VAT_PERCENT}%
+        is added for you.
       </p>
       <p className="text-[12px] text-muted-foreground">
         {vat.treatment === "NOT_STATED" || !vat.stated
@@ -114,8 +115,8 @@ export function PricingEditor({
       )}
       {editState === "editable" && canEdit && (
         <p role="note" className="rounded-lg border p-3 text-[12px] text-muted-foreground">
-          When you have finished, press <strong className="font-medium text-foreground">Prepare bid again</strong> at the top of the page to check the bid again with
-          your figures.
+          When you have finished, press <strong className="font-medium text-foreground">Prepare bid again</strong> at the top of the page to check the bid again
+          with your figures.
         </p>
       )}
       {editState === "locked" && (
@@ -123,7 +124,9 @@ export function PricingEditor({
           This bid has been approved or closed, so its prices can no longer be changed.
         </p>
       )}
-      {!canEdit && editState !== "locked" && <p className="text-[12px] text-muted-foreground">You can read the schedule. Only owners, admins and operators can enter prices.</p>}
+      {!canEdit && editState !== "locked" && (
+        <p className="text-[12px] text-muted-foreground">You can read the schedule. Only owners, admins and operators can enter prices.</p>
+      )}
 
       {lines.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -158,7 +161,9 @@ export function PricingEditor({
           <dt className="font-medium">Total including VAT</dt>
           <dd className="font-semibold tabular-nums">{formatCents(totals.total_cents)}</dd>
         </div>
-        {!totals.complete && totals.lines > 0 && <p className="pt-1 text-[11px] text-amber-300">The totals only include the lines that have a quantity and a price.</p>}
+        {!totals.complete && totals.lines > 0 && (
+          <p className="pt-1 text-[11px] text-amber-300">The totals only include the lines that have a quantity and a price.</p>
+        )}
       </dl>
 
       {editable && <AddLine tenderId={tenderId} onRun={run} busy={busy} />}
@@ -166,9 +171,17 @@ export function PricingEditor({
       <div className="flex flex-wrap items-center gap-2">
         {confirmed ? (
           <>
-            <Badge variant="success">Confirmed by {confirmed.by ? (people[confirmed.by] ?? "a former team member") : "a team member"}, {formatDateTime(confirmed.at)}</Badge>
+            <Badge variant="success">
+              Confirmed by {confirmed.by ? (people[confirmed.by] ?? "a former team member") : "a team member"}, {formatDateTime(confirmed.at)}
+            </Badge>
             {editable && (
-              <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => run(() => setPricingConfirmed(tenderId, false), "Confirmation taken back")}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => run(() => setPricingConfirmed(tenderId, false), "Confirmation taken back")}
+              >
                 Take back confirmation
               </Button>
             )}
@@ -177,11 +190,18 @@ export function PricingEditor({
           <>
             <Badge variant="warning">Not confirmed</Badge>
             {editable && (
-              <Button type="button" size="sm" disabled={busy || !totals.complete} onClick={() => run(() => setPricingConfirmed(tenderId, true), "Prices confirmed")}>
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy || !totals.complete}
+                onClick={() => run(() => setPricingConfirmed(tenderId, true), "Prices confirmed")}
+              >
                 Confirm prices
               </Button>
             )}
-            {editable && !totals.complete && <span className="text-[11px] text-muted-foreground">Every line needs a quantity and a price (R0.00 is allowed) before you can confirm.</span>}
+            {editable && !totals.complete && (
+              <span className="text-[11px] text-muted-foreground">Every line needs a quantity and a price (R0.00 is allowed) before you can confirm.</span>
+            )}
           </>
         )}
       </div>
@@ -211,7 +231,10 @@ function LineCard({
   const [price, setPrice] = useState(rands(l.unit_price_cents));
   const [quantity, setQuantity] = useState(l.quantity === null ? "" : String(l.quantity));
   const [ref, setRef] = useState(l.supplier_quote_ref ?? "");
-  const dirty = price.trim() !== rands(l.unit_price_cents) || quantity.trim() !== (l.quantity === null ? "" : String(l.quantity)) || ref.trim() !== (l.supplier_quote_ref ?? "");
+  const dirty =
+    price.trim() !== rands(l.unit_price_cents) ||
+    quantity.trim() !== (l.quantity === null ? "" : String(l.quantity)) ||
+    ref.trim() !== (l.supplier_quote_ref ?? "");
   const name = `line ${index}${l.item_ref ? `, item ${l.item_ref}` : ""}`;
 
   return (
@@ -279,7 +302,14 @@ function LineCard({
               Save line
             </Button>
             {l.source === "PERSON" && (
-              <Button type="button" size="sm" variant="outline" disabled={busy} aria-label={`Remove ${name}`} onClick={() => onRun(() => removePricingLine(l.id), "Line removed")}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                aria-label={`Remove ${name}`}
+                onClick={() => onRun(() => removePricingLine(l.id), "Line removed")}
+              >
                 Remove
               </Button>
             )}
@@ -290,7 +320,15 @@ function LineCard({
   );
 }
 
-function AddLine({ tenderId, onRun, busy }: { tenderId: string; onRun: (action: () => Promise<{ ok: boolean; error?: string }>, done: string) => void; busy: boolean }) {
+function AddLine({
+  tenderId,
+  onRun,
+  busy,
+}: {
+  tenderId: string;
+  onRun: (action: () => Promise<{ ok: boolean; error?: string }>, done: string) => void;
+  busy: boolean;
+}) {
   const id = useId();
   const [description, setDescription] = useState("");
   const [unit, setUnit] = useState("");

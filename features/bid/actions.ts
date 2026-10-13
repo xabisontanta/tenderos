@@ -49,7 +49,12 @@ export async function saveProposalSection(tenderId: string, key: string, content
   return { ok: true, data: { version: Number(res.data) } };
 }
 
-export async function setSectionReviewed(tenderId: string, key: string, reviewed: boolean, expectedVersion: number): Promise<ActionResult<{ version: number }>> {
+export async function setSectionReviewed(
+  tenderId: string,
+  key: string,
+  reviewed: boolean,
+  expectedVersion: number,
+): Promise<ActionResult<{ version: number }>> {
   if (!uuid.safeParse(tenderId).success) return { ok: false, error: "Invalid tender" };
   if (!sectionKey.safeParse(key).success) return { ok: false, error: "Invalid section" };
   if (!version.safeParse(expectedVersion).success) return { ok: false, error: "Reload the page and try again" };
@@ -91,7 +96,14 @@ export async function savePricingLine(lineId: string, input: PricingLineInput): 
   if (ref.length > 120) return { ok: false, error: "A supplier quote reference can be 120 characters at most" };
   if (!(await operator())) return { ok: false, error: NOT_ALLOWED };
   const res = await call<number>(
-    (s) => s.rpc("save_pricing_line", { p_line_id: lineId, p_unit_price_cents: cents as number, p_quantity: quantity as number, p_supplier_ref: ref, p_expected_version: input.expectedVersion }),
+    (s) =>
+      s.rpc("save_pricing_line", {
+        p_line_id: lineId,
+        p_unit_price_cents: cents as number,
+        p_quantity: quantity as number,
+        p_supplier_ref: ref,
+        p_expected_version: input.expectedVersion,
+      }),
     "Could not save the line",
   );
   if (!res.ok) return res;
@@ -112,7 +124,10 @@ export async function addPricingLine(tenderId: string, input: { description: str
     quantity = Number(q.value);
   }
   if (!(await operator())) return { ok: false, error: NOT_ALLOWED };
-  const res = await call<string>((s) => s.rpc("add_pricing_line", { p_tender_id: tenderId, p_description: description, p_unit: unit, p_quantity: quantity as number }), "Could not add the line");
+  const res = await call<string>(
+    (s) => s.rpc("add_pricing_line", { p_tender_id: tenderId, p_description: description, p_unit: unit, p_quantity: quantity as number }),
+    "Could not add the line",
+  );
   if (!res.ok) return res;
   revalidatePath(`/tenders/${tenderId}`);
   return { ok: true, data: { id: String(res.data) } };
@@ -130,7 +145,10 @@ export async function removePricingLine(lineId: string): Promise<ActionResult> {
 export async function setPricingConfirmed(tenderId: string, confirmed: boolean): Promise<ActionResult> {
   if (!uuid.safeParse(tenderId).success) return { ok: false, error: "Invalid tender" };
   if (!(await operator())) return { ok: false, error: NOT_ALLOWED };
-  const res = await call<undefined>((s) => s.rpc("set_pricing_confirmed", { p_tender_id: tenderId, p_confirmed: confirmed === true }), "Could not change the confirmation");
+  const res = await call<undefined>(
+    (s) => s.rpc("set_pricing_confirmed", { p_tender_id: tenderId, p_confirmed: confirmed === true }),
+    "Could not change the confirmation",
+  );
   if (!res.ok) return res;
   revalidatePath(`/tenders/${tenderId}`);
   return { ok: true };

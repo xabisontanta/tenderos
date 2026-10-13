@@ -45,7 +45,15 @@ export async function seedProposal(c: PoolClient, a: { organisationId: string; t
     const state = seedState({ content: s.content, aiWrote: a.output.ai_generated === true });
     const factIds = [...new Set((s.paragraphs ?? []).flatMap((p) => p.fact_ids))];
     const requirementIds = [...new Set((s.paragraphs ?? []).flatMap((p) => p.requirement_ids))];
-    const values = [state.content, state.status, state.ai_generated, JSON.stringify(s.needs), JSON.stringify(factIds), JSON.stringify(requirementIds), JSON.stringify(s.warnings ?? [])];
+    const values = [
+      state.content,
+      state.status,
+      state.ai_generated,
+      JSON.stringify(s.needs),
+      JSON.stringify(factIds),
+      JSON.stringify(requirementIds),
+      JSON.stringify(s.warnings ?? []),
+    ];
     const prev = existing.get(s.key);
     if (!prev) {
       const { rows: made } = await c.query<{ version: number }>(
@@ -54,7 +62,11 @@ export async function seedProposal(c: PoolClient, a: { organisationId: string; t
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13) returning version`,
         [a.organisationId, a.tenderId, s.key, s.title, position, ...values, a.taskId],
       );
-      await history(c, a.organisationId, a.tenderId, "PROPOSAL_SECTION", s.key, made[0].version, "SEEDED", { content: state.content, status: state.status, ai_generated: state.ai_generated });
+      await history(c, a.organisationId, a.tenderId, "PROPOSAL_SECTION", s.key, made[0].version, "SEEDED", {
+        content: state.content,
+        status: state.status,
+        ai_generated: state.ai_generated,
+      });
     } else if (mayReplaceWithNewDraft({ edited_by: prev.edited_at ? "a person" : null, reviewed_by: prev.reviewed_at ? "a person" : null })) {
       const { rows: updated } = await c.query<{ version: number }>(
         `update public.bid_proposal_sections
@@ -63,7 +75,11 @@ export async function seedProposal(c: PoolClient, a: { organisationId: string; t
           where id = $1 and tender_id = $2 returning version`,
         [prev.id, a.tenderId, s.title, position, ...values, a.taskId],
       );
-      await history(c, a.organisationId, a.tenderId, "PROPOSAL_SECTION", s.key, updated[0].version, "RESEEDED", { content: state.content, status: state.status, ai_generated: state.ai_generated });
+      await history(c, a.organisationId, a.tenderId, "PROPOSAL_SECTION", s.key, updated[0].version, "RESEEDED", {
+        content: state.content,
+        status: state.status,
+        ai_generated: state.ai_generated,
+      });
     }
   }
 }
@@ -97,7 +113,16 @@ export async function seedPricing(c: PoolClient, a: { organisationId: string; te
      on conflict (tender_id) do update
        set vat_treatment = excluded.vat_treatment, vat_status = excluded.vat_status, vat_requirement_id = excluded.vat_requirement_id,
            notes = excluded.notes, ai_generated = excluded.ai_generated, source_task_id = excluded.source_task_id`,
-    [a.tenderId, a.organisationId, a.output.vat?.treatment ?? "NOT_STATED", a.output.vat?.status ?? "REQUIRES_CONFIRMATION", a.output.vat?.requirement_id ?? null, JSON.stringify(a.output.notes), a.output.ai_generated === true, a.taskId],
+    [
+      a.tenderId,
+      a.organisationId,
+      a.output.vat?.treatment ?? "NOT_STATED",
+      a.output.vat?.status ?? "REQUIRES_CONFIRMATION",
+      a.output.vat?.requirement_id ?? null,
+      JSON.stringify(a.output.notes),
+      a.output.ai_generated === true,
+      a.taskId,
+    ],
   );
   const { rows } = await c.query<LineDbRow>(`select * from public.bid_pricing_lines where tender_id = $1 for update`, [a.tenderId]);
   const byRequirement = new Map(rows.filter((r) => r.requirement_id).map((r) => [r.requirement_id!, r]));
@@ -106,7 +131,15 @@ export async function seedPricing(c: PoolClient, a: { organisationId: string; te
 
   for (const [position, l] of a.output.lines.entries()) {
     const printed = l.quantity !== null && l.quantity !== undefined;
-    const fields = [l.description.slice(0, 300), l.item_ref ?? null, l.unit ?? null, l.quote ?? null, l.page ?? null, l.supplier_quote_likely === true, l.warning ?? null];
+    const fields = [
+      l.description.slice(0, 300),
+      l.item_ref ?? null,
+      l.unit ?? null,
+      l.quote ?? null,
+      l.page ?? null,
+      l.supplier_quote_likely === true,
+      l.warning ?? null,
+    ];
     const prev = l.requirement_id ? byRequirement.get(l.requirement_id) : undefined;
     if (!prev) {
       const { rows: made } = await c.query<{ id: string; version: number }>(
@@ -118,7 +151,10 @@ export async function seedPricing(c: PoolClient, a: { organisationId: string; te
       );
       keep.add(made[0].id);
       changed = true;
-      await history(c, a.organisationId, a.tenderId, "PRICING_LINE", made[0].id, made[0].version, "SEEDED", { description: fields[0], quantity: printed ? l.quantity : null });
+      await history(c, a.organisationId, a.tenderId, "PRICING_LINE", made[0].id, made[0].version, "SEEDED", {
+        description: fields[0],
+        quantity: printed ? l.quantity : null,
+      });
       continue;
     }
     keep.add(prev.id);
@@ -199,25 +235,23 @@ export async function loadBidContent(c: PoolClient, tenderId: string): Promise<{
                 confirmed: bid.confirmed_at !== null,
               }
             : { vat_treatment: "NOT_STATED", vat_status: "REQUIRES_CONFIRMATION", vat_requirement_id: null, notes: [], ai_generated: false, confirmed: false },
-          lines.map(
-            (r): BidPricingLineRow => ({
-              id: r.id,
-              position: r.position,
-              source: r.source,
-              description: r.description,
-              item_ref: r.item_ref,
-              quantity: r.quantity === null ? null : String(r.quantity),
-              quantity_printed: r.quantity_printed,
-              unit: r.unit,
-              unit_price_cents: num(r.unit_price_cents),
-              supplier_quote_ref: r.supplier_quote_ref,
-              supplier_quote_likely: r.supplier_quote_likely,
-              requirement_id: r.requirement_id,
-              quote: r.quote,
-              page: r.page,
-              warning: r.warning,
-            }),
-          ),
+          lines.map((r): BidPricingLineRow => ({
+            id: r.id,
+            position: r.position,
+            source: r.source,
+            description: r.description,
+            item_ref: r.item_ref,
+            quantity: r.quantity === null ? null : String(r.quantity),
+            quantity_printed: r.quantity_printed,
+            unit: r.unit,
+            unit_price_cents: num(r.unit_price_cents),
+            supplier_quote_ref: r.supplier_quote_ref,
+            supplier_quote_likely: r.supplier_quote_likely,
+            requirement_id: r.requirement_id,
+            quote: r.quote,
+            page: r.page,
+            warning: r.warning,
+          })),
         )
       : null;
   return { proposal, pricing };

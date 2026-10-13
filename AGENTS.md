@@ -86,6 +86,17 @@ analysis and qualification (`options.resume_from`). Real runs are not paced
 and their rule-based steps are recorded as $0 `rules` cost, not simulation. After approval the Submission Officer hands over a
 verified pack and delivery instructions. TenderOS never submits a bid itself.
 
+On a real tender the Proposal Writer's sections and the Pricing Analyst's
+schedule lines seed the bid content a person reviews and enters on the tender
+page (`bid_proposal_sections`, `bid_pricing`, `bid_pricing_lines`, migration
+072; `docs/ai-agents.md`). A person's text and figures are the bid: the engine
+overlays them on the step outputs, so QA and the Submission Officer (and the
+approval's package hash) read what the person wrote, and a section counts as
+complete only once a person has reviewed it. A re-run never overwrites what a
+person edited, reviewed or priced. Editing a bid that waits for approval
+withdraws the approval and sends it back to `PREPARING_BID`; an approved or
+closed bid cannot be edited. Simulated tenders have no editable content.
+
 ## 3. Responsibility boundaries
 
 - One step, one agent, one task row. An agent only reads its task input,
@@ -355,7 +366,12 @@ See `docs/security.md` for the full model.
   taken from the line of such text is never trusted as a requirement.
 - Pricing agents structure schedules; they do not produce figures without
   supplier quotations and human input. The Pricing Analyst's model schema has
-  no price field and every amount stays empty.
+  no price field and every amount stays empty. Prices are typed in by a person
+  on the tender page, in whole cents and excluding VAT; only the database
+  computes line amounts and VAT (15 percent, rounded half up per line) and the
+  bid totals, in integer cents. A printed quantity cannot be changed by the
+  bidder, and changing any figure takes a person's confirmation of the schedule
+  away.
 - The Proposal Writer drafts only from the allow-listed company facts and the
   analysed requirements; every paragraph cites them, and a paragraph with
   figures found in neither is removed. A section the facts do not support

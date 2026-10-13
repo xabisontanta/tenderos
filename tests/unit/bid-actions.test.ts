@@ -11,7 +11,8 @@ vi.mock("@/lib/data/context", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({ getServerSupabase: async () => ({ rpc: h.rpc }) }));
 
-const { addPricingLine, removePricingLine, saveProposalSection, savePricingLine, setPricingConfirmed, setSectionReviewed } = await import("@/features/bid/actions");
+const { addPricingLine, removePricingLine, saveProposalSection, savePricingLine, setPricingConfirmed, setSectionReviewed } =
+  await import("@/features/bid/actions");
 
 const TENDER = "11111111-1111-4111-8111-111111111111";
 const LINE = "22222222-2222-4222-8222-222222222222";
@@ -44,8 +45,14 @@ describe("saveProposalSection", () => {
   });
 
   it("shows the database's own words when someone else changed the section", async () => {
-    h.rpc.mockResolvedValue({ data: null, error: { code: "P0001", message: "This section was changed by someone else. Reload the page to see their version." } });
-    expect(await saveProposalSection(TENDER, "methodology", "x", 1)).toEqual({ ok: false, error: "This section was changed by someone else. Reload the page to see their version." });
+    h.rpc.mockResolvedValue({
+      data: null,
+      error: { code: "P0001", message: "This section was changed by someone else. Reload the page to see their version." },
+    });
+    expect(await saveProposalSection(TENDER, "methodology", "x", 1)).toEqual({
+      ok: false,
+      error: "This section was changed by someone else. Reload the page to see their version.",
+    });
   });
 
   it("asks for the authenticator when the database does", async () => {
@@ -64,7 +71,12 @@ describe("setSectionReviewed", () => {
     expect(await setSectionReviewed(TENDER, "methodology", true, 3)).toEqual({ ok: true, data: { version: 2 } });
     expect(h.rpc).toHaveBeenCalledWith("set_proposal_section_review", { p_tender_id: TENDER, p_key: "methodology", p_reviewed: true, p_expected_version: 3 });
     await setSectionReviewed(TENDER, "methodology", false, 4);
-    expect(h.rpc).toHaveBeenLastCalledWith("set_proposal_section_review", { p_tender_id: TENDER, p_key: "methodology", p_reviewed: false, p_expected_version: 4 });
+    expect(h.rpc).toHaveBeenLastCalledWith("set_proposal_section_review", {
+      p_tender_id: TENDER,
+      p_key: "methodology",
+      p_reviewed: false,
+      p_expected_version: 4,
+    });
   });
 
   it("refuses a viewer", async () => {
@@ -79,12 +91,24 @@ describe("savePricingLine", () => {
 
   it("turns what the person typed into whole cents before it leaves the server", async () => {
     expect(await savePricingLine(LINE, input)).toEqual({ ok: true, data: { version: 2 } });
-    expect(h.rpc).toHaveBeenCalledWith("save_pricing_line", { p_line_id: LINE, p_unit_price_cents: 123450, p_quantity: null, p_supplier_ref: "Q-77", p_expected_version: 1 });
+    expect(h.rpc).toHaveBeenCalledWith("save_pricing_line", {
+      p_line_id: LINE,
+      p_unit_price_cents: 123450,
+      p_quantity: null,
+      p_supplier_ref: "Q-77",
+      p_expected_version: 1,
+    });
   });
 
   it("sends a quantity as a number, and an empty price as no price", async () => {
     await savePricingLine(LINE, { unitPrice: "", quantity: "12,5", supplierRef: "", expectedVersion: 3 });
-    expect(h.rpc).toHaveBeenCalledWith("save_pricing_line", { p_line_id: LINE, p_unit_price_cents: null, p_quantity: 12.5, p_supplier_ref: "", p_expected_version: 3 });
+    expect(h.rpc).toHaveBeenCalledWith("save_pricing_line", {
+      p_line_id: LINE,
+      p_unit_price_cents: null,
+      p_quantity: 12.5,
+      p_supplier_ref: "",
+      p_expected_version: 3,
+    });
   });
 
   it.each([
@@ -112,7 +136,10 @@ describe("savePricingLine", () => {
 
   it("shows the database's words for a quantity the tender prints", async () => {
     h.rpc.mockResolvedValue({ data: null, error: { code: "23514", message: "The quantity is printed in the tender and cannot be changed" } });
-    expect(await savePricingLine(LINE, { ...input, quantity: "3" })).toEqual({ ok: false, error: "The quantity is printed in the tender and cannot be changed" });
+    expect(await savePricingLine(LINE, { ...input, quantity: "3" })).toEqual({
+      ok: false,
+      error: "The quantity is printed in the tender and cannot be changed",
+    });
   });
 });
 

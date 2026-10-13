@@ -91,8 +91,8 @@ export function ProposalEditor({
       )}
       {editState === "editable" && canEdit && (
         <p role="note" className="rounded-lg border p-3 text-[12px] text-muted-foreground">
-          When you have finished, press <strong className="font-medium text-foreground">Prepare bid again</strong> at the top of the page to check the bid again with
-          your changes.
+          When you have finished, press <strong className="font-medium text-foreground">Prepare bid again</strong> at the top of the page to check the bid again
+          with your changes.
         </p>
       )}
       {editState === "locked" && (
@@ -100,7 +100,9 @@ export function ProposalEditor({
           This bid has been approved or closed, so its proposal can no longer be edited.
         </p>
       )}
-      {!canEdit && editState !== "locked" && <p className="text-[12px] text-muted-foreground">You can read the proposal. Only owners, admins and operators can change it.</p>}
+      {!canEdit && editState !== "locked" && (
+        <p className="text-[12px] text-muted-foreground">You can read the proposal. Only owners, admins and operators can change it.</p>
+      )}
       <ul className="grid gap-3">
         {sections.map((s) => (
           <li key={`${s.section_key}:${s.version}`}>
@@ -163,7 +165,13 @@ function SectionCard({
           {s.title}
         </h3>
         <Badge variant={status.variant}>
-          {s.status === "REVIEWED" ? <CheckCircle2 aria-hidden /> : s.status === "MISSING_INFORMATION" ? <FileWarning aria-hidden /> : <CircleAlert aria-hidden />}
+          {s.status === "REVIEWED" ? (
+            <CheckCircle2 aria-hidden />
+          ) : s.status === "MISSING_INFORMATION" ? (
+            <FileWarning aria-hidden />
+          ) : (
+            <CircleAlert aria-hidden />
+          )}
           {status.label}
         </Badge>
         {s.ai_generated && (
@@ -214,7 +222,9 @@ function SectionCard({
       )}
       {(s.requirement_ids.length > 0 || s.fact_ids.length > 0) && (
         <details className="text-[12px]">
-          <summary className="cursor-pointer text-muted-foreground">Based on {s.requirement_ids.length + s.fact_ids.length} source{s.requirement_ids.length + s.fact_ids.length === 1 ? "" : "s"}</summary>
+          <summary className="cursor-pointer text-muted-foreground">
+            Based on {s.requirement_ids.length + s.fact_ids.length} source{s.requirement_ids.length + s.fact_ids.length === 1 ? "" : "s"}
+          </summary>
           <ul className="mt-1 list-disc pl-5 text-muted-foreground">
             {s.requirement_ids.map((r) => (
               <li key={r}>Tender requirement: {requirements[r] ? requirements[r].slice(0, 200) : r}</li>

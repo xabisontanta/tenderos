@@ -116,6 +116,20 @@ limits that (`lib/tender-documents`, `tests/unit/tender-document-fetcher.test.ts
   document is handled as untrusted data by the AI layer, not scanned for malware (files are stored, never opened or
   executed by TenderOS, and only PDFs are sent on).
 
+## Bid content (proposal text and prices)
+
+- Browsers read their organisation's rows through RLS and write only through six role-checked functions (`save_proposal_section`,
+  `set_proposal_section_review`, `save_pricing_line`, `add_pricing_line`, `remove_pricing_line`, `set_pricing_confirmed`):
+  owners, admins and operators, rate limited, `private.require_aal2`, a version check against lost updates, an audit row per
+  change (section key, lengths and amounts, never the text), and an append-only history (`bid_content_history`: no write
+  privilege for any API role).
+- Money is whole cents. The browser never sends a float: the server action parses what was typed, the database checks the
+  range (R10 000 000 000 a line, three decimals of quantity) and computes amounts and VAT in generated columns. A quantity
+  the tender prints cannot be changed.
+- Editing is gated by the tender's status (`private.prepare_bid_edit`): not for a simulated tender, not once the bid is
+  approved or closed, and an edit while it waits for approval withdraws the approval. `edited_by`, `reviewed_by`,
+  `confirmed_by` and `changed_by` are `on delete set null`, so erasing a person leaves the content and drops the link.
+
 ## Web hardening
 
 - Content-Security-Policy with a per-request nonce and `strict-dynamic`;

@@ -264,7 +264,10 @@ describe("every privileged function, with the requirement on", () => {
     expect(mailbox.error).toBeNull();
     const tender = await createTender(f.owner.client, f.orgId, { reference_number: `MX-${Date.now()}` });
     // Bid content for the calls on it (the tender is a simulation, so they stop at their own checks once past the authenticator).
-    await pool.query(`insert into public.bid_proposal_sections (organisation_id, tender_id, section_key, title, status) values ($1, $2, 'methodology', 'Methodology', 'MISSING_INFORMATION')`, [f.orgId, tender.id]);
+    await pool.query(
+      `insert into public.bid_proposal_sections (organisation_id, tender_id, section_key, title, status) values ($1, $2, 'methodology', 'Methodology', 'MISSING_INFORMATION')`,
+      [f.orgId, tender.id],
+    );
     const { rows: lineRows } = await pool.query(
       `insert into public.bid_pricing_lines (organisation_id, tender_id, source, description) values ($1, $2, 'PERSON', 'A line') returning id`,
       [f.orgId, tender.id],

@@ -98,9 +98,14 @@ const qaOutput = async (runId: string) =>
     checks: Array<{ key: string; result: string; detail: string }>;
   };
 const history = async (tenderId: string, kind: string, ref?: string) =>
-  (await pool.query(`select version, change, changed_by, snapshot from public.bid_content_history where tender_id = $1 and kind = $2 ${ref ? "and ref = $3" : ""} order by id`, ref ? [tenderId, kind, ref] : [tenderId, kind]))
-    .rows;
-const auditActions = async (orgId: string, like: string) => (await pool.query(`select action, metadata from public.audit_logs where organisation_id = $1 and action like $2 order by id`, [orgId, like])).rows;
+  (
+    await pool.query(
+      `select version, change, changed_by, snapshot from public.bid_content_history where tender_id = $1 and kind = $2 ${ref ? "and ref = $3" : ""} order by id`,
+      ref ? [tenderId, kind, ref] : [tenderId, kind],
+    )
+  ).rows;
+const auditActions = async (orgId: string, like: string) =>
+  (await pool.query(`select action, metadata from public.audit_logs where organisation_id = $1 and action like $2 order by id`, [orgId, like])).rows;
 
 beforeAll(() => {
   pool = testPool();
@@ -166,7 +171,14 @@ describe("seeding from the agents", () => {
         },
       });
       const [a, b] = await sectionsOf(tender.id);
-      expect(a).toMatchObject({ status: "DRAFT", ai_generated: true, content: "We hold CIDB grade 6CE.", fact_ids: ["fact:cidb_grade"], requirement_ids: ["doc-1", "doc-2"], warnings: ["A paragraph was removed"] });
+      expect(a).toMatchObject({
+        status: "DRAFT",
+        ai_generated: true,
+        content: "We hold CIDB grade 6CE.",
+        fact_ids: ["fact:cidb_grade"],
+        requirement_ids: ["doc-1", "doc-2"],
+        warnings: ["A paragraph was removed"],
+      });
       expect(b).toMatchObject({ status: "MISSING_INFORMATION", content: null, ai_generated: false, needs: ["Company delivery methodology"] });
       // QA reads an unreviewed AI draft as unconfirmed, not complete.
       const { proposal } = await loadBidContent(client, tender.id);
@@ -189,7 +201,14 @@ describe("editing a section", () => {
     expect(error).toBeNull();
     expect(version).toBe(2);
     const [s] = await sectionsOf(tender.id);
-    expect(s).toMatchObject({ content: "We build roads.\n\nSince 2011.", status: "DRAFT", ai_generated: false, version: 2, edited_by: f.operator.id, reviewed_by: null });
+    expect(s).toMatchObject({
+      content: "We build roads.\n\nSince 2011.",
+      status: "DRAFT",
+      ai_generated: false,
+      version: 2,
+      edited_by: f.operator.id,
+      reviewed_by: null,
+    });
     expect(s.edited_at).not.toBeNull();
     const h = await history(tender.id, "PROPOSAL_SECTION", "executive_summary");
     expect(h.map((x) => [x.version, x.change, x.changed_by])).toEqual([
@@ -208,7 +227,7 @@ describe("editing a section", () => {
     expect(approvals).toEqual([{ status: "CANCELLED", comments: "Withdrawn because the bid content was edited" }]);
     const { rows: runs } = await pool.query(`select status, outcome from public.workflow_runs where id = $1`, [runId]);
     expect(runs[0]).toEqual({ status: "CANCELLED", outcome: "BID_EDITED" });
-    expect((await auditActions(f.orgId, "bid.approval_withdrawn"))).toHaveLength(1);
+    expect(await auditActions(f.orgId, "bid.approval_withdrawn")).toHaveLength(1);
   });
 
   it("refuses a viewer and an outsider, and says nothing happened", async () => {
@@ -220,15 +239,32 @@ describe("editing a section", () => {
       expect(error?.code, user.email).toBe("42501");
     }
     for (const user of [f.owner, f.admin]) {
-      expect((await user.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: user === f.owner ? "methodology" : "quality", p_content: "ok", p_expected_version: 1 })).error).toBeNull();
+      expect(
+        (
+          await user.client.rpc("save_proposal_section", {
+            p_tender_id: tender.id,
+            p_key: user === f.owner ? "methodology" : "quality",
+            p_content: "ok",
+            p_expected_version: 1,
+          })
+        ).error,
+      ).toBeNull();
     }
     expect((await sectionsOf(tender.id)).filter((s) => s.edited_by).length).toBe(2);
   });
 
   it("refuses an out-of-date version, so two people cannot overwrite each other", async () => {
     const { f, tender } = await readyBid("bc-edit-version");
-    expect((await f.operator.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: "methodology", p_content: "First.", p_expected_version: 1 })).error).toBeNull();
-    const stale = await f.admin.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: "methodology", p_content: "Second.", p_expected_version: 1 });
+    expect(
+      (await f.operator.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: "methodology", p_content: "First.", p_expected_version: 1 }))
+        .error,
+    ).toBeNull();
+    const stale = await f.admin.client.rpc("save_proposal_section", {
+      p_tender_id: tender.id,
+      p_key: "methodology",
+      p_content: "Second.",
+      p_expected_version: 1,
+    });
     expect(stale.error?.message).toMatch(/changed by someone else/i);
     expect((await sectionsOf(tender.id))[1]).toMatchObject({ content: "First.", version: 2 });
   });
@@ -247,8 +283,18 @@ describe("editing a section", () => {
     const key = "quality";
     await f.operator.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: key, p_content: "Something.", p_expected_version: 1 });
     await f.operator.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: key, p_content: "\n \n", p_expected_version: 2 });
-    expect((await sectionsOf(tender.id)).find((s) => s.section_key === key)).toMatchObject({ content: null, status: "MISSING_INFORMATION", version: 3, ai_generated: false });
-    const long = await f.operator.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: key, p_content: "x".repeat(20001), p_expected_version: 3 });
+    expect((await sectionsOf(tender.id)).find((s) => s.section_key === key)).toMatchObject({
+      content: null,
+      status: "MISSING_INFORMATION",
+      version: 3,
+      ai_generated: false,
+    });
+    const long = await f.operator.client.rpc("save_proposal_section", {
+      p_tender_id: tender.id,
+      p_key: key,
+      p_content: "x".repeat(20001),
+      p_expected_version: 3,
+    });
     expect(long.error?.code).toBe("23514");
     const missing = await f.operator.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: "nope", p_content: "x", p_expected_version: 1 });
     expect(missing.error?.code).toBe("23514");
@@ -256,7 +302,12 @@ describe("editing a section", () => {
 
   it("strips control characters", async () => {
     const { f, tender } = await readyBid("bc-edit-ctrl");
-    await f.operator.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: "staffing", p_content: "Team\u0007 of\u001b[31m five", p_expected_version: 1 });
+    await f.operator.client.rpc("save_proposal_section", {
+      p_tender_id: tender.id,
+      p_key: "staffing",
+      p_content: "Team\u0007 of\u001b[31m five",
+      p_expected_version: 1,
+    });
     expect((await sectionsOf(tender.id)).find((s) => s.section_key === "staffing")!.content).toBe("Team of[31m five");
   });
 });
@@ -265,36 +316,69 @@ describe("reviewing a section", () => {
   it("records who reviewed it and when, and an edit after that takes the review away", async () => {
     const { f, tender } = await readyBid("bc-review");
     await f.operator.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: "methodology", p_content: "Our method.", p_expected_version: 1 });
-    const reviewed = await f.admin.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: true, p_expected_version: 2 });
+    const reviewed = await f.admin.client.rpc("set_proposal_section_review", {
+      p_tender_id: tender.id,
+      p_key: "methodology",
+      p_reviewed: true,
+      p_expected_version: 2,
+    });
     expect(reviewed.error).toBeNull();
     expect(reviewed.data).toBe(3);
     expect((await sectionsOf(tender.id))[1]).toMatchObject({ status: "REVIEWED", reviewed_by: f.admin.id, edited_by: f.operator.id, version: 3 });
     expect((await sectionsOf(tender.id))[1].reviewed_at).not.toBeNull();
     expect((await history(tender.id, "PROPOSAL_SECTION", "methodology")).map((h) => h.change)).toEqual(["SEEDED", "EDITED", "REVIEWED"]);
-    expect((await auditActions(f.orgId, "bid.section_reviewed"))).toHaveLength(1);
+    expect(await auditActions(f.orgId, "bid.section_reviewed")).toHaveLength(1);
 
-    await f.operator.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: "methodology", p_content: "Our changed method.", p_expected_version: 3 });
+    await f.operator.client.rpc("save_proposal_section", {
+      p_tender_id: tender.id,
+      p_key: "methodology",
+      p_content: "Our changed method.",
+      p_expected_version: 3,
+    });
     expect((await sectionsOf(tender.id))[1]).toMatchObject({ status: "DRAFT", reviewed_by: null, reviewed_at: null, version: 4 });
   });
 
   it("will not review a section with no text, review it twice, or take back a review that was never made", async () => {
     const { f, tender } = await readyBid("bc-review-rules");
-    const empty = await f.owner.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: true, p_expected_version: 1 });
+    const empty = await f.owner.client.rpc("set_proposal_section_review", {
+      p_tender_id: tender.id,
+      p_key: "methodology",
+      p_reviewed: true,
+      p_expected_version: 1,
+    });
     expect(empty.error?.code).toBe("23514");
     expect(empty.error?.message).toMatch(/needs text/i);
     await f.owner.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: "methodology", p_content: "Text.", p_expected_version: 1 });
-    expect((await f.owner.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: false, p_expected_version: 2 })).error?.code).toBe("23514");
-    expect((await f.owner.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: true, p_expected_version: 2 })).error).toBeNull();
-    expect((await f.owner.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: true, p_expected_version: 3 })).error?.code).toBe("23514");
-    expect((await f.owner.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: false, p_expected_version: 3 })).error).toBeNull();
+    expect(
+      (await f.owner.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: false, p_expected_version: 2 }))
+        .error?.code,
+    ).toBe("23514");
+    expect(
+      (await f.owner.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: true, p_expected_version: 2 }))
+        .error,
+    ).toBeNull();
+    expect(
+      (await f.owner.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: true, p_expected_version: 3 })).error
+        ?.code,
+    ).toBe("23514");
+    expect(
+      (await f.owner.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: false, p_expected_version: 3 }))
+        .error,
+    ).toBeNull();
     expect((await sectionsOf(tender.id))[1]).toMatchObject({ status: "DRAFT", reviewed_by: null });
   });
 
   it("is for owners, admins and operators", async () => {
     const { f, tender } = await readyBid("bc-review-roles");
     await f.owner.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: "methodology", p_content: "Text.", p_expected_version: 1 });
-    expect((await f.viewer.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: true, p_expected_version: 2 })).error?.code).toBe("42501");
-    expect((await f.operator.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: true, p_expected_version: 2 })).error).toBeNull();
+    expect(
+      (await f.viewer.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: true, p_expected_version: 2 }))
+        .error?.code,
+    ).toBe("42501");
+    expect(
+      (await f.operator.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: "methodology", p_reviewed: true, p_expected_version: 2 }))
+        .error,
+    ).toBeNull();
   });
 });
 
@@ -329,7 +413,12 @@ describe("when a bid can be edited", () => {
     const { data: approval } = await f.owner.client.from("approvals").select("id").eq("tender_id", tender.id).single();
     expect((await f.owner.client.rpc("decide_approval", { p_approval_id: approval!.id, p_approve: true, p_comments: "ok" })).error).toBeNull();
     await drainOrg(worker(), pool, f.orgId);
-    const res = await f.operator.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: "methodology", p_content: "Late change", p_expected_version: 1 });
+    const res = await f.operator.client.rpc("save_proposal_section", {
+      p_tender_id: tender.id,
+      p_key: "methodology",
+      p_content: "Late change",
+      p_expected_version: 1,
+    });
     expect(res.error?.code).toBe("23514");
     expect(res.error?.message).toMatch(/approved or closed/i);
     const line = await f.operator.client.rpc("add_pricing_line", { p_tender_id: tender.id, p_description: "Late line", p_unit: "each", p_quantity: 1 });
@@ -340,7 +429,10 @@ describe("when a bid can be edited", () => {
   it("refuses a simulated tender", async () => {
     const f = await fixture("bc-sim");
     const tender = await createTender(f.owner.client, f.orgId, { is_simulation: true });
-    await pool.query(`insert into public.bid_proposal_sections (organisation_id, tender_id, section_key, title, status) values ($1, $2, 'methodology', 'Methodology', 'MISSING_INFORMATION')`, [f.orgId, tender.id]);
+    await pool.query(
+      `insert into public.bid_proposal_sections (organisation_id, tender_id, section_key, title, status) values ($1, $2, 'methodology', 'Methodology', 'MISSING_INFORMATION')`,
+      [f.orgId, tender.id],
+    );
     const res = await f.owner.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: "methodology", p_content: "x", p_expected_version: 1 });
     expect(res.error?.code).toBe("23514");
     expect(res.error?.message).toMatch(/simulated/i);
@@ -354,7 +446,14 @@ describe("pricing", () => {
       `insert into public.bid_pricing_lines (organisation_id, tender_id, position, source, description, unit, quantity, quantity_printed, requirement_id, quote, page)
        values ($1, $2, coalesce((select max(position) + 1 from public.bid_pricing_lines where tender_id = $2), 0), 'TENDER', $3, 'm', $4, $5, $6, '1.1 Supply 110 mm pipe 500 m', 4)
        returning id`,
-      [f.orgId, tenderId, over.description ?? "Supply 110 mm pipe", over.quantity === undefined ? 500 : over.quantity, over.quantity !== null, over.requirement ?? "doc-1"],
+      [
+        f.orgId,
+        tenderId,
+        over.description ?? "Supply 110 mm pipe",
+        over.quantity === undefined ? 500 : over.quantity,
+        over.quantity !== null,
+        over.requirement ?? "doc-1",
+      ],
     );
     return rows[0].id as string;
   }
@@ -362,11 +461,24 @@ describe("pricing", () => {
   it("lets a person enter a unit price and a supplier quote reference, computes the amount and VAT in the database in cents, and clears nothing it should not", async () => {
     const { f, tender } = await readyBid("bc-price");
     const id = await tenderLine(f, tender.id);
-    const saved = await f.operator.client.rpc("save_pricing_line", { p_line_id: id, p_unit_price_cents: 12345, p_quantity: 500, p_supplier_ref: "  Q-77 / Pipe Co  ", p_expected_version: 1 });
+    const saved = await f.operator.client.rpc("save_pricing_line", {
+      p_line_id: id,
+      p_unit_price_cents: 12345,
+      p_quantity: 500,
+      p_supplier_ref: "  Q-77 / Pipe Co  ",
+      p_expected_version: 1,
+    });
     expect(saved.error).toBeNull();
     expect(saved.data).toBe(2);
     const [l] = await linesOf(tender.id);
-    expect(l).toMatchObject({ unit_price_cents: 12345, supplier_quote_ref: "Q-77 / Pipe Co", quantity: 500, amount_cents: 6_172_500, vat_cents: 925_875, version: 2 });
+    expect(l).toMatchObject({
+      unit_price_cents: 12345,
+      supplier_quote_ref: "Q-77 / Pipe Co",
+      quantity: 500,
+      amount_cents: 6_172_500,
+      vat_cents: 925_875,
+      version: 2,
+    });
     const h = await history(tender.id, "PRICING_LINE", id);
     expect(h.map((x) => x.change)).toEqual(["FIGURES_ENTERED"]);
     expect(h[0].snapshot).toMatchObject({ unit_price_cents: 12345, amount_cents: 6_172_500 });
@@ -391,9 +503,20 @@ describe("pricing", () => {
       ["2", 333],
     ];
     for (const [i, [quantity, cents]] of cases.entries()) {
-      const added = await f.owner.client.rpc("add_pricing_line", { p_tender_id: tender.id, p_description: `Line ${i + 1}`, p_unit: "each", p_quantity: Number(quantity) });
+      const added = await f.owner.client.rpc("add_pricing_line", {
+        p_tender_id: tender.id,
+        p_description: `Line ${i + 1}`,
+        p_unit: "each",
+        p_quantity: Number(quantity),
+      });
       expect(added.error, `add ${quantity}`).toBeNull();
-      const saved = await f.owner.client.rpc("save_pricing_line", { p_line_id: added.data!, p_unit_price_cents: cents, p_quantity: Number(quantity), p_supplier_ref: null as never, p_expected_version: 1 });
+      const saved = await f.owner.client.rpc("save_pricing_line", {
+        p_line_id: added.data!,
+        p_unit_price_cents: cents,
+        p_quantity: Number(quantity),
+        p_supplier_ref: null as never,
+        p_expected_version: 1,
+      });
       expect(saved.error, `price ${quantity} x ${cents}`).toBeNull();
     }
     const lines = await linesOf(tender.id);
@@ -404,18 +527,51 @@ describe("pricing", () => {
     const ts = priceSchedule(cases.map(([quantity, cents]) => ({ quantity, unitPriceCents: cents })));
     const { data } = await f.viewer.client.rpc("bid_pricing_totals", { p_tender_id: tender.id });
     const totals = (data as unknown as Array<Record<string, number | boolean>>)[0];
-    expect(totals).toMatchObject({ lines: cases.length, priced: cases.length, subtotal_cents: ts.subtotalCents, vat_cents: ts.vatCents, total_cents: ts.totalCents, complete: true });
+    expect(totals).toMatchObject({
+      lines: cases.length,
+      priced: cases.length,
+      subtotal_cents: ts.subtotalCents,
+      vat_cents: ts.vatCents,
+      total_cents: ts.totalCents,
+      complete: true,
+    });
   });
 
   it("will not let the bidder change a quantity the tender prints, but lets them supply one the tender leaves out", async () => {
     const { f, tender } = await readyBid("bc-quantity");
     const printed = await tenderLine(f, tender.id, { quantity: 500, requirement: "doc-1" });
     const blank = await tenderLine(f, tender.id, { quantity: null, requirement: "doc-2" });
-    const changed = await f.owner.client.rpc("save_pricing_line", { p_line_id: printed, p_unit_price_cents: 100, p_quantity: 400, p_supplier_ref: null as never, p_expected_version: 1 });
+    const changed = await f.owner.client.rpc("save_pricing_line", {
+      p_line_id: printed,
+      p_unit_price_cents: 100,
+      p_quantity: 400,
+      p_supplier_ref: null as never,
+      p_expected_version: 1,
+    });
     expect(changed.error?.code).toBe("23514");
     expect(changed.error?.message).toMatch(/printed in the tender/i);
-    expect((await f.owner.client.rpc("save_pricing_line", { p_line_id: printed, p_unit_price_cents: 100, p_quantity: 500, p_supplier_ref: null as never, p_expected_version: 1 })).error).toBeNull();
-    expect((await f.owner.client.rpc("save_pricing_line", { p_line_id: blank, p_unit_price_cents: 100, p_quantity: 12.5, p_supplier_ref: null as never, p_expected_version: 1 })).error).toBeNull();
+    expect(
+      (
+        await f.owner.client.rpc("save_pricing_line", {
+          p_line_id: printed,
+          p_unit_price_cents: 100,
+          p_quantity: 500,
+          p_supplier_ref: null as never,
+          p_expected_version: 1,
+        })
+      ).error,
+    ).toBeNull();
+    expect(
+      (
+        await f.owner.client.rpc("save_pricing_line", {
+          p_line_id: blank,
+          p_unit_price_cents: 100,
+          p_quantity: 12.5,
+          p_supplier_ref: null as never,
+          p_expected_version: 1,
+        })
+      ).error,
+    ).toBeNull();
     expect((await linesOf(tender.id)).map((l) => [l.quantity, l.amount_cents])).toEqual([
       [500, 50_000],
       [12.5, 1250],
@@ -434,34 +590,61 @@ describe("pricing", () => {
       ["an amount over the cap", { p_unit_price_cents: 1_000_000_000_000, p_quantity: 2 }],
     ];
     for (const [what, args] of bad) {
-      const { error } = await f.owner.client.rpc("save_pricing_line", { p_line_id: id, p_supplier_ref: null as never, p_expected_version: 1, ...args } as never);
+      const { error } = await f.owner.client.rpc("save_pricing_line", {
+        p_line_id: id,
+        p_supplier_ref: null as never,
+        p_expected_version: 1,
+        ...args,
+      } as never);
       expect(error?.code, what).toBe("23514");
     }
-    const long = await f.owner.client.rpc("save_pricing_line", { p_line_id: id, p_unit_price_cents: 100, p_quantity: 2, p_supplier_ref: "x".repeat(121), p_expected_version: 1 });
+    const long = await f.owner.client.rpc("save_pricing_line", {
+      p_line_id: id,
+      p_unit_price_cents: 100,
+      p_quantity: 2,
+      p_supplier_ref: "x".repeat(121),
+      p_expected_version: 1,
+    });
     expect(long.error?.code).toBe("23514");
     expect((await linesOf(tender.id))[0]).toMatchObject({ unit_price_cents: null, version: 1 });
   });
 
   it("confirms the schedule only when every line has a quantity and a price, and a changed figure takes the confirmation away", async () => {
     const { f, tender } = await readyBid("bc-confirm");
-    expect((await f.owner.client.rpc("set_pricing_confirmed", { p_tender_id: tender.id, p_confirmed: true })).error?.message).toMatch(/Every line needs a quantity and a price/);
+    expect((await f.owner.client.rpc("set_pricing_confirmed", { p_tender_id: tender.id, p_confirmed: true })).error?.message).toMatch(
+      /Every line needs a quantity and a price/,
+    );
     const id = (await f.owner.client.rpc("add_pricing_line", { p_tender_id: tender.id, p_description: "Supply and fix", p_unit: "sum", p_quantity: 1 })).data!;
     expect((await f.owner.client.rpc("set_pricing_confirmed", { p_tender_id: tender.id, p_confirmed: true })).error?.code).toBe("23514");
-    await f.owner.client.rpc("save_pricing_line", { p_line_id: id, p_unit_price_cents: 0, p_quantity: 1, p_supplier_ref: null as never, p_expected_version: 1 });
+    await f.owner.client.rpc("save_pricing_line", {
+      p_line_id: id,
+      p_unit_price_cents: 0,
+      p_quantity: 1,
+      p_supplier_ref: null as never,
+      p_expected_version: 1,
+    });
     expect((await f.operator.client.rpc("set_pricing_confirmed", { p_tender_id: tender.id, p_confirmed: true })).error).toBeNull();
     const { rows } = await pool.query(`select confirmed_by, confirmed_at from public.bid_pricing where tender_id = $1`, [tender.id]);
     expect(rows[0].confirmed_by).toBe(f.operator.id);
     expect(rows[0].confirmed_at).not.toBeNull();
     expect((await auditActions(f.orgId, "bid.pricing_confirmed")).length).toBe(1);
 
-    await f.owner.client.rpc("save_pricing_line", { p_line_id: id, p_unit_price_cents: 5000, p_quantity: 1, p_supplier_ref: null as never, p_expected_version: 2 });
+    await f.owner.client.rpc("save_pricing_line", {
+      p_line_id: id,
+      p_unit_price_cents: 5000,
+      p_quantity: 1,
+      p_supplier_ref: null as never,
+      p_expected_version: 2,
+    });
     expect((await pool.query(`select confirmed_at from public.bid_pricing where tender_id = $1`, [tender.id])).rows[0].confirmed_at).toBeNull();
     expect((await history(tender.id, "PRICING")).map((h) => h.change)).toEqual(["CONFIRMED", "UNCONFIRMED"]);
   });
 
   it("lets a person add lines of their own and remove them, but not remove the tender's lines", async () => {
     const { f, tender } = await readyBid("bc-lines");
-    const own = (await f.operator.client.rpc("add_pricing_line", { p_tender_id: tender.id, p_description: "Site establishment", p_unit: "sum", p_quantity: null as never })).data!;
+    const own = (
+      await f.operator.client.rpc("add_pricing_line", { p_tender_id: tender.id, p_description: "Site establishment", p_unit: "sum", p_quantity: null as never })
+    ).data!;
     const fromTender = await tenderLine(f, tender.id);
     expect((await f.operator.client.rpc("remove_pricing_line", { p_line_id: fromTender })).error?.message).toMatch(/cannot be removed/);
     expect((await f.operator.client.rpc("remove_pricing_line", { p_line_id: own })).error).toBeNull();
@@ -476,17 +659,64 @@ describe("pricing", () => {
     const outsider = await createUser("bc-pricing-out");
     await bootstrapOrg(outsider);
     for (const user of [f.viewer, outsider]) {
-      expect((await user.client.rpc("add_pricing_line", { p_tender_id: tender.id, p_description: "A line", p_unit: "each", p_quantity: 1 })).error?.code, user.email).toBe("42501");
+      expect(
+        (await user.client.rpc("add_pricing_line", { p_tender_id: tender.id, p_description: "A line", p_unit: "each", p_quantity: 1 })).error?.code,
+        user.email,
+      ).toBe("42501");
     }
     const id = (await f.admin.client.rpc("add_pricing_line", { p_tender_id: tender.id, p_description: "A line", p_unit: "each", p_quantity: 1 })).data!;
-    expect((await f.viewer.client.rpc("save_pricing_line", { p_line_id: id, p_unit_price_cents: 1, p_quantity: 1, p_supplier_ref: null as never, p_expected_version: 1 })).error?.code).toBe("42501");
-    expect((await f.owner.client.rpc("save_pricing_line", { p_line_id: id, p_unit_price_cents: 1, p_quantity: 1, p_supplier_ref: null as never, p_expected_version: 1 })).error).toBeNull();
-    expect((await f.admin.client.rpc("save_pricing_line", { p_line_id: id, p_unit_price_cents: 2, p_quantity: 1, p_supplier_ref: null as never, p_expected_version: 1 })).error?.message).toMatch(/changed by someone else/);
+    expect(
+      (
+        await f.viewer.client.rpc("save_pricing_line", {
+          p_line_id: id,
+          p_unit_price_cents: 1,
+          p_quantity: 1,
+          p_supplier_ref: null as never,
+          p_expected_version: 1,
+        })
+      ).error?.code,
+    ).toBe("42501");
+    expect(
+      (
+        await f.owner.client.rpc("save_pricing_line", {
+          p_line_id: id,
+          p_unit_price_cents: 1,
+          p_quantity: 1,
+          p_supplier_ref: null as never,
+          p_expected_version: 1,
+        })
+      ).error,
+    ).toBeNull();
+    expect(
+      (
+        await f.admin.client.rpc("save_pricing_line", {
+          p_line_id: id,
+          p_unit_price_cents: 2,
+          p_quantity: 1,
+          p_supplier_ref: null as never,
+          p_expected_version: 1,
+        })
+      ).error?.message,
+    ).toMatch(/changed by someone else/);
     expect((await f.viewer.client.from("bid_pricing_lines").select("id,amount_cents").eq("tender_id", tender.id)).data).toHaveLength(1);
     expect((await outsider.client.from("bid_pricing_lines").select("id").eq("tender_id", tender.id)).data).toEqual([]);
     expect((await outsider.client.from("bid_proposal_sections").select("id").eq("tender_id", tender.id)).data).toEqual([]);
-    expect((await f.viewer.client.from("bid_pricing_lines").update({ unit_price_cents: 1 } as never).eq("id", id)).error).not.toBeNull();
-    expect((await f.viewer.client.from("bid_proposal_sections").update({ content: "x" } as never).eq("tender_id", tender.id)).error).not.toBeNull();
+    expect(
+      (
+        await f.viewer.client
+          .from("bid_pricing_lines")
+          .update({ unit_price_cents: 1 } as never)
+          .eq("id", id)
+      ).error,
+    ).not.toBeNull();
+    expect(
+      (
+        await f.viewer.client
+          .from("bid_proposal_sections")
+          .update({ content: "x" } as never)
+          .eq("tender_id", tender.id)
+      ).error,
+    ).not.toBeNull();
   });
 
   it("never lets the AI's structure price anything: seeded lines arrive without figures, and a re-run keeps the person's", async () => {
@@ -495,7 +725,15 @@ describe("pricing", () => {
     const output = (lines: Array<{ requirement_id: string; description: string; quantity: number | null }>) => ({
       currency: "ZAR" as const,
       vat_rate: 0.15,
-      lines: lines.map((l) => ({ ...l, unit: "m", unit_price_zar: null, source: "MISSING_INFORMATION" as const, supplier_quote_likely: true, quote: `${l.description} line`, page: 3 })),
+      lines: lines.map((l) => ({
+        ...l,
+        unit: "m",
+        unit_price_zar: null,
+        source: "MISSING_INFORMATION" as const,
+        supplier_quote_likely: true,
+        quote: `${l.description} line`,
+        page: 3,
+      })),
       subtotal_zar: null,
       status: "REQUIRES_CONFIRMATION" as const,
       notes: ["Final pricing requires human approval"],
@@ -506,14 +744,26 @@ describe("pricing", () => {
     });
     const client = await pool.connect();
     try {
-      await seedPricing(client, { organisationId: f.orgId, tenderId: tender.id, taskId: task, output: output([{ requirement_id: "doc-1", description: "Supply pipe", quantity: 500 }, { requirement_id: "doc-2", description: "Lay pipe", quantity: null }, { requirement_id: "doc-3", description: "Test pipe", quantity: 1 }]) });
+      await seedPricing(client, {
+        organisationId: f.orgId,
+        tenderId: tender.id,
+        taskId: task,
+        output: output([
+          { requirement_id: "doc-1", description: "Supply pipe", quantity: 500 },
+          { requirement_id: "doc-2", description: "Lay pipe", quantity: null },
+          { requirement_id: "doc-3", description: "Test pipe", quantity: 1 },
+        ]),
+      });
       const seeded = await linesOf(tender.id);
       expect(seeded.map((l) => [l.requirement_id, l.quantity, l.quantity_printed, l.unit_price_cents, l.amount_cents])).toEqual([
         ["doc-1", 500, true, null, null],
         ["doc-2", null, false, null, null],
         ["doc-3", 1, true, null, null],
       ]);
-      expect((await pool.query(`select vat_treatment, vat_status, vat_requirement_id, ai_generated from public.bid_pricing where tender_id = $1`, [tender.id])).rows[0]).toEqual({
+      expect(
+        (await pool.query(`select vat_treatment, vat_status, vat_requirement_id, ai_generated from public.bid_pricing where tender_id = $1`, [tender.id]))
+          .rows[0],
+      ).toEqual({
         vat_treatment: "EXCLUSIVE",
         vat_status: "STATED",
         vat_requirement_id: "doc-9",
@@ -521,12 +771,32 @@ describe("pricing", () => {
       });
 
       // A person prices the first line and supplies the quantity of the second.
-      await f.operator.client.rpc("save_pricing_line", { p_line_id: seeded[0].id, p_unit_price_cents: 9900, p_quantity: 500, p_supplier_ref: "Q-1", p_expected_version: 1 });
-      await f.operator.client.rpc("save_pricing_line", { p_line_id: seeded[1].id, p_unit_price_cents: null as never, p_quantity: 40, p_supplier_ref: null as never, p_expected_version: 1 });
+      await f.operator.client.rpc("save_pricing_line", {
+        p_line_id: seeded[0].id,
+        p_unit_price_cents: 9900,
+        p_quantity: 500,
+        p_supplier_ref: "Q-1",
+        p_expected_version: 1,
+      });
+      await f.operator.client.rpc("save_pricing_line", {
+        p_line_id: seeded[1].id,
+        p_unit_price_cents: null as never,
+        p_quantity: 40,
+        p_supplier_ref: null as never,
+        p_expected_version: 1,
+      });
       await pool.query(`update public.bid_pricing set confirmed_at = now(), confirmed_by = $2 where tender_id = $1`, [tender.id, f.operator.id]);
 
       // The re-run finds doc-1 and doc-2 again, and no longer finds doc-3.
-      await seedPricing(client, { organisationId: f.orgId, tenderId: tender.id, taskId: task, output: output([{ requirement_id: "doc-1", description: "Supply pipe (revised)", quantity: 500 }, { requirement_id: "doc-2", description: "Lay pipe", quantity: null }]) });
+      await seedPricing(client, {
+        organisationId: f.orgId,
+        tenderId: tender.id,
+        taskId: task,
+        output: output([
+          { requirement_id: "doc-1", description: "Supply pipe (revised)", quantity: 500 },
+          { requirement_id: "doc-2", description: "Lay pipe", quantity: null },
+        ]),
+      });
     } finally {
       client.release();
     }
@@ -545,7 +815,13 @@ describe("a re-run never overwrites what a person did", () => {
     const { f, tender } = await readyBid("bc-rerun");
     await f.operator.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: "methodology", p_content: "Our own method.", p_expected_version: 1 });
     const id = (await f.operator.client.rpc("add_pricing_line", { p_tender_id: tender.id, p_description: "Mobilisation", p_unit: "sum", p_quantity: 1 })).data!;
-    await f.operator.client.rpc("save_pricing_line", { p_line_id: id, p_unit_price_cents: 250000, p_quantity: 1, p_supplier_ref: null as never, p_expected_version: 1 });
+    await f.operator.client.rpc("save_pricing_line", {
+      p_line_id: id,
+      p_unit_price_cents: 250000,
+      p_quantity: 1,
+      p_supplier_ref: null as never,
+      p_expected_version: 1,
+    });
     expect(await tenderStatus(tender.id)).toBe("PREPARING_BID");
 
     const rerun = await f.operator.client.rpc("rerun_bid", { p_tender_id: tender.id });
@@ -568,12 +844,21 @@ describe("QA reads what the person wrote", () => {
     // Edit and review all six sections, enter and confirm a schedule. The first edit withdraws the approval.
     const keys = ["executive_summary", "methodology", "delivery_schedule", "staffing", "experience", "quality"];
     for (const key of keys) {
-      const saved = await f.operator.client.rpc("save_proposal_section", { p_tender_id: tender.id, p_key: key, p_content: `Our ${key} answer.`, p_expected_version: 1 });
+      const saved = await f.operator.client.rpc("save_proposal_section", {
+        p_tender_id: tender.id,
+        p_key: key,
+        p_content: `Our ${key} answer.`,
+        p_expected_version: 1,
+      });
       expect(saved.error, key).toBeNull();
     }
     expect(await tenderStatus(tender.id)).toBe("PREPARING_BID");
     // Part way: five reviewed, pricing not confirmed.
-    for (const key of keys.slice(0, 5)) expect((await f.admin.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: key, p_reviewed: true, p_expected_version: 2 })).error, key).toBeNull();
+    for (const key of keys.slice(0, 5))
+      expect(
+        (await f.admin.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: key, p_reviewed: true, p_expected_version: 2 })).error,
+        key,
+      ).toBeNull();
     const partial = (await f.operator.client.rpc("rerun_bid", { p_tender_id: tender.id })).data as string;
     await drainOrg(worker(), pool, f.orgId);
     const qaPartial = await qaOutput(partial);
@@ -582,9 +867,23 @@ describe("QA reads what the person wrote", () => {
     expect(qaPartial.verdict).toBe("CONDITIONAL");
 
     // The rest: the last section reviewed, one line priced and the schedule confirmed. That waits for approval again, so edits withdraw it.
-    expect((await f.admin.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: keys[5], p_reviewed: true, p_expected_version: 2 })).error).toBeNull();
-    const line = (await f.operator.client.rpc("add_pricing_line", { p_tender_id: tender.id, p_description: "Rehabilitate the access road", p_unit: "sum", p_quantity: 1 })).data!;
-    expect((await f.operator.client.rpc("save_pricing_line", { p_line_id: line, p_unit_price_cents: 1_250_000_00, p_quantity: 1, p_supplier_ref: "Q-2026-14", p_expected_version: 1 })).error).toBeNull();
+    expect(
+      (await f.admin.client.rpc("set_proposal_section_review", { p_tender_id: tender.id, p_key: keys[5], p_reviewed: true, p_expected_version: 2 })).error,
+    ).toBeNull();
+    const line = (
+      await f.operator.client.rpc("add_pricing_line", { p_tender_id: tender.id, p_description: "Rehabilitate the access road", p_unit: "sum", p_quantity: 1 })
+    ).data!;
+    expect(
+      (
+        await f.operator.client.rpc("save_pricing_line", {
+          p_line_id: line,
+          p_unit_price_cents: 1_250_000_00,
+          p_quantity: 1,
+          p_supplier_ref: "Q-2026-14",
+          p_expected_version: 1,
+        })
+      ).error,
+    ).toBeNull();
     expect((await f.operator.client.rpc("set_pricing_confirmed", { p_tender_id: tender.id, p_confirmed: true })).error).toBeNull();
     expect(await tenderStatus(tender.id)).toBe("PREPARING_BID");
 
@@ -645,6 +944,13 @@ describe("history and the audit trail", () => {
     const { data } = await f.viewer.client.from("bid_content_history").select("version").eq("tender_id", tender.id).eq("ref", "methodology");
     expect(data).toHaveLength(3);
     expect((await f.owner.client.from("bid_content_history").delete().eq("tender_id", tender.id)).error).not.toBeNull();
-    expect((await f.owner.client.from("bid_content_history").update({ change: "NOPE" } as never).eq("tender_id", tender.id)).error).not.toBeNull();
+    expect(
+      (
+        await f.owner.client
+          .from("bid_content_history")
+          .update({ change: "NOPE" } as never)
+          .eq("tender_id", tender.id)
+      ).error,
+    ).not.toBeNull();
   });
 });

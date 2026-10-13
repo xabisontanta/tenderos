@@ -16,7 +16,9 @@ test("a person edits a proposal section, prices the schedule and prepares the bi
   const stamp = Date.now();
 
   // A company that can pass compliance: a profile and the documents it needs, uploaded and verified by the owner.
-  const asOwner = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
+  const asOwner = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
   expect((await asOwner.auth.signInWithPassword({ email: owner.email, password: owner.password })).error).toBeNull();
   const expires = new Date(Date.now() + 300 * 86_400_000).toISOString().slice(0, 10);
   expect(
@@ -42,7 +44,10 @@ test("a person edits a proposal section, prices the schedule and prepares the bi
   ] as const) {
     const path = `${owner.orgId}/${type}/doc.pdf`;
     expect((await asOwner.storage.from(DOCUMENT_BUCKET).upload(path, new Blob(["%PDF-1.4\n"], { type: "application/pdf" }))).error).toBeNull();
-    expect((await asOwner.rpc("register_company_document", { p_org: owner.orgId, p_doc_type: type, p_title: type, p_path: path, p_expires_at: expiry as never })).error).toBeNull();
+    expect(
+      (await asOwner.rpc("register_company_document", { p_org: owner.orgId, p_doc_type: type, p_title: type, p_path: path, p_expires_at: expiry as never }))
+        .error,
+    ).toBeNull();
   }
   const { data: tender, error } = await admin
     .from("tenders")

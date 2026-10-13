@@ -19,6 +19,7 @@ import {
 import { pricingOutputSchema } from "@/agents/pricing/schema";
 import { proposalOutputSchema } from "@/agents/proposal/schema";
 import { buildEvidence, reviewBid } from "@/agents/qa/logic";
+import { packageHash } from "@/agents/submission/logic";
 
 describe("bidEditState: when a bid's content can be edited", () => {
   it.each(["PREPARING_BID", "PRICING", "QUALITY_ASSURANCE", "QA_FAILED", "COMPLIANCE_REVIEW", "MISSING_INFORMATION"] as const)("%s is editable", (status) => {
@@ -31,7 +32,8 @@ describe("bidEditState: when a bid's content can be edited", () => {
 
   it("is locked once approved, delivered or closed, and before there is any content", () => {
     for (const status of ALL_TENDER_STATUSES) {
-      if (["PREPARING_BID", "PRICING", "QUALITY_ASSURANCE", "QA_FAILED", "COMPLIANCE_REVIEW", "MISSING_INFORMATION", "READY_FOR_APPROVAL"].includes(status)) continue;
+      if (["PREPARING_BID", "PRICING", "QUALITY_ASSURANCE", "QA_FAILED", "COMPLIANCE_REVIEW", "MISSING_INFORMATION", "READY_FOR_APPROVAL"].includes(status))
+        continue;
       expect(bidEditState(status), status).toBe("locked");
     }
   });
@@ -49,7 +51,13 @@ const state = (over: Partial<SectionState> = {}): SectionState => ({
 describe("section state machine", () => {
   describe("seedState: what the Proposal Writer's section becomes", () => {
     it("is a draft to review when the AI wrote text, flagged as AI", () => {
-      expect(seedState({ content: "Text", aiWrote: true })).toEqual({ content: "Text", status: "DRAFT", ai_generated: true, edited_by: null, reviewed_by: null });
+      expect(seedState({ content: "Text", aiWrote: true })).toEqual({
+        content: "Text",
+        status: "DRAFT",
+        ai_generated: true,
+        edited_by: null,
+        reviewed_by: null,
+      });
     });
 
     it("is missing information when there is no text, and not AI-generated", () => {
@@ -168,6 +176,15 @@ describe("proposalFromSections: what QA and the submission officer read", () => 
     expect(technical([section({ status: "REVIEWED" })])).toBe("PASS");
   });
 
+  it("changes the approved pack's hash when a person changes the text or a figure, so the hash covers what was written", () => {
+    const hash = (rows: BidSectionRow[], cents: number | null) =>
+      packageHash({ proposal: proposalFromSections(rows), pricing: pricingFromRows(bid({ confirmed: true }), [line({ unit_price_cents: cents })]) });
+    const base = hash([section({ content: "One." })], 100);
+    expect(hash([section({ content: "One." })], 100)).toBe(base);
+    expect(hash([section({ content: "Two." })], 100)).not.toBe(base);
+    expect(hash([section({ content: "One." })], 101)).not.toBe(base);
+  });
+
   it("is evidence for QA's coverage rule only when it is complete", () => {
     const evidence = buildEvidence({
       proposal: proposalFromSections([section({ section_key: "done", status: "REVIEWED" }), section({ section_key: "todo", status: "DRAFT" })]),
@@ -219,7 +236,10 @@ describe("pricingFromRows: the schedule as QA and the submission officer read it
   });
 
   it("is ready for approval only when priced, complete and confirmed", () => {
-    const out = pricingFromRows(bid({ confirmed: true }), [line({ unit_price_cents: 12000, supplier_quote_ref: "Q-77" }), line({ id: "l2", position: 1, unit_price_cents: 0 })]);
+    const out = pricingFromRows(bid({ confirmed: true }), [
+      line({ unit_price_cents: 12000, supplier_quote_ref: "Q-77" }),
+      line({ id: "l2", position: 1, unit_price_cents: 0 }),
+    ]);
     expect(out.status).toBe("READY_FOR_APPROVAL");
     expect(out.subtotal_zar).toBe(60000);
     expect(out.lines[0]).toMatchObject({ unit_price_zar: 120, source: "SUPPLIER_QUOTE" });
@@ -227,7 +247,9 @@ describe("pricingFromRows: the schedule as QA and the submission officer read it
   });
 
   it("is not ready if a confirmed bid has a line that lost its price, or no lines", () => {
-    expect(pricingFromRows(bid({ confirmed: true }), [line({ unit_price_cents: 100 }), line({ id: "l2", unit_price_cents: null })]).status).toBe("REQUIRES_CONFIRMATION");
+    expect(pricingFromRows(bid({ confirmed: true }), [line({ unit_price_cents: 100 }), line({ id: "l2", unit_price_cents: null })]).status).toBe(
+      "REQUIRES_CONFIRMATION",
+    );
     expect(pricingFromRows(bid({ confirmed: true }), []).status).toBe("REQUIRES_CONFIRMATION");
     expect(pricingFromRows(bid({ confirmed: true }), [line({ unit_price_cents: 100, quantity: null })]).status).toBe("REQUIRES_CONFIRMATION");
   });
@@ -250,7 +272,9 @@ describe("pricingFromRows: the schedule as QA and the submission officer read it
   });
 
   it("shows a person's own line with no requirement as an ordinary line", () => {
-    const out = pricingFromRows(bid({ confirmed: true }), [line({ source: "PERSON", requirement_id: null, quote: null, page: null, quantity_printed: false, unit_price_cents: 500 })]);
+    const out = pricingFromRows(bid({ confirmed: true }), [
+      line({ source: "PERSON", requirement_id: null, quote: null, page: null, quantity_printed: false, unit_price_cents: 500 }),
+    ]);
     expect(out.lines[0].requirement_id).toBeUndefined();
     expect(out.lines[0]).toMatchObject({ description: "Supply 110 mm pipe", unit_price_zar: 5 });
   });

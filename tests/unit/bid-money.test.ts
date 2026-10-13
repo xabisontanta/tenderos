@@ -133,7 +133,11 @@ describe("priceSchedule: totals from the lines, in cents", () => {
   const line = (over: Partial<ScheduleLine> = {}): ScheduleLine => ({ quantity: "2", unitPriceCents: 1000, ...over });
 
   it("adds line amounts and line VAT, so the lines always add up to the totals", () => {
-    const res = priceSchedule([line({ quantity: "3", unitPriceCents: 333 }), line({ quantity: "1", unitPriceCents: 10 }), line({ quantity: "2", unitPriceCents: 1000 })]);
+    const res = priceSchedule([
+      line({ quantity: "3", unitPriceCents: 333 }),
+      line({ quantity: "1", unitPriceCents: 10 }),
+      line({ quantity: "2", unitPriceCents: 1000 }),
+    ]);
     expect(res.lines.map((l) => [l.amountCents, l.vatCents, l.totalCents])).toEqual([
       [999, 150, 1149], // 999 x 15% = 149.85
       [10, 2, 12], // 1.5 rounds up

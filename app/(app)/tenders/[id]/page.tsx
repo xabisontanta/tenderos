@@ -452,25 +452,25 @@ async function bidContent(supabase: Awaited<ReturnType<typeof getServerSupabase>
   return {
     error: Boolean(failed),
     people: Object.fromEntries((members.data ?? []).map((m) => [m.user_id, m.full_name || m.email || "a team member"])) as Record<string, string>,
-    sections: (sections.data ?? []).map(
-      (s): SectionView => ({
-        section_key: s.section_key,
-        title: s.title,
-        version: s.version,
-        content: s.content,
-        status: s.status as SectionView["status"],
-        ai_generated: s.ai_generated,
-        needs: strings(s.needs),
-        warnings: strings(s.warnings),
-        fact_ids: strings(s.fact_ids),
-        requirement_ids: strings(s.requirement_ids),
-        edited_by: s.edited_by,
-        edited_at: s.edited_at,
-        reviewed_by: s.reviewed_by,
-        reviewed_at: s.reviewed_at,
-      }),
-    ),
-    history: (history.data ?? []).filter((h) => h.kind === "PROPOSAL_SECTION").map((h) => ({ ref: h.ref, version: h.version, change: h.change, changed_by: h.changed_by, changed_at: h.changed_at })),
+    sections: (sections.data ?? []).map((s): SectionView => ({
+      section_key: s.section_key,
+      title: s.title,
+      version: s.version,
+      content: s.content,
+      status: s.status as SectionView["status"],
+      ai_generated: s.ai_generated,
+      needs: strings(s.needs),
+      warnings: strings(s.warnings),
+      fact_ids: strings(s.fact_ids),
+      requirement_ids: strings(s.requirement_ids),
+      edited_by: s.edited_by,
+      edited_at: s.edited_at,
+      reviewed_by: s.reviewed_by,
+      reviewed_at: s.reviewed_at,
+    })),
+    history: (history.data ?? [])
+      .filter((h) => h.kind === "PROPOSAL_SECTION")
+      .map((h) => ({ ref: h.ref, version: h.version, change: h.change, changed_by: h.changed_by, changed_at: h.changed_at })),
     pricing:
       pricing.data || lineViews.length > 0
         ? {
