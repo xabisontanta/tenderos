@@ -17,6 +17,9 @@ import type { PlanStep } from "./definitions/plan";
 import * as db from "./store";
 import { runDiscovery } from "./discovery";
 import { maxInvalidRatioFromEnv, type Fetcher } from "@/agents/discovery/etenders";
+import type { PricingOutput } from "@/agents/pricing/schema";
+import type { ProposalOutput } from "@/agents/proposal/schema";
+import { overlayBidContent, seedPricing, seedProposal } from "./bid-content";
 import { ingestTenderDocuments, productionIngestDeps, type IngestDeps } from "@/lib/tender-documents/ingest";
 import { createTenderDocumentSource } from "@/lib/tender-documents/source";
 import { createSupabaseStorage, type DocumentStorage } from "@/lib/tender-documents/storage";
@@ -443,7 +446,10 @@ export class WorkflowEngine {
           tender: granted.has("PUBLIC_TENDER_DATA") ? db.toTenderSnapshot(tender) : null,
           company: granted.has("COMPANY_PROFILE") ? await db.getCompanyProfile(c, run.organisation_id) : null,
           documents: await db.getCompanyDocuments(c, run.organisation_id, [...granted]),
-          previousOutputs: await db.getPreviousOutputs(c, run),
+          // On a real tender the proposal and pricing are what the person reviewed and entered, not the first draft.
+          previousOutputs: run.is_simulation
+            ? await db.getPreviousOutputs(c, run)
+            : await overlayBidContent(c, run.tender_id, await db.getPreviousOutputs(c, run)),
           granted,
           now: this.now(),
           simulationStepMs: this.opts.simulationStepMs,
@@ -538,6 +544,13 @@ export class WorkflowEngine {
                   completed_at = now(), error = null where id = $1`,
           [task.id, JSON.stringify(result.output), result.summary.slice(0, 200)],
         );
+        // The proposal draft and the pricing structure become the bid content a person reviews and enters (migration 072).
+        if (!lockedRun.is_simulation && step.key === "proposal") {
+          await seedProposal(c, { organisationId: task.organisation_id, tenderId: run.tender_id, taskId: task.id, output: result.output as ProposalOutput });
+        }
+        if (!lockedRun.is_simulation && step.key === "pricing") {
+          await seedPricing(c, { organisationId: task.organisation_id, tenderId: run.tender_id, taskId: task.id, output: result.output as PricingOutput });
+        }
         if (result.cost) {
           // Rule-based steps on a real tender are not simulated work: record them as $0 rules, not simulation.
           const cost = !run.is_simulation && result.cost.provider === "simulation" ? { ...result.cost, provider: "rules", isSimulated: false } : result.cost;

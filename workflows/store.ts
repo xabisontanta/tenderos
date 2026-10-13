@@ -174,12 +174,20 @@ export async function getCompanyDocuments(c: PoolClient, organisationId: string,
  * it skipped; its own outputs win.
  */
 export async function getPreviousOutputs(c: PoolClient, run: Pick<RunRow, "id" | "options">): Promise<Record<string, unknown>> {
-  const resumeFrom = (run.options as { resume_from?: string } | null)?.resume_from ?? null;
+  // A bid prepared again continues from the run before it, which may itself have continued from an earlier one (a person who
+  // edits and prepares the bid again more than once): follow the whole chain, nearest run first.
+  const chain = [run.id];
+  let next = (run.options as { resume_from?: string } | null)?.resume_from ?? null;
+  while (next && chain.length < 25 && !chain.includes(next)) {
+    chain.push(next);
+    const { rows } = await c.query<{ next: string | null }>(`select options ->> 'resume_from' as next from public.workflow_runs where id = $1`, [next]);
+    next = rows[0]?.next ?? null;
+  }
   const { rows } = await c.query<{ step_key: string; output: unknown }>(
     `select distinct on (step_key) step_key, output from public.tasks
       where workflow_run_id = any ($1::uuid[]) and status = 'COMPLETED' and step_key is not null
-      order by step_key, (workflow_run_id = $2) desc, completed_at desc`,
-    [resumeFrom ? [run.id, resumeFrom] : [run.id], run.id],
+      order by step_key, array_position($1::uuid[], workflow_run_id), completed_at desc`,
+    [chain],
   );
   return Object.fromEntries(rows.map((r) => [r.step_key, r.output]));
 }

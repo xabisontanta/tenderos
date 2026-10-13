@@ -341,7 +341,7 @@ not `aal2`. Signing in and reading stay open, so someone who has not set one up 
   `createAutofillToken` and `createBrowserPairing`, the organisation export download, and `/api/email/google/start` and `/callback`.
   It refuses when the level cannot be read. `toUserError` maps P0403 to the same message ("Verify with your authenticator to do this."), and
   the toast adds a "Verify now" link.
-- **Tested** with the claims set the way PostgREST sets them (`tests/integration/aal2.test.ts`: all twenty-three functions refuse aal1 with
+- **Tested** with the claims set the way PostgREST sets them (`tests/integration/aal2.test.ts`: all twenty-nine functions refuse aal1 with
   P0403 and accept aal2, the switch, the pairing codes, documents and Storage, the worker); a real aal2 token needs a TOTP-enabled Auth server
   (`tests/integration/mfa.test.ts`). `has_org_role` keeps its signature.
 
@@ -442,7 +442,7 @@ other MFA error codes. On a stack without TOTP the test skips itself with a note
   migration's pre-check; keyword constraints and `complete_onboarding`. Teams and MFA: member
   management and the last-owner rule under concurrency (`members.test.ts`); invitations, their
   tokens, limits, acceptance rules and POPIA handling (`invitations.test.ts`); `reset_user_mfa`
-  (`mfa-reset.test.ts`); the second-factor requirement for all twenty-three functions, the switch, pairing
+  (`mfa-reset.test.ts`); the second-factor requirement for all twenty-nine functions, the switch, pairing
   codes and documents (`aal2.test.ts`, with the session's claims set as PostgREST sets them); and the
   catalogue checks in `hardening.test.ts`. `mfa.test.ts` (a real TOTP enrolment, challenge and aal2
   session) skips itself when the Auth server has TOTP off.

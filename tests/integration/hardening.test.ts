@@ -99,6 +99,12 @@ describe("database hardening", () => {
       "set_ai_settings",
       "set_ai_budget",
       "fetch_tender_documents",
+      "save_proposal_section",
+      "set_proposal_section_review",
+      "save_pricing_line",
+      "add_pricing_line",
+      "remove_pricing_line",
+      "set_pricing_confirmed",
     ];
     const { rows } = await pool.query(`select proname, prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = any($1)`, [fns]);
     expect(rows.map((r) => r.proname).sort()).toEqual([...fns].sort());
@@ -132,6 +138,12 @@ describe("database hardening", () => {
       "set_ai_settings",
       "set_ai_budget",
       "fetch_tender_documents",
+      "save_proposal_section",
+      "set_proposal_section_review",
+      "save_pricing_line",
+      "add_pricing_line",
+      "remove_pricing_line",
+      "set_pricing_confirmed",
     ];
     const { rows } = await pool.query(`select proname, prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = any($1)`, [fns]);
     expect(rows.map((r) => r.proname).sort()).toEqual([...fns].sort());
