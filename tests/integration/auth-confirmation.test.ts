@@ -41,10 +41,20 @@ describe("an unconfirmed address", () => {
 
     const mail = await waitForMail(user.email, { subject: /confirm/i });
     expect(mail.to).toContain(user.email);
-    const link = pickLink(mail, /\/auth\/v1\/verify/);
-    // Do not follow the redirect: the link itself does the confirming.
-    const res = await fetch(link, { redirect: "manual" });
-    expect([301, 302, 303, 307]).toContain(res.status);
+    const link = pickLink(mail, /\/auth\/(confirm\?token_hash=|v1\/verify)/);
+    if (link.includes("/auth/confirm?")) {
+      // The branded template links to the app's /auth/confirm route, which verifies the
+      // token hash. Do the same here, from a client that never started the flow.
+      const url = new URL(link);
+      expect(url.searchParams.get("type")).toBe("email");
+      expect(url.searchParams.get("next")).toBe("/onboarding");
+      const verified = await anon().auth.verifyOtp({ type: "email", token_hash: url.searchParams.get("token_hash")! });
+      expect(verified.error).toBeNull();
+    } else {
+      // Supabase's default template: the link itself does the confirming. Do not follow the redirect.
+      const res = await fetch(link, { redirect: "manual" });
+      expect([301, 302, 303, 307]).toContain(res.status);
+    }
 
     const { data } = await admin().auth.admin.getUserById(user.id);
     expect(data.user?.email_confirmed_at).toBeTruthy();
