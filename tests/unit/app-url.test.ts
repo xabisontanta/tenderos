@@ -21,6 +21,30 @@ describe("appUrl", () => {
     expect(() => appUrl({ NODE_ENV: "production", APP_URL: "  " })).toThrow(/APP_URL is required in production/);
   });
 
+  it("uses the deployment's own origin on Vercel when APP_URL is unset", () => {
+    const vercel = {
+      NODE_ENV: "production",
+      VERCEL: "1",
+      VERCEL_PROJECT_PRODUCTION_URL: "tenderos-six.vercel.app",
+      VERCEL_BRANCH_URL: "tenderos-git-x.vercel.app",
+      VERCEL_URL: "tenderos-abc123.vercel.app",
+    };
+    expect(appUrl({ ...vercel, VERCEL_ENV: "production" })).toBe("https://tenderos-six.vercel.app");
+    expect(appUrl({ ...vercel, VERCEL_ENV: "preview" })).toBe("https://tenderos-git-x.vercel.app");
+    expect(appUrl({ ...vercel, VERCEL_ENV: "preview", VERCEL_BRANCH_URL: "" })).toBe("https://tenderos-abc123.vercel.app");
+    expect(appUrl({ ...vercel, VERCEL_ENV: "production", APP_URL: "https://app.tenderos.example" })).toBe("https://app.tenderos.example");
+  });
+
+  it("still fails in production when neither APP_URL nor a usable Vercel origin is set", () => {
+    expect(() => appUrl({ NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "production" })).toThrow(/APP_URL is required in production/);
+    expect(() => appUrl({ NODE_ENV: "production", VERCEL_ENV: "production", VERCEL_PROJECT_PRODUCTION_URL: "tenderos-six.vercel.app" })).toThrow(
+      /APP_URL is required in production/,
+    );
+    expect(() => appUrl({ NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "production", VERCEL_PROJECT_PRODUCTION_URL: "evil.example/path" })).toThrow(
+      /APP_URL is required in production/,
+    );
+  });
+
   it("requires https in production, except for a local server", () => {
     expect(() => appUrl({ NODE_ENV: "production", APP_URL: "http://app.tenderos.example" })).toThrow(/https/);
     expect(appUrl({ NODE_ENV: "production", APP_URL: "http://127.0.0.1:3100" })).toBe("http://127.0.0.1:3100");

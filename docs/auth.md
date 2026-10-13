@@ -368,6 +368,19 @@ See `.env.example` for the full list with placeholders. Auth-related:
 `authEnv()` in `lib/env.ts` validates these. A bad value makes auth attempts
 fail closed and logs the variable name (never a value).
 
+Platform defaults, used only when a variable is unset (an explicit value always wins):
+
+- On Vercel (`VERCEL=1`), `APP_URL` falls back to the deployment's own origin:
+  `https://$VERCEL_PROJECT_PRODUCTION_URL` for production deployments and the
+  branch or deployment URL for previews. These are Vercel system variables, not
+  request headers. Set `APP_URL` once a custom domain is live.
+- On Vercel, `TRUSTED_IP_HEADER` falls back to `x-vercel-forwarded-for`, which
+  Vercel overwrites with the visitor's address on every request.
+- In production, `AUTH_RATE_LIMIT_SECRET` falls back to an HMAC of a fixed label
+  keyed with `SUPABASE_SERVICE_ROLE_KEY`. The derivation is one-way; rotating the
+  service role key resets the auth limits and changes the hashed address on new
+  consent records, nothing else.
+
 ## Hosted Supabase checklist
 
 Local settings live in `supabase/config.toml`; a hosted project does not read

@@ -24,6 +24,30 @@ describe("authEnv", () => {
     expect(authEnv(production).trustedIpHeader).toBe("x-vercel-forwarded-for");
   });
 
+  it("defaults the header on Vercel and derives the secret from the service role key", () => {
+    const serviceKey = "service-role-key-".padEnd(48, "x");
+    const env = authEnv({ NODE_ENV: "production", VERCEL: "1", SUPABASE_SERVICE_ROLE_KEY: serviceKey });
+    expect(env.trustedIpHeader).toBe("x-vercel-forwarded-for");
+    expect(env.rateLimitSecret).toMatch(/^[0-9a-f]{64}$/);
+    expect(env.rateLimitSecret).not.toContain(serviceKey);
+    expect(authEnv({ NODE_ENV: "production", VERCEL: "1", SUPABASE_SERVICE_ROLE_KEY: serviceKey }).rateLimitSecret).toBe(env.rateLimitSecret);
+    expect(authEnv({ NODE_ENV: "production", VERCEL: "1", SUPABASE_SERVICE_ROLE_KEY: serviceKey.replace(/x$/, "y") }).rateLimitSecret).not.toBe(
+      env.rateLimitSecret,
+    );
+  });
+
+  it("lets explicit values win over the platform defaults", () => {
+    const env = authEnv({ ...production, VERCEL: "1", TRUSTED_IP_HEADER: "cf-connecting-ip", SUPABASE_SERVICE_ROLE_KEY: "k".repeat(48) });
+    expect(env).toMatchObject({ trustedIpHeader: "cf-connecting-ip", rateLimitSecret: secret });
+  });
+
+  it("does not derive a secret from a missing or short service role key, or outside production", () => {
+    expect(() => authEnv({ NODE_ENV: "production", VERCEL: "1" })).toThrow(/AUTH_RATE_LIMIT_SECRET is required in production/);
+    expect(() => authEnv({ NODE_ENV: "production", VERCEL: "1", SUPABASE_SERVICE_ROLE_KEY: "short" })).toThrow(/AUTH_RATE_LIMIT_SECRET is required/);
+    expect(() => authEnv({ NODE_ENV: "production", SUPABASE_SERVICE_ROLE_KEY: "k".repeat(48) })).toThrow(/TRUSTED_IP_HEADER is required in production/);
+    expect(authEnv({ SUPABASE_SERVICE_ROLE_KEY: "k".repeat(48) }).trustedIpHeader).toBeNull();
+  });
+
   it("rejects a short secret and a malformed header name", () => {
     expect(() => authEnv({ AUTH_RATE_LIMIT_SECRET: "short" })).toThrow(/at least 32/);
     expect(() => authEnv({ TRUSTED_IP_HEADER: "x forwarded for" })).toThrow(/TRUSTED_IP_HEADER/);
