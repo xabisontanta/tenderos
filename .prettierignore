@@ -1,7 +1,11 @@
 types/database.ts
+.claude/worktrees
 supabase/.temp
 .next
 playwright-report
 test-results
 package-lock.json
 supabase/functions/worker/index.ts
+supabase/templates
+emails/preview
+extension/dist

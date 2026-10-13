@@ -1,10 +1,13 @@
 import type { NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { buildCsp, STATIC_SECURITY_HEADERS } from "@/lib/security/csp";
+import { captchaClientConfig } from "@/lib/auth/captcha-config";
 
 export async function middleware(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const csp = buildCsp(nonce, process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321", process.env.NODE_ENV !== "production");
+  const csp = buildCsp(nonce, process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321", process.env.NODE_ENV !== "production", {
+    turnstile: captchaClientConfig() !== null,
+  });
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);

@@ -28,23 +28,25 @@ npm run dev           # http://localhost:3000
 npm run worker        # in a second terminal: runs agent work
 ```
 
-Sign up, name your organisation, create a tender with "Simulation" ticked,
+Sign up, confirm your email (the message lands in the local mail catcher; see
+`docs/local-development.md`), name your organisation, create a tender with "Simulation" ticked,
 and press **Start simulated workflow**. Watch it in Office and Operations, then
 approve it on the Approvals page.
 
 ## Scripts
 
-| Script                                                                | What it does                                                |
-| --------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `dev`, `build`, `start`                                               | Next.js                                                     |
-| `worker`                                                              | Background job worker (agent execution)                     |
-| `build:edge-worker`                                                   | Bundles the worker as the `tenderos-worker` Edge Function   |
-| `lint`, `typecheck`, `format`, `format:check`                         | Code quality                                                |
-| `test` / `test:unit`                                                  | Unit tests (business rules, state machine, permissions)     |
-| `test:integration`                                                    | Against local Supabase: workflow, RLS, roles, failure paths |
-| `test:e2e`                                                            | Playwright, against a production build plus a real worker   |
-| `db:start`, `db:stop`, `db:reset`, `db:migrate`, `db:types`, `db:env` | Database                                                    |
-| `ci`                                                                  | lint, typecheck, unit tests and build                       |
+| Script                                                                | What it does                                                         |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `dev`, `build`, `start`                                               | Next.js                                                              |
+| `worker`                                                              | Background job worker (agent execution)                              |
+| `build:edge-worker`                                                   | Bundles the worker as the `tenderos-worker` Edge Function            |
+| `popia`                                                               | Data-subject requests: export and erase (`docs/popia-operations.md`) |
+| `lint`, `typecheck`, `format`, `format:check`                         | Code quality                                                         |
+| `test` / `test:unit`                                                  | Unit tests (business rules, state machine, permissions)              |
+| `test:integration`                                                    | Against local Supabase: workflow, RLS, roles, failure paths          |
+| `test:e2e`                                                            | Playwright, against a production build plus a real worker            |
+| `db:start`, `db:stop`, `db:reset`, `db:migrate`, `db:types`, `db:env` | Database                                                             |
+| `ci`                                                                  | lint, typecheck, unit tests and build                                |
 
 `test:integration` and `test:e2e` refuse to run against a non-local database.
 For e2e, run `npm run build` first; if Playwright's bundled browser is not
@@ -56,7 +58,10 @@ screenshots of each stage.
 Choose provinces on **Discover**. The Tender Scout reads every published
 tender on National Treasury eTenders, keeps the ones in those provinces and
 hands each to the Tender Director, who runs analysis, qualification,
-compliance, proposal, pricing and QA without anyone pressing a button. Scans
+compliance, proposal, pricing and QA without anyone pressing a button (automatic
+runs are off for a new organisation; switch them on in Discover). New
+organisations are guided through sectors, provinces, CIDB grade and keywords
+right after sign-up, and can skip that (`docs/auth.md`). Scans
 repeat every morning, and tenders already on file are updated when eTenders
 changes them (a moved closing date is flagged). Fill in **Company** and upload
 your CIPC, CSD, tax compliance and signed SBD documents on **Documents**:
@@ -112,12 +117,48 @@ fills; you submit.** It never presses submit, never ticks declarations, never
 enters prices and never signs, and anything it is unsure of or TenderOS does
 not hold is left empty and listed for you.
 
-Owners, admins and operators pair it on **Settings → Browser helper** with a
-pairing code that is shown once, lasts 30 days and can be revoked there. Only
-its SHA-256 hash is stored. The helper reads `GET /api/autofill/profile` and
-`GET /api/autofill/documents/<id>` with that code; director IDs, bank letters
-and proof of address only reach owners and admins, and every file download is
-audited. See `extension/README.md` to install and use it.
+**One click.** Build and load the helper once (`npm run build:extension`, then
+**Load unpacked** on `extension/dist`; see `extension/README.md`). Owners, admins
+and operators then open **Settings → Browser helper** and press **Connect
+browser**: TenderOS creates the pairing code and hands it straight to the helper
+in the same browser, so there is nothing to copy or paste. The code is never
+shown, put in a URL or logged; it lasts 30 days, is stored only as a SHA-256 hash
+on the server, and can be revoked on the same card. If no helper answers within
+about a second and a half, the page shows how to install it. Pasting a code into
+the helper still works as an advanced fallback.
+
+On the tender page of an approved bid that is delivered through a web portal,
+**Apply with TenderOS** asks the helper to open the portal in a new tab, fill the
+company details and attach the approved bid pack documents (matching file inputs
+are filled automatically; nothing is picked by hand). A review panel on the portal
+page lists what was filled and attached and what is left for you (declarations,
+price schedule, signatures, anything it is unsure of). The helper then reports the
+host and counts to TenderOS, and the tender page shows "Prepared by TenderOS at
+...". **You still check everything and press the portal's Submit yourself.**
+
+How it stays safe:
+
+- The helper fills a page only when its site (registrable domain) is the portal
+  TenderOS named for the tender; on any other site it asks you to confirm, naming
+  both hosts. Only https pages are filled (http only on localhost in a
+  development build), only the top frame and same-origin frames, and the page
+  must still be on that host when the fill starts.
+- The production manifest has no wildcard or optional host permissions and no
+  localhost. It can act by itself only on the TenderOS address it was built for
+  and the portal hosts it was built with (`TENDEROS_PORTAL_HOSTS`, default the
+  eTenders portal). Any other portal is filled from the toolbar button, on the
+  page you are looking at.
+- The helper reads `GET /api/autofill/profile`, `GET /api/autofill/documents/<id>`
+  and `GET /api/autofill/tenders/<id>/apply-plan` with its pairing code, and
+  reports with `POST /api/autofill/tenders/<id>/apply-report` (host and counts
+  only; audit log and tender event). Director IDs, bank letters and proof of
+  address only reach owners and admins, and only when they tick the option on
+  the tender page; every file download is audited.
+
+`TENDEROS_ORIGIN` sets the TenderOS address a build talks to (default
+`https://tenderos-six.vercel.app`; `http://localhost:3000` makes a development
+build). Publishing the helper in the Chrome Web Store is the later one-click
+install route.
 
 ## Hosted worker (Supabase Edge Function)
 
@@ -127,8 +168,23 @@ Each call processes ready jobs for about 45 seconds, so steps advance within a
 minute rather than instantly.
 
 1. `npm run build:edge-worker` writes `supabase/functions/worker/index.ts`.
-2. Deploy it as `tenderos-worker` with JWT verification on
-   (`supabase functions deploy`, or the dashboard).
+2. Deploy it as `tenderos-worker`:
+
+   ```bash
+   npx supabase link --project-ref <ref>
+   npx supabase functions deploy tenderos-worker
+   ```
+
+   The code is in the folder `supabase/functions/worker`, and the cron job
+   calls `/functions/v1/tenderos-worker`. The mapping that joins the two is the
+   `[functions.tenderos-worker]` table in `supabase/config.toml` (entrypoint
+   `./functions/worker/index.ts`, `verify_jwt = true`); without it Supabase
+   would deploy the folder as `worker` and the cron job would call nothing. A
+   unit test fails if the names or the entrypoint drift apart. Add
+   `--use-api` when Docker is not running. Deploying from the dashboard works
+   too, but the function must be named `tenderos-worker` and keep JWT
+   verification on.
+
 3. Migration `20261010000008` generates the worker secret in Vault. Add the
    project URL and the legacy anon JWT to Vault, then schedule the job:
 
@@ -154,5 +210,6 @@ only. Never commit real values.
 - `docs/database.md`: schema, state machine, queue, RLS
 - `docs/security.md`: security architecture
 - `docs/roadmap.md`: phases and the milestone 1 definition
+- `docs/production-readiness.md`: audit findings, launch blockers and the phased plan to production
 - `docs/local-development.md`: local setup, deployment, troubleshooting
 - `docs/adr/`: architecture decisions

@@ -8,7 +8,7 @@ import { RunStatusBadge, SimulationBadge, TenderStatusBadge } from "@/components
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LiveRefresh } from "@/features/realtime/live-refresh";
-import { canOperate, requireContext } from "@/lib/data/context";
+import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
 import { getAgentFloor, getDashboardData, getPendingApprovals, getRecentEvents, getTenderTitles } from "@/lib/data/queries";
 import { formatDateTime, formatUsd, humanize, relativeTime } from "@/lib/format";
 
@@ -43,6 +43,19 @@ export default async function DashboardPage() {
           )
         }
       />
+
+      {!ctx.settings.onboarding_completed_at && canAdminister(ctx.role) && (
+        <Link
+          href="/onboarding/profile"
+          className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm hover:bg-emerald-500/15"
+        >
+          <span>
+            <strong className="font-semibold text-emerald-200">Finish setting up.</strong>{" "}
+            <span className="text-emerald-200/80">Tell us your sectors, provinces and CIDB grade so the Tender Scout looks in the right places.</span>
+          </span>
+          <ArrowRight className="size-4 text-emerald-200" aria-hidden />
+        </Link>
+      )}
 
       {approvals.length > 0 && (
         <Link

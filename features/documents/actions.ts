@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getAdminSupabase } from "@/lib/supabase/admin";
 import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
+import { requireAal2 } from "@/lib/auth/require-aal2";
 import { toUserError, type ActionResult } from "@/lib/actions";
 import { DOCUMENT_BUCKET, DOCUMENT_TYPES, contentMatchesType } from "@/lib/domain/documents";
 import { createLogger } from "@/lib/log";
@@ -22,6 +23,8 @@ const registerSchema = z.object({
 export async function registerDocument(input: z.input<typeof registerSchema>): Promise<ActionResult> {
   const ctx = await requireContext();
   if (!canOperate(ctx.role)) return { ok: false, error: "Viewers cannot upload documents" };
+  const verify = await requireAal2(ctx);
+  if (verify) return { ok: false, error: verify };
   const parsed = registerSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
   if (!parsed.data.path.startsWith(`${ctx.organisation.id}/`) || parsed.data.path.includes("..")) return { ok: false, error: "Invalid upload" };

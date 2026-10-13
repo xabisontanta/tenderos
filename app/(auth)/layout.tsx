@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { Logo } from "@/components/command-centre/logo";
+import { LEGAL_PATHS } from "@/lib/legal/versions";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -13,6 +15,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
         <div className="rounded-xl border bg-card/80 p-6 shadow-2xl backdrop-blur">{children}</div>
+        <p className="mt-4 flex justify-center gap-4 text-[11px] text-muted-foreground">
+          <Link href={LEGAL_PATHS.terms} className="hover:underline">
+            Terms
+          </Link>
+          <Link href={LEGAL_PATHS.privacy} className="hover:underline">
+            Privacy
+          </Link>
+        </p>
       </div>
     </main>
   );

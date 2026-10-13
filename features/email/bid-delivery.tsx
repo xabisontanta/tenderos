@@ -67,6 +67,9 @@ export function BidDelivery({
   const [picked, setPicked] = useState<string[]>(documents.map((d) => d.id));
   const [reference, setReference] = useState("");
   const total = documents.filter((d) => picked.includes(d.id)).reduce((n, d) => n + (d.size_bytes ?? 0), 0);
+  // A message that is SENDING (in progress, or interrupted) or SENT blocks another send; the database enforces it too.
+  const unfinished = sent.some((m) => m.status === "SENDING");
+  const alreadySent = sent.some((m) => m.status === "SENT");
 
   const send = () => {
     setError(null);
@@ -155,8 +158,15 @@ export function BidDelivery({
                   Upload signed SBD forms and the priced schedule on the Documents page so they can be attached.
                 </p>
               </fieldset>
+              {(unfinished || alreadySent) && (
+                <p role="status" className="text-[13px] text-amber-300">
+                  {alreadySent
+                    ? "This bid has been emailed. Record it as delivered below instead of sending it again."
+                    : "An earlier attempt to email this bid did not finish. Check the mailbox's Sent folder: if the email went out, record it as delivered below and do not send it again."}
+                </p>
+              )}
               <div>
-                <Button onClick={send} disabled={pending || !accountId || !to}>
+                <Button onClick={send} disabled={pending || !accountId || !to || unfinished || alreadySent}>
                   <Send aria-hidden /> {pending ? "Sending…" : "Send bid email"}
                 </Button>
               </div>
@@ -189,8 +199,8 @@ export function BidDelivery({
       {sent.length > 0 && (
         <ul className="grid gap-1 border-t pt-3 text-[12px]">
           {sent.map((m) => (
-            <li key={m.id} className={m.status === "SENT" ? "text-muted-foreground" : "text-red-300"}>
-              {m.status === "SENT" ? "Sent" : "Failed"} to {m.to_address} from {m.from_address} ·{" "}
+            <li key={m.id} className={m.status === "SENT" ? "text-muted-foreground" : m.status === "SENDING" ? "text-amber-300" : "text-red-300"}>
+              {m.status === "SENT" ? "Sent" : m.status === "SENDING" ? "Sending, not confirmed" : "Failed"} to {m.to_address} from {m.from_address} ·{" "}
               {new Date(m.created_at).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" })}
               {m.error && ` · ${m.error}`}
             </li>

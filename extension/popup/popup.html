@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TenderOS browser helper</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
@@ -11,16 +12,27 @@
       <p id="paired" class="muted"></p>
     </header>
 
-    <section id="setup" hidden>
-      <label for="server">TenderOS address</label>
-      <input id="server" type="url" placeholder="https://tenderos-six.vercel.app" autocomplete="off" spellcheck="false" />
-      <label for="token">Pairing code</label>
-      <input id="token" type="password" placeholder="tos_…" autocomplete="off" spellcheck="false" />
-      <p class="muted">Create a pairing code in TenderOS on Settings → Browser helper. It is shown once.</p>
-      <div class="row">
-        <button id="save" type="button">Save</button>
-        <button id="forget" type="button" class="secondary">Forget pairing</button>
-      </div>
+    <section id="connect" hidden>
+      <p>This browser is not connected to TenderOS yet.</p>
+      <button id="open-settings" type="button">Open TenderOS to connect</button>
+      <p class="muted">In TenderOS, open Settings, Browser helper and press Connect browser. There is no code to copy.</p>
+      <details>
+        <summary>Use a pairing code instead</summary>
+        <label for="token">Pairing code</label>
+        <input id="token" type="password" placeholder="tos_…" autocomplete="off" spellcheck="false" />
+        <p class="muted">Create one in TenderOS on Settings, Browser helper. It is shown once.</p>
+        <button id="save" type="button">Connect with this code</button>
+      </details>
+    </section>
+
+    <section id="session" class="card" hidden aria-labelledby="session-title">
+      <h2 id="session-title">Ready to fill for TenderOS</h2>
+      <p id="session-text"></p>
+      <label class="check" id="session-confirm-row" hidden>
+        <input id="session-confirm" type="checkbox" />
+        <span id="session-confirm-text"></span>
+      </label>
+      <button id="session-fill" type="button">Fill this page</button>
     </section>
 
     <section id="fill" hidden>
@@ -35,13 +47,13 @@
       </label>
       <p class="muted">Page: <span id="page">—</span></p>
       <button id="fill-btn" type="button">Fill this page</button>
-      <button id="change" type="button" class="link">Change server or pairing code</button>
+      <button id="forget" type="button" class="link">Disconnect this browser</button>
     </section>
 
     <p id="status" class="muted" role="status" hidden></p>
     <p id="error" class="error" role="alert" hidden></p>
 
-    <section id="summary" hidden>
+    <section id="summary" hidden aria-labelledby="summary-title">
       <h2 id="summary-title"></h2>
       <p class="reminder">Check every field, then submit it yourself.</p>
       <details open>

@@ -4,13 +4,25 @@ import type { Logger } from "@/lib/log";
 import { getExecutor } from "@/agents";
 import { getAgentDefinition } from "@/agents/registry";
 import { authoriseExecutor } from "@/agents/runtime/permissions";
-import { NonRetryableError, type AgentContext, type AgentResult, type SimulationOptions } from "@/agents/runtime/types";
+import { createToolGate } from "@/agents/runtime/tool-access";
+import { NonRetryableError, type AgentContext, type AgentResult, type CostRecord, type SimulationOptions } from "@/agents/runtime/types";
+import { createAnthropicClient } from "@/agents/runtime/ai/anthropic";
+import type { AiClient } from "@/agents/runtime/ai/client";
+import { loadAiConfig, resolveAiEnabled, resolveModel, resolveWebResearchEnabled, withTaskCostCeiling, type AiConfig } from "@/agents/runtime/ai/config";
+import type { DocumentSource } from "@/agents/runtime/ai/documents";
+import { createAiRuntime, type AiRuntime } from "@/agents/runtime/ai/runtime";
 import { backoffMs, shouldRetry } from "./retry";
 import { WORKFLOWS, getStep, type StepResolution, type WorkflowDefinition } from "./definitions/simulated-bid";
 import type { PlanStep } from "./definitions/plan";
 import * as db from "./store";
 import { runDiscovery } from "./discovery";
-import type { Fetcher } from "@/agents/discovery/etenders";
+import { maxInvalidRatioFromEnv, type Fetcher } from "@/agents/discovery/etenders";
+import type { PricingOutput } from "@/agents/pricing/schema";
+import type { ProposalOutput } from "@/agents/proposal/schema";
+import { overlayBidContent, seedPricing, seedProposal } from "./bid-content";
+import { ingestTenderDocuments, productionIngestDeps, type IngestDeps } from "@/lib/tender-documents/ingest";
+import { createTenderDocumentSource } from "@/lib/tender-documents/source";
+import { createSupabaseStorage, type DocumentStorage } from "@/lib/tender-documents/storage";
 
 export interface Job {
   id: number;
@@ -35,6 +47,30 @@ export interface EngineOptions {
   progressThrottleMs?: number;
   /** HTTP client for tender source connectors. Defaults to global fetch. */
   fetcher?: Fetcher;
+  /** Share of the portal's rows a scan may fail to read before it fails (default: DISCOVERY_MAX_INVALID_PCT, else 20 percent). */
+  discovery?: { maxInvalidRatio?: number };
+  ai?: EngineAiOptions;
+  /** Tender document fetching (the `tender.documents.fetch` job and the Tender Analyst's documents). Tests inject fakes. */
+  documents?: EngineDocumentOptions;
+}
+
+export interface EngineDocumentOptions {
+  /** Downloads one document. Defaults to the hardened HTTPS fetcher. */
+  fetch?: IngestDeps["fetch"];
+  /** The private tender-documents bucket. Defaults to Supabase Storage with the service role key from the environment. */
+  storage?: DocumentStorage;
+  /** Hosts documents may come from besides the tender's own. Defaults to TENDER_DOCUMENT_HOSTS. */
+  allowedHosts?: readonly string[];
+}
+
+/** Wiring for AI execution. Everything defaults to production behaviour; tests inject fakes. */
+export interface EngineAiOptions {
+  /** Environment to read AI settings from. Defaults to process.env. */
+  env?: Record<string, string | undefined>;
+  /** Model client. Defaults to the Anthropic client built from the environment. */
+  client?: AiClient;
+  /** Where the Tender Analyst reads tender documents from. Defaults to the organisation's fetched PDFs (lib/tender-documents/source.ts). */
+  documents?: DocumentSource;
 }
 
 const DEFER_PAUSED_MS = 30_000;
@@ -67,7 +103,10 @@ export class WorkflowEngine {
           fetcher: this.opts.fetcher ?? (globalThis.fetch as unknown as Fetcher),
           logger: this.opts.logger,
           now: this.now,
+          maxInvalidRatio: this.opts.discovery?.maxInvalidRatio ?? maxInvalidRatioFromEnv(process.env),
         });
+      case "tender.documents.fetch":
+        return this.fetchTenderDocuments(job);
       case "approval.decided":
         return this.approvalDecided(String(job.payload.approval_id));
       case "agents.refresh":
@@ -98,6 +137,14 @@ export class WorkflowEngine {
       );
       return;
     }
+    if (job.kind === "tender.documents.fetch" && job.payload.tender_id) {
+      // Nothing should stay "waiting" for a job that will never run again: show the reason on the documents.
+      await this.pool.query(`update public.tender_documents set status = 'FAILED', error = $2 where tender_id = $1 and status = 'PENDING'`, [
+        String(job.payload.tender_id),
+        `The fetch stopped: ${error}`.slice(0, 500),
+      ]);
+      return;
+    }
     if (job.kind !== "task.run") return;
     await withTx(this.pool, async (c) => {
       const task = await db.lockTask(c, String(job.payload.task_id));
@@ -111,6 +158,23 @@ export class WorkflowEngine {
   }
 
   // -------------------------------------------------------------------------
+  private ingestDeps(): IngestDeps {
+    const o = this.opts.documents;
+    const storage = o?.storage ?? createSupabaseStorage(this.opts.ai?.env ?? process.env);
+    const base = o?.fetch ? { fetch: o.fetch, storage, logger: this.opts.logger } : productionIngestDeps(this.opts.logger, storage);
+    return o?.allowedHosts ? { ...base, allowedHosts: o.allowedHosts } : base;
+  }
+
+  /** Fetches a tender's pending documents. Per-document outcomes are recorded on the rows; the job only decides whether to come back. */
+  private async fetchTenderDocuments(job: Job): Promise<JobOutcome> {
+    const res = await ingestTenderDocuments(this.pool, String(job.payload.tender_id), this.ingestDeps());
+    const later = (ms: number) => new Date(this.now().getTime() + ms);
+    if (res.busy) return { status: "defer", runAt: later(5_000), reason: "Another run is fetching this tender's documents" };
+    if (res.retrying > 0) return { status: "retry", runAt: later(backoffMs(job.attempts)), error: "Some documents will be tried again" };
+    if (res.remaining > 0) return { status: "defer", runAt: later(2_000), reason: "More documents to fetch" };
+    return { status: "completed" };
+  }
+
   private definition(run: db.RunRow): WorkflowDefinition {
     const def = WORKFLOWS[run.workflow_key];
     if (!def) throw new NonRetryableError(`Unknown workflow ${run.workflow_key}`);
@@ -252,7 +316,9 @@ export class WorkflowEngine {
           agent: db.AgentRow;
           step: PlanStep;
           def: WorkflowDefinition;
-          ctxData: Omit<AgentContext, "progress" | "signal">;
+          ctxData: Omit<AgentContext, "progress" | "signal" | "tools" | "ai">;
+          /** Present when the step runs a model-backed executor. */
+          aiSetup: { config: AiConfig; webResearch: boolean } | null;
         };
 
     const prepared = await withTx<Prepared>(this.pool, async (c) => {
@@ -293,7 +359,8 @@ export class WorkflowEngine {
       }
 
       const daily = Number(settings.daily_ai_budget_usd);
-      if (!run.is_simulation && daily > 0 && (await db.spendToday(c, task.organisation_id)) >= daily) {
+      const spentToday = !run.is_simulation && daily > 0 ? await db.spendToday(c, task.organisation_id) : 0;
+      if (!run.is_simulation && daily > 0 && spentToday >= daily) {
         await this.failTaskPermanently(c, task, run, agent, step, "Daily AI budget reached; raise the budget or wait until tomorrow");
         await db.emitEvent(c, {
           organisationId: task.organisation_id,
@@ -307,14 +374,25 @@ export class WorkflowEngine {
         return { kind: "outcome", outcome: { status: "dead", error: "Daily AI budget reached" } };
       }
 
-      const executor = getExecutor(task.type);
+      // Rules-only is the default. A model-backed executor needs a real run and AI switched on for the organisation.
+      const aiEnv = this.opts.ai?.env ?? process.env;
+      const executor = getExecutor(task.type, { simulation: run.is_simulation, aiEnabled: resolveAiEnabled(settings, aiEnv) });
       if (!executor) {
         await this.failTaskPermanently(c, task, run, agent, step, `No executor registered for ${task.type}`);
         return { kind: "outcome", outcome: { status: "dead", error: `No executor for ${task.type}` } };
       }
       let granted;
+      let aiSetup: { config: AiConfig; webResearch: boolean } | null = null;
       try {
         granted = authoriseExecutor(executor, await db.getAgentGrants(c, agent.id));
+        if (executor.ai) {
+          // Refuse before the task starts if the key, the agent's model or its price is not configured. Never fall back silently.
+          const loaded = loadAiConfig(aiEnv);
+          resolveModel(loaded, { agentTier: agent.model_tier, override: agent.model_override });
+          // The task may not spend more than what is left of the day's budget.
+          const config = daily > 0 ? withTaskCostCeiling(loaded, daily - spentToday) : loaded;
+          aiSetup = { config, webResearch: resolveWebResearchEnabled(settings, aiEnv) };
+        }
       } catch (err) {
         await this.failTaskPermanently(c, task, run, agent, step, (err as Error).message);
         return { kind: "outcome", outcome: { status: "dead", error: (err as Error).message } };
@@ -360,6 +438,7 @@ export class WorkflowEngine {
         agent,
         step,
         def,
+        aiSetup,
         ctxData: {
           agentSlug: step.agent,
           task: { id: task.id, type: task.type, stepKey: step.key, input: (task.input ?? {}) as Record<string, unknown>, retryCount: task.retry_count },
@@ -367,7 +446,10 @@ export class WorkflowEngine {
           tender: granted.has("PUBLIC_TENDER_DATA") ? db.toTenderSnapshot(tender) : null,
           company: granted.has("COMPANY_PROFILE") ? await db.getCompanyProfile(c, run.organisation_id) : null,
           documents: await db.getCompanyDocuments(c, run.organisation_id, [...granted]),
-          previousOutputs: await db.getPreviousOutputs(c, run),
+          // On a real tender the proposal and pricing are what the person reviewed and entered, not the first draft.
+          previousOutputs: run.is_simulation
+            ? await db.getPreviousOutputs(c, run)
+            : await overlayBidContent(c, run.tender_id, await db.getPreviousOutputs(c, run)),
           granted,
           now: this.now(),
           simulationStepMs: this.opts.simulationStepMs,
@@ -376,16 +458,37 @@ export class WorkflowEngine {
     });
 
     if (prepared.kind === "outcome") return prepared.outcome;
-    const { task, run, agent, step, def, ctxData } = prepared;
+    const { task, run, agent, step, def, ctxData, aiSetup } = prepared;
     const log = this.opts.logger.child({ task_id: task.id, run_id: run.id, agent: agent.slug, step: step.key });
-    const executor = getExecutor(task.type)!;
+    const executor = getExecutor(task.type, { simulation: run.is_simulation, aiEnabled: aiSetup !== null })!;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(new Error(`Timed out after ${task.timeout_seconds}s`)), task.timeout_seconds * 1000);
     let lastProgressAt = 0;
     const ctx: AgentContext = {
       ...ctxData,
+      ai: null,
       signal: controller.signal,
+      // AGENTS.md section 5: a tool that is not on the agent's stored allow-list is refused and logged as a WARNING.
+      tools: createToolGate({
+        agent: agent.slug,
+        allowedTools: agent.allowed_tools,
+        onRefused: async (r) => {
+          log.warn("tool refused", { tool: r.tool, reason: r.reason });
+          await this.emitOutsideTx({
+            organisationId: task.organisation_id,
+            type: "TOOL_REFUSED",
+            severity: "WARNING",
+            summary: `${agent.display_name} was refused tool "${r.tool}"${r.reason === "NOT_ON_ALLOWED_LIST" ? ": not on its allowed tools" : ": switched off for this organisation"}`,
+            agentId: agent.id,
+            tenderId: run.tender_id,
+            taskId: task.id,
+            runId: run.id,
+            correlationId: run.correlation_id,
+            payload: { tool: r.tool, reason: r.reason },
+          });
+        },
+      }),
       progress: async (percent, message) => {
         const t = Date.now();
         if (t - lastProgressAt < (this.opts.progressThrottleMs ?? 250) && percent < 100) return;
@@ -400,7 +503,20 @@ export class WorkflowEngine {
     };
 
     let result: AgentResult<unknown>;
+    let ai: AiRuntime | null = null;
     try {
+      if (aiSetup) {
+        ai = createAiRuntime({
+          client: this.opts.ai?.client ?? createAnthropicClient(aiSetup.config),
+          config: aiSetup.config,
+          agent: { slug: agent.slug as AiRuntime["agent"]["slug"], tier: agent.model_tier, modelOverride: agent.model_override },
+          logger: log,
+          documents: this.opts.ai?.documents ?? createTenderDocumentSource({ pool: this.pool, ingest: this.ingestDeps() }),
+          signal: controller.signal,
+          webResearchEnabled: aiSetup.webResearch,
+        });
+        ctx.ai = ai;
+      }
       const raw = await executor.run(ctx);
       const parsed = executor.outputSchema.safeParse(raw.output);
       if (!parsed.success)
@@ -409,7 +525,9 @@ export class WorkflowEngine {
     } catch (err) {
       clearTimeout(timeout);
       log.warn("task failed", { error: (err as Error).message });
-      return this.handleTaskFailure(task.id, err as Error);
+      // Money spent on calls that did not produce a usable result still counts against the budget.
+      const spent = ai && ai.meter.costUsd > 0 ? ai.meter.toCostRecord() : null;
+      return this.handleTaskFailure(task.id, err as Error, spent);
     }
     clearTimeout(timeout);
 
@@ -426,6 +544,13 @@ export class WorkflowEngine {
                   completed_at = now(), error = null where id = $1`,
           [task.id, JSON.stringify(result.output), result.summary.slice(0, 200)],
         );
+        // The proposal draft and the pricing structure become the bid content a person reviews and enters (migration 072).
+        if (!lockedRun.is_simulation && step.key === "proposal") {
+          await seedProposal(c, { organisationId: task.organisation_id, tenderId: run.tender_id, taskId: task.id, output: result.output as ProposalOutput });
+        }
+        if (!lockedRun.is_simulation && step.key === "pricing") {
+          await seedPricing(c, { organisationId: task.organisation_id, tenderId: run.tender_id, taskId: task.id, output: result.output as PricingOutput });
+        }
         if (result.cost) {
           // Rule-based steps on a real tender are not simulated work: record them as $0 rules, not simulation.
           const cost = !run.is_simulation && result.cost.provider === "simulation" ? { ...result.cost, provider: "rules", isSimulated: false } : result.cost;
@@ -468,6 +593,16 @@ export class WorkflowEngine {
     );
     log.info("task completed");
     return { status: "completed" };
+  }
+
+  /** Writes an event in its own transaction, for things that must be recorded even though the task then fails. */
+  private async emitOutsideTx(e: db.EventInput): Promise<void> {
+    const c = await this.pool.connect();
+    try {
+      await db.emitEvent(c, e);
+    } finally {
+      c.release();
+    }
   }
 
   private async applyResolution(
@@ -597,10 +732,11 @@ export class WorkflowEngine {
     }
   }
 
-  private async handleTaskFailure(taskId: string, err: Error): Promise<JobOutcome> {
+  private async handleTaskFailure(taskId: string, err: Error, spent: CostRecord | null = null): Promise<JobOutcome> {
     const retryable = !(err instanceof NonRetryableError);
     return withTx(this.pool, async (c) => {
       const task = await db.lockTask(c, taskId);
+      if (task && spent) await db.recordCost(c, task, spent);
       if (!task || task.status !== "RUNNING") return { status: "completed" } as JobOutcome;
       const run = await db.lockRun(c, task.workflow_run_id!);
       const agent = await db.getAgent(c, task.agent_id);

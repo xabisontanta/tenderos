@@ -1,6 +1,8 @@
 import type { z } from "zod";
 import type { DataCategory, AgentSlug } from "@/agents/registry";
 import type { Database } from "@/types/database";
+import type { AiRuntime } from "./ai/runtime";
+import type { ToolGate } from "./tool-access";
 
 type TenderRow = Database["public"]["Tables"]["tenders"]["Row"];
 
@@ -72,6 +74,10 @@ export interface AgentContext {
   granted: ReadonlySet<DataCategory>;
   now: Date;
   signal: AbortSignal;
+  /** Enforces the agent's allowedTools: every tool an executor uses goes through `tools.run`. */
+  tools: ToolGate;
+  /** The model runtime. Present only for AI executors; simulated and rules-only executors never see it. */
+  ai: AiRuntime | null;
   simulationStepMs: number;
   progress(percent: number, message: string): Promise<void>;
 }
@@ -107,6 +113,10 @@ export interface AgentExecutor<T = unknown> {
   requires: DataCategory[];
   /** Categories the executor uses when the agent holds them (e.g. the company profile). */
   optional?: DataCategory[];
+  /** Tool ids the executor calls through `ctx.tools`. Each must be on the agent's allowedTools (checked by a unit test). */
+  tools?: string[];
+  /** True for model-backed executors: the engine gives them `ctx.ai` and checks AI configuration before they start. */
+  ai?: true;
   outputSchema: z.ZodType<T>;
   run(ctx: AgentContext): Promise<AgentResult<T>>;
 }

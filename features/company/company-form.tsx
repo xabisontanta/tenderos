@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WATCHABLE_PROVINCES } from "@/features/discovery/provinces";
+import { MAX_KEYWORDS, MAX_SECTORS } from "./schema";
+import { SECTOR_SUGGESTIONS } from "./sectors";
+import { TagInput } from "./tag-input";
 import type { Database } from "@/types/database";
 import { saveCompanyProfile, type CompanyFormState } from "./actions";
 
@@ -113,14 +116,27 @@ export function CompanyForm({ profile, canEdit }: { profile: Profile | null; can
       </fieldset>
       <fieldset disabled={!canEdit || pending} className="grid gap-4 rounded-xl border bg-card p-4">
         <legend className="px-1 text-sm font-semibold">What you can deliver</legend>
-        <Field
+        <TagInput
           id="sectors"
           label="Sectors you work in"
           error={e.sectors}
-          hint="Comma separated, using eTenders category names, e.g. Services: Professional, Civil engineering"
-        >
-          <Input id="sectors" name="sectors" defaultValue={(p?.sectors ?? []).join(", ")} {...inv("sectors")} />
-        </Field>
+          hint="Press Enter after each one. Matching compares these with the category on the tender, so use the eTenders wording, e.g. Services: Professional."
+          defaultValue={p?.sectors ?? []}
+          suggestions={SECTOR_SUGGESTIONS}
+          maxLength={120}
+          max={MAX_SECTORS}
+          disabled={!canEdit || pending}
+        />
+        <TagInput
+          id="keywords"
+          label="Keywords"
+          error={e.keywords}
+          hint="Words or short phrases that describe the work you want, e.g. road maintenance."
+          defaultValue={p?.keywords ?? []}
+          maxLength={60}
+          max={MAX_KEYWORDS}
+          disabled={!canEdit || pending}
+        />
         <Field id="max_contract_value_zar" label="Largest contract you can take on (R)" error={e.max_contract_value_zar}>
           <Input
             id="max_contract_value_zar"

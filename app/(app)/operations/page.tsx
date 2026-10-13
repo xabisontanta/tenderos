@@ -19,9 +19,8 @@ import {
   getTenderTitles,
   getWorkerHealth,
 } from "@/lib/data/queries";
-import { getServerSupabase } from "@/lib/supabase/server";
 import { relativeTime } from "@/lib/format";
-import { pipelineStage, type TenderStatus } from "@/lib/domain/tender-state";
+import { stageCounts } from "@/lib/domain/tender-state";
 
 export const metadata: Metadata = { title: "Operations" };
 
@@ -39,8 +38,7 @@ const STAGES = [
 export default async function OperationsPage() {
   const ctx = await requireContext();
   const orgId = ctx.organisation.id;
-  const supabase = await getServerSupabase();
-  const [floor, approvals, events, handoffs, health, worker, dash, tenders] = await Promise.all([
+  const [floor, approvals, events, handoffs, health, worker, dash] = await Promise.all([
     getAgentFloor(orgId),
     getPendingApprovals(orgId),
     getRecentEvents(orgId, { limit: 60 }),
@@ -48,15 +46,11 @@ export default async function OperationsPage() {
     getQueueHealth(orgId),
     getWorkerHealth(),
     getDashboardData(orgId),
-    supabase.from("tenders").select("id,status").eq("organisation_id", orgId),
   ]);
   const agentNames = Object.fromEntries(floor.agents.map((a) => [a.id, a.display_name]));
   const tenderTitles = await getTenderTitles([...events.map((e) => e.tender_id), ...handoffs.map((h) => h.tender_id)]);
-  const stageCounts = new Map<string, number>();
-  for (const t of tenders.data ?? []) {
-    const s = pipelineStage(t.status as TenderStatus);
-    stageCounts.set(s, (stageCounts.get(s) ?? 0) + 1);
-  }
+  // Counted by the database (dashboard_counts); reading a row per tender stopped at the API's 1000 rows.
+  const stages = stageCounts(dash.tenders.byStatus);
   const errors = events.filter((e) => e.severity === "ERROR" || e.severity === "CRITICAL").slice(0, 8);
 
   return (
@@ -82,7 +76,7 @@ export default async function OperationsPage() {
         {STAGES.map(([k, label]) => (
           <Link key={k} href={`/tenders?stage=${k}`} className="min-w-28 flex-1 rounded-lg border bg-card p-2.5 hover:border-primary/40">
             <p className="text-[11px] text-muted-foreground">{label}</p>
-            <p className="text-lg font-semibold tabular-nums">{stageCounts.get(k) ?? 0}</p>
+            <p className="text-lg font-semibold tabular-nums">{stages[k]}</p>
           </Link>
         ))}
       </section>

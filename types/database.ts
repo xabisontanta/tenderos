@@ -195,24 +195,18 @@ isOneToOne: false
                     "action"?: string,"actor_agent_id"?: string | null,"actor_type"?: Database["public"]['Enums']["actor_type"],"actor_user_id"?: string | null,"correlation_id"?: string | null,"created_at"?: string,"id"?: never,"ip"?: unknown,"metadata"?: NonNullable<Json>,"organisation_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-                    {
-      foreignKeyName: "audit_logs_organisation_id_fkey"
-      columns: ["organisation_id"]
-isOneToOne: false
-      referencedRelation: "organisations"
-      referencedColumns: ["id"]
-    }
+                    
                   ]
                 },"autofill_tokens": {
                   Row: {
-                    "created_at": string,"expires_at": string,"id": string,"label": string,"last_used_at": string | null,"organisation_id": string,"revoked_at": string | null,"token_hash": string,"user_id": string
+                    "created_aal": string | null,"created_at": string,"expires_at": string,"id": string,"label": string,"last_used_at": string | null,"organisation_id": string,"revoked_at": string | null,"token_hash": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"expires_at"?: string,"id"?: string,"label": string,"last_used_at"?: string | null,"organisation_id": string,"revoked_at"?: string | null,"token_hash": string,"user_id": string
+                    "created_aal"?: string | null,"created_at"?: string,"expires_at"?: string,"id"?: string,"label": string,"last_used_at"?: string | null,"organisation_id": string,"revoked_at"?: string | null,"token_hash": string,"user_id": string
                   }
                   Update: {
-                    "created_at"?: string,"expires_at"?: string,"id"?: string,"label"?: string,"last_used_at"?: string | null,"organisation_id"?: string,"revoked_at"?: string | null,"token_hash"?: string,"user_id"?: string
+                    "created_aal"?: string | null,"created_at"?: string,"expires_at"?: string,"id"?: string,"label"?: string,"last_used_at"?: string | null,"organisation_id"?: string,"revoked_at"?: string | null,"token_hash"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -227,6 +221,104 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "organisation_members"
       referencedColumns: ["organisation_id","user_id"]
+    }
+                  ]
+                },"bid_content_history": {
+                  Row: {
+                    "change": string,"changed_at": string,"changed_by": string | null,"id": number,"kind": string,"organisation_id": string,"ref": string,"snapshot": NonNullable<Json>,"tender_id": string,"version": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "change": string,"changed_at"?: string,"changed_by"?: string | null,"id"?: never,"kind": string,"organisation_id": string,"ref": string,"snapshot": NonNullable<Json>,"tender_id": string,"version": number
+                  }
+                  Update: {
+                    "change"?: string,"changed_at"?: string,"changed_by"?: string | null,"id"?: never,"kind"?: string,"organisation_id"?: string,"ref"?: string,"snapshot"?: NonNullable<Json>,"tender_id"?: string,"version"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "bid_content_history_organisation_id_tender_id_fkey"
+      columns: ["organisation_id","tender_id"]
+isOneToOne: false
+      referencedRelation: "tenders"
+      referencedColumns: ["organisation_id","id"]
+    }
+                  ]
+                },"bid_pricing": {
+                  Row: {
+                    "ai_generated": boolean,"confirmed_at": string | null,"confirmed_by": string | null,"created_at": string,"notes": NonNullable<Json>,"organisation_id": string,"source_task_id": string | null,"tender_id": string,"updated_at": string,"vat_requirement_id": string | null,"vat_status": string,"vat_treatment": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "ai_generated"?: boolean,"confirmed_at"?: string | null,"confirmed_by"?: string | null,"created_at"?: string,"notes"?: NonNullable<Json>,"organisation_id": string,"source_task_id"?: string | null,"tender_id": string,"updated_at"?: string,"vat_requirement_id"?: string | null,"vat_status"?: string,"vat_treatment"?: string
+                  }
+                  Update: {
+                    "ai_generated"?: boolean,"confirmed_at"?: string | null,"confirmed_by"?: string | null,"created_at"?: string,"notes"?: NonNullable<Json>,"organisation_id"?: string,"source_task_id"?: string | null,"tender_id"?: string,"updated_at"?: string,"vat_requirement_id"?: string | null,"vat_status"?: string,"vat_treatment"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "bid_pricing_organisation_id_tender_id_fkey"
+      columns: ["organisation_id","tender_id"]
+isOneToOne: false
+      referencedRelation: "tenders"
+      referencedColumns: ["organisation_id","id"]
+    },{
+      foreignKeyName: "bid_pricing_source_task_id_fkey"
+      columns: ["source_task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"bid_pricing_lines": {
+                  Row: {
+                    "amount_cents": number | null,"created_at": string,"description": string,"edited_at": string | null,"edited_by": string | null,"id": string,"item_ref": string | null,"organisation_id": string,"page": number | null,"position": number,"quantity": number | null,"quantity_printed": boolean,"quote": string | null,"requirement_id": string | null,"source": string,"source_task_id": string | null,"supplier_quote_likely": boolean,"supplier_quote_ref": string | null,"tender_id": string,"unit": string | null,"unit_price_cents": number | null,"updated_at": string,"vat_cents": number | null,"version": number,"warning": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount_cents"?: never,"created_at"?: string,"description": string,"edited_at"?: string | null,"edited_by"?: string | null,"id"?: string,"item_ref"?: string | null,"organisation_id": string,"page"?: number | null,"position"?: number,"quantity"?: number | null,"quantity_printed"?: boolean,"quote"?: string | null,"requirement_id"?: string | null,"source": string,"source_task_id"?: string | null,"supplier_quote_likely"?: boolean,"supplier_quote_ref"?: string | null,"tender_id": string,"unit"?: string | null,"unit_price_cents"?: number | null,"updated_at"?: string,"vat_cents"?: never,"version"?: number,"warning"?: string | null
+                  }
+                  Update: {
+                    "amount_cents"?: never,"created_at"?: string,"description"?: string,"edited_at"?: string | null,"edited_by"?: string | null,"id"?: string,"item_ref"?: string | null,"organisation_id"?: string,"page"?: number | null,"position"?: number,"quantity"?: number | null,"quantity_printed"?: boolean,"quote"?: string | null,"requirement_id"?: string | null,"source"?: string,"source_task_id"?: string | null,"supplier_quote_likely"?: boolean,"supplier_quote_ref"?: string | null,"tender_id"?: string,"unit"?: string | null,"unit_price_cents"?: number | null,"updated_at"?: string,"vat_cents"?: never,"version"?: number,"warning"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "bid_pricing_lines_organisation_id_tender_id_fkey"
+      columns: ["organisation_id","tender_id"]
+isOneToOne: false
+      referencedRelation: "tenders"
+      referencedColumns: ["organisation_id","id"]
+    },{
+      foreignKeyName: "bid_pricing_lines_source_task_id_fkey"
+      columns: ["source_task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"bid_proposal_sections": {
+                  Row: {
+                    "ai_generated": boolean,"content": string | null,"created_at": string,"edited_at": string | null,"edited_by": string | null,"fact_ids": NonNullable<Json>,"id": string,"needs": NonNullable<Json>,"organisation_id": string,"position": number,"requirement_ids": NonNullable<Json>,"reviewed_at": string | null,"reviewed_by": string | null,"section_key": string,"source_task_id": string | null,"status": string,"tender_id": string,"title": string,"updated_at": string,"version": number,"warnings": NonNullable<Json>
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "ai_generated"?: boolean,"content"?: string | null,"created_at"?: string,"edited_at"?: string | null,"edited_by"?: string | null,"fact_ids"?: NonNullable<Json>,"id"?: string,"needs"?: NonNullable<Json>,"organisation_id": string,"position"?: number,"requirement_ids"?: NonNullable<Json>,"reviewed_at"?: string | null,"reviewed_by"?: string | null,"section_key": string,"source_task_id"?: string | null,"status": string,"tender_id": string,"title": string,"updated_at"?: string,"version"?: number,"warnings"?: NonNullable<Json>
+                  }
+                  Update: {
+                    "ai_generated"?: boolean,"content"?: string | null,"created_at"?: string,"edited_at"?: string | null,"edited_by"?: string | null,"fact_ids"?: NonNullable<Json>,"id"?: string,"needs"?: NonNullable<Json>,"organisation_id"?: string,"position"?: number,"requirement_ids"?: NonNullable<Json>,"reviewed_at"?: string | null,"reviewed_by"?: string | null,"section_key"?: string,"source_task_id"?: string | null,"status"?: string,"tender_id"?: string,"title"?: string,"updated_at"?: string,"version"?: number,"warnings"?: NonNullable<Json>
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "bid_proposal_sections_organisation_id_tender_id_fkey"
+      columns: ["organisation_id","tender_id"]
+isOneToOne: false
+      referencedRelation: "tenders"
+      referencedColumns: ["organisation_id","id"]
+    },{
+      foreignKeyName: "bid_proposal_sections_source_task_id_fkey"
+      columns: ["source_task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
     }
                   ]
                 },"company_documents": {
@@ -251,14 +343,14 @@ isOneToOne: false
                   ]
                 },"company_profiles": {
                   Row: {
-                    "authorised_signatory": string | null,"bbbee_expires_at": string | null,"bbbee_level": number | null,"cidb_grade": string | null,"contact_email": string | null,"contact_person": string | null,"contact_phone": string | null,"csd_number": string | null,"legal_name": string | null,"max_contract_value_zar": number | null,"organisation_id": string,"physical_address": string | null,"postal_address": string | null,"provinces": (string)[],"registration_number": string | null,"sectors": (string)[],"tax_pin": string | null,"tax_pin_expires_at": string | null,"trading_name": string | null,"updated_at": string,"updated_by": string | null,"vat_number": string | null,"website": string | null
+                    "authorised_signatory": string | null,"bbbee_expires_at": string | null,"bbbee_level": number | null,"cidb_grade": string | null,"contact_email": string | null,"contact_person": string | null,"contact_phone": string | null,"csd_number": string | null,"keywords": (string)[],"legal_name": string | null,"max_contract_value_zar": number | null,"organisation_id": string,"physical_address": string | null,"postal_address": string | null,"provinces": (string)[],"registration_number": string | null,"sectors": (string)[],"tax_pin": string | null,"tax_pin_expires_at": string | null,"trading_name": string | null,"updated_at": string,"updated_by": string | null,"vat_number": string | null,"website": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"contact_email"?: string | null,"contact_person"?: string | null,"contact_phone"?: string | null,"csd_number"?: string | null,"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id": string,"physical_address"?: string | null,"postal_address"?: string | null,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"trading_name"?: string | null,"updated_at"?: string,"updated_by"?: string | null,"vat_number"?: string | null,"website"?: string | null
+                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"contact_email"?: string | null,"contact_person"?: string | null,"contact_phone"?: string | null,"csd_number"?: string | null,"keywords"?: (string)[],"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id": string,"physical_address"?: string | null,"postal_address"?: string | null,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"trading_name"?: string | null,"updated_at"?: string,"updated_by"?: string | null,"vat_number"?: string | null,"website"?: string | null
                   }
                   Update: {
-                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"contact_email"?: string | null,"contact_person"?: string | null,"contact_phone"?: string | null,"csd_number"?: string | null,"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id"?: string,"physical_address"?: string | null,"postal_address"?: string | null,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"trading_name"?: string | null,"updated_at"?: string,"updated_by"?: string | null,"vat_number"?: string | null,"website"?: string | null
+                    "authorised_signatory"?: string | null,"bbbee_expires_at"?: string | null,"bbbee_level"?: number | null,"cidb_grade"?: string | null,"contact_email"?: string | null,"contact_person"?: string | null,"contact_phone"?: string | null,"csd_number"?: string | null,"keywords"?: (string)[],"legal_name"?: string | null,"max_contract_value_zar"?: number | null,"organisation_id"?: string,"physical_address"?: string | null,"postal_address"?: string | null,"provinces"?: (string)[],"registration_number"?: string | null,"sectors"?: (string)[],"tax_pin"?: string | null,"tax_pin_expires_at"?: string | null,"trading_name"?: string | null,"updated_at"?: string,"updated_by"?: string | null,"vat_number"?: string | null,"website"?: string | null
                   }
                   Relationships: [
                     {
@@ -329,14 +421,14 @@ isOneToOne: false
                   ]
                 },"discovery_runs": {
                   Row: {
-                    "completed_at": string | null,"created_at": string,"created_tenders": number,"error": string | null,"id": string,"matched": number,"methods": (string)[],"organisation_id": string,"provinces": (string)[],"requested_by": string | null,"scanned": number,"source": string,"started_at": string | null,"started_workflows": number,"status": Database["public"]['Enums']["discovery_status"],"trigger": string
+                    "completed_at": string | null,"created_at": string,"created_tenders": number,"error": string | null,"id": string,"matched": number,"methods": (string)[],"organisation_id": string,"provinces": (string)[],"requested_by": string | null,"rows_seen": number,"rows_skipped": number,"scanned": number,"source": string,"started_at": string | null,"started_workflows": number,"status": Database["public"]['Enums']["discovery_status"],"trigger": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id": string,"provinces": (string)[],"requested_by"?: string | null,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger": string
+                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id": string,"provinces": (string)[],"requested_by"?: string | null,"rows_seen"?: number,"rows_skipped"?: number,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger": string
                   }
                   Update: {
-                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id"?: string,"provinces"?: (string)[],"requested_by"?: string | null,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger"?: string
+                    "completed_at"?: string | null,"created_at"?: string,"created_tenders"?: number,"error"?: string | null,"id"?: string,"matched"?: number,"methods"?: (string)[],"organisation_id"?: string,"provinces"?: (string)[],"requested_by"?: string | null,"rows_seen"?: number,"rows_skipped"?: number,"scanned"?: number,"source"?: string,"started_at"?: string | null,"started_workflows"?: number,"status"?: Database["public"]['Enums']["discovery_status"],"trigger"?: string
                   }
                   Relationships: [
                     {
@@ -375,14 +467,14 @@ isOneToOne: false
                   ]
                 },"email_messages": {
                   Row: {
-                    "attachments": NonNullable<Json>,"created_at": string,"email_account_id": string,"error": string | null,"from_address": string,"id": string,"organisation_id": string,"provider_message_id": string | null,"sent_by": string,"status": string,"subject": string,"submission_record_id": string | null,"tender_id": string,"to_address": string
+                    "attachments": NonNullable<Json>,"created_at": string,"email_account_id": string | null,"error": string | null,"from_address": string,"id": string,"organisation_id": string,"provider_message_id": string | null,"sent_by": string | null,"status": string,"subject": string,"submission_record_id": string | null,"tender_id": string,"to_address": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id": string,"error"?: string | null,"from_address": string,"id"?: string,"organisation_id": string,"provider_message_id"?: string | null,"sent_by": string,"status": string,"subject": string,"submission_record_id"?: string | null,"tender_id": string,"to_address": string
+                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id"?: string | null,"error"?: string | null,"from_address": string,"id"?: string,"organisation_id": string,"provider_message_id"?: string | null,"sent_by"?: string | null,"status": string,"subject": string,"submission_record_id"?: string | null,"tender_id": string,"to_address": string
                   }
                   Update: {
-                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id"?: string,"error"?: string | null,"from_address"?: string,"id"?: string,"organisation_id"?: string,"provider_message_id"?: string | null,"sent_by"?: string,"status"?: string,"subject"?: string,"submission_record_id"?: string | null,"tender_id"?: string,"to_address"?: string
+                    "attachments"?: NonNullable<Json>,"created_at"?: string,"email_account_id"?: string | null,"error"?: string | null,"from_address"?: string,"id"?: string,"organisation_id"?: string,"provider_message_id"?: string | null,"sent_by"?: string | null,"status"?: string,"subject"?: string,"submission_record_id"?: string | null,"tender_id"?: string,"to_address"?: string
                   }
                   Relationships: [
                     {
@@ -487,6 +579,40 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"legal_acceptances": {
+                  Row: {
+                    "accepted_at": string,"id": number,"ip_hmac": string | null,"kind": string,"user_id": string,"version": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accepted_at"?: string,"id"?: never,"ip_hmac"?: string | null,"kind": string,"user_id": string,"version": string
+                  }
+                  Update: {
+                    "accepted_at"?: string,"id"?: never,"ip_hmac"?: string | null,"kind"?: string,"user_id"?: string,"version"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "legal_acceptances_document_fk"
+      columns: ["kind","version"]
+isOneToOne: false
+      referencedRelation: "legal_documents"
+      referencedColumns: ["kind","version"]
+    }
+                  ]
+                },"legal_documents": {
+                  Row: {
+                    "is_current": boolean,"kind": string,"published_at": string,"version": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "is_current"?: boolean,"kind": string,"published_at"?: string,"version": string
+                  }
+                  Update: {
+                    "is_current"?: boolean,"kind"?: string,"published_at"?: string,"version"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"notifications": {
                   Row: {
                     "body": string | null,"created_at": string,"id": string,"kind": string,"link": string | null,"organisation_id": string,"read_at": string | null,"severity": Database["public"]['Enums']["event_severity"],"title": string,"user_id": string
@@ -501,6 +627,26 @@ isOneToOne: false
                   Relationships: [
                     {
       foreignKeyName: "notifications_organisation_id_fkey"
+      columns: ["organisation_id"]
+isOneToOne: false
+      referencedRelation: "organisations"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"organisation_invitations": {
+                  Row: {
+                    "accepted_at": string | null,"accepted_by": string | null,"created_at": string,"email": string,"expires_at": string,"id": string,"invited_by": string | null,"organisation_id": string,"revoked_at": string | null,"role": Database["public"]['Enums']["org_role"],"token_hash": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accepted_at"?: string | null,"accepted_by"?: string | null,"created_at"?: string,"email": string,"expires_at"?: string,"id"?: string,"invited_by"?: string | null,"organisation_id": string,"revoked_at"?: string | null,"role": Database["public"]['Enums']["org_role"],"token_hash": string
+                  }
+                  Update: {
+                    "accepted_at"?: string | null,"accepted_by"?: string | null,"created_at"?: string,"email"?: string,"expires_at"?: string,"id"?: string,"invited_by"?: string | null,"organisation_id"?: string,"revoked_at"?: string | null,"role"?: Database["public"]['Enums']["org_role"],"token_hash"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "organisation_invitations_organisation_id_fkey"
       columns: ["organisation_id"]
 isOneToOne: false
       referencedRelation: "organisations"
@@ -595,14 +741,14 @@ isOneToOne: false
                   ]
                 },"system_settings": {
                   Row: {
-                    "audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"organisation_id": string,"per_tender_budget_usd": number,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_methods": (string)[],"watched_provinces": (string)[]
+                    "ai_enabled": boolean,"ai_web_research_enabled": boolean,"audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"onboarding_completed_at": string | null,"organisation_id": string,"per_tender_budget_usd": number,"require_mfa": boolean,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_methods": (string)[],"watched_provinces": (string)[]
                   }
                   ComputedFields: never
                   Insert: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"organisation_id": string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
+                    "ai_enabled"?: boolean,"ai_web_research_enabled"?: boolean,"audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id": string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Update: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"organisation_id"?: string,"per_tender_budget_usd"?: number,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
+                    "ai_enabled"?: boolean,"ai_web_research_enabled"?: boolean,"audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id"?: string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Relationships: [
                     {
@@ -693,6 +839,26 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "workflow_runs"
       referencedColumns: ["id"]
+    }
+                  ]
+                },"tender_documents": {
+                  Row: {
+                    "attempts": number,"created_at": string,"error": string | null,"fetched_at": string | null,"file_name": string,"id": string,"mime_type": string | null,"organisation_id": string,"page_count": number | null,"sha256": string | null,"size_bytes": number | null,"source_url": string,"status": string,"storage_path": string | null,"tender_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attempts"?: number,"created_at"?: string,"error"?: string | null,"fetched_at"?: string | null,"file_name": string,"id"?: string,"mime_type"?: string | null,"organisation_id": string,"page_count"?: number | null,"sha256"?: string | null,"size_bytes"?: number | null,"source_url": string,"status"?: string,"storage_path"?: string | null,"tender_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "attempts"?: number,"created_at"?: string,"error"?: string | null,"fetched_at"?: string | null,"file_name"?: string,"id"?: string,"mime_type"?: string | null,"organisation_id"?: string,"page_count"?: number | null,"sha256"?: string | null,"size_bytes"?: number | null,"source_url"?: string,"status"?: string,"storage_path"?: string | null,"tender_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tender_documents_organisation_id_tender_id_fkey"
+      columns: ["organisation_id","tender_id"]
+isOneToOne: false
+      referencedRelation: "tenders"
+      referencedColumns: ["organisation_id","id"]
     }
                   ]
                 },"tender_sources": {
@@ -813,7 +979,24 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "archive_company_document":
+            "accept_invitation":
+{ Args: { "p_token": string }; Returns: string
+                           },
+"accept_legal":
+{ Args: { "p_ip_hmac"?: string,"p_privacy_version": string,"p_terms_version": string }; Returns: undefined
+                           },
+"add_pricing_line":
+{ Args: { "p_description": string,"p_quantity": number,"p_tender_id": string,"p_unit": string }; Returns: string
+                           },
+"agent_usage_totals":
+{ Args: { "p_agent_id": string }; Returns: Json
+                           },
+"ai_spend":
+{ Args: { "p_org": string }; Returns: {
+              "month_usd": number,"today_usd": number
+            }[]
+                           },
+"archive_company_document":
 { Args: { "p_id": string }; Returns: undefined
                            },
 "autofill_document_download":
@@ -826,17 +1009,39 @@ isOneToOne: false
               "created_at": string,"doc_type": string,"expires_at": string,"file_name": string,"id": string,"mime_type": string,"size_bytes": number,"title": string
             }[]
                            },
+"autofill_record_prepared":
+{ Args: { "p_confirmed_host": boolean,"p_documents": number,"p_fields": number,"p_host": string,"p_left": number,"p_sensitive": boolean,"p_tender_id": string,"p_token_id": string }; Returns: undefined
+                           },
+"bid_pricing_totals":
+{ Args: { "p_tender_id": string }; Returns: {
+              "complete": boolean,"lines": number,"priced": number,"subtotal_cents": number,"total_cents": number,"vat_cents": number
+            }[]
+                           },
 "bootstrap_organisation":
 { Args: { "p_agents": Json,"p_departments": Json,"p_name": string,"p_slug": string,"p_user_id": string }; Returns: string
                            },
 "cancel_workflow":
 { Args: { "p_reason": string,"p_run_id": string }; Returns: undefined
                            },
+"change_member_role":
+{ Args: { "p_org": string,"p_role": Database["public"]['Enums']["org_role"],"p_user": string }; Returns: undefined
+                           },
+"change_tender_delivery":
+{ Args: { "p_changes": Json,"p_reason": string,"p_tender_id": string }; Returns: Json
+                           },
+"complete_onboarding":
+{ Args: { "p_org": string }; Returns: undefined
+                           },
 "connect_email_account":
 { Args: { "p_display_name": string,"p_from": string,"p_org": string,"p_provider": Database["public"]['Enums']["email_provider"],"p_secret": string,"p_smtp_host"?: string,"p_smtp_port"?: number,"p_smtp_username"?: string }; Returns: string
                            },
 "create_autofill_token":
 { Args: { "p_label"?: string,"p_org": string }; Returns: string
+                           },
+"create_invitation":
+{ Args: { "p_email": string,"p_org": string,"p_role": Database["public"]['Enums']["org_role"] }; Returns: {
+              "expires_at": string,"invitation_id": string,"token": string
+            }[]
                            },
 "dashboard_counts":
 { Args: { "p_day_start": string,"p_month_start": string,"p_org": string }; Returns: Json
@@ -857,14 +1062,44 @@ isOneToOne: false
               "display_name": string,"from_address": string,"organisation_id": string,"provider": Database["public"]['Enums']["email_provider"],"secret": string,"smtp_host": string,"smtp_port": number,"smtp_username": string
             }[]
                            },
+"erase_organisation":
+{ Args: { "p_org": string,"p_reference"?: string }; Returns: Json
+                           },
+"erase_user":
+{ Args: { "p_reference"?: string,"p_user_id": string }; Returns: Json
+                           },
+"export_organisation_data":
+{ Args: { "p_actor"?: string,"p_org": string }; Returns: Json
+                           },
+"export_user_data":
+{ Args: { "p_actor"?: string,"p_user_id": string }; Returns: Json
+                           },
+"fetch_tender_documents":
+{ Args: { "p_document_id"?: string,"p_tender_id": string }; Returns: number
+                           },
 "hit_rate_limit":
 { Args: { "p_action": string,"p_max"?: number,"p_window_seconds"?: number }; Returns: undefined
                            },
 "hit_rate_limit_key":
 { Args: { "p_action": string,"p_key": string,"p_max"?: number,"p_window_seconds"?: number }; Returns: undefined
                            },
+"invitation_preview":
+{ Args: { "p_token": string }; Returns: {
+              "email": string,"expires_at": string,"invitation_id": string,"organisation_id": string,"organisation_name": string,"role": Database["public"]['Enums']["org_role"]
+            }[]
+                           },
+"list_members":
+{ Args: { "p_org": string }; Returns: {
+              "email": string,"full_name": string,"joined_at": string,"role": Database["public"]['Enums']["org_role"],"user_id": string
+            }[]
+                           },
 "mark_notifications_read":
 { Args: { "p_ids": (string)[] }; Returns: undefined
+                           },
+"pending_legal_acceptances":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "kind": string,"version": string
+            }[]
                            },
 "record_bid_delivery":
 { Args: { "p_note"?: string,"p_reference"?: string,"p_submission_id": string }; Returns: undefined
@@ -872,8 +1107,22 @@ isOneToOne: false
 "register_company_document":
 { Args: { "p_doc_type": string,"p_expires_at"?: string,"p_org": string,"p_path": string,"p_title": string }; Returns: string
                            },
+"remove_member":
+{ Args: { "p_org": string,"p_user": string }; Returns: undefined
+                           },
+"remove_pricing_line":
+{ Args: { "p_line_id": string }; Returns: undefined
+                           },
 "rerun_bid":
 { Args: { "p_tender_id": string }; Returns: string
+                           },
+"resend_invitation":
+{ Args: { "p_id": string }; Returns: {
+              "expires_at": string,"invitation_id": string,"token": string
+            }[]
+                           },
+"reset_user_mfa":
+{ Args: { "p_reference"?: string,"p_user_id": string }; Returns: Json
                            },
 "resolve_autofill_token":
 { Args: { "p_hash": string }; Returns: {
@@ -886,11 +1135,35 @@ isOneToOne: false
 "revoke_autofill_token":
 { Args: { "p_id": string }; Returns: undefined
                            },
+"revoke_invitation":
+{ Args: { "p_id": string }; Returns: undefined
+                           },
+"save_pricing_line":
+{ Args: { "p_expected_version": number,"p_line_id": string,"p_quantity": number,"p_supplier_ref": string,"p_unit_price_cents": number }; Returns: number
+                           },
+"save_proposal_section":
+{ Args: { "p_content": string,"p_expected_version": number,"p_key": string,"p_tender_id": string }; Returns: number
+                           },
 "set_agent_control":
 { Args: { "p_action": string,"p_agent_id": string,"p_reason"?: string }; Returns: Database["public"]['Enums']["agent_status"]
                            },
+"set_ai_budget":
+{ Args: { "p_daily_usd": number,"p_org": string }; Returns: undefined
+                           },
+"set_ai_settings":
+{ Args: { "p_enabled": boolean,"p_org": string,"p_web_research": boolean }; Returns: undefined
+                           },
 "set_kill_switch":
 { Args: { "p_engaged": boolean,"p_org": string,"p_reason": string }; Returns: undefined
+                           },
+"set_pricing_confirmed":
+{ Args: { "p_confirmed": boolean,"p_tender_id": string }; Returns: undefined
+                           },
+"set_proposal_section_review":
+{ Args: { "p_expected_version": number,"p_key": string,"p_reviewed": boolean,"p_tender_id": string }; Returns: number
+                           },
+"set_require_mfa":
+{ Args: { "p_on": boolean,"p_org": string }; Returns: undefined
                            },
 "set_watched_methods":
 { Args: { "p_methods": (string)[],"p_org": string }; Returns: undefined

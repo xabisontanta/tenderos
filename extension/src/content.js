@@ -1,7 +1,9 @@
 // TenderOS browser helper: content script.
 //
-// Injected only when the person clicks "Fill this page" in the helper (that
-// click is the permission). It runs in the extension's isolated world, so the
+// Injected only when the person clicks "Fill this page" in the helper or
+// "Apply with TenderOS" in TenderOS (those clicks are the permission), and only
+// into the top frame and same-origin frames of the page. It runs in the
+// extension's isolated world, so the
 // page cannot see these functions, the plan or the files. It reports the
 // form fields it finds (never their contents), then fills the fields the
 // background worker planned and attaches files.
@@ -141,13 +143,28 @@
     return d;
   }
 
+  /**
+   * The helper works on the top frame and on frames from the same origin as it, never on a
+   * frame from another origin (an ad, a widget, an embedded third-party form). The background
+   * worker checks the origin reported by the scan again.
+   */
+  function sameOriginAsTop() {
+    if (window === window.top) return true;
+    try {
+      return window.top.location.origin === window.location.origin;
+    } catch {
+      return false;
+    }
+  }
+
   function scan() {
+    if (!sameOriginAsTop()) return null;
     const found = [];
     collect(document, found);
     fields = found
       .filter((el) => !IGNORED_TYPES.has((el.getAttribute("type") || "").toLowerCase()) && !el.disabled && !el.readOnly && visible(el))
       .slice(0, MAX_FIELDS);
-    return { fields: fields.map(describe) };
+    return { origin: window.location.origin, fields: fields.map(describe) };
   }
 
   function mark(el, colour) {
@@ -196,6 +213,7 @@
    * Refuses anything that is not a plain text box, a select or a file upload.
    */
   function apply(steps, files, leftIndexes) {
+    if (!sameOriginAsTop()) return { done: [], failed: steps.map((s) => ({ index: s.index, reason: "changed" })) };
     const done = [];
     const failed = [];
     for (const step of steps) {

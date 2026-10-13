@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Pool, PoolClient } from "@/lib/db/pool";
 import type { Logger } from "@/lib/log";
 import { backoffMs } from "./retry";
-import { WorkflowEngine, type Job, type JobOutcome } from "./engine";
+import { WorkflowEngine, type EngineAiOptions, type EngineDocumentOptions, type Job, type JobOutcome } from "./engine";
 import type { Fetcher } from "@/agents/discovery/etenders";
 
 export interface WorkerOptions {
@@ -13,6 +13,12 @@ export interface WorkerOptions {
   idlePollMs?: number;
   /** HTTP client for tender source connectors (tests inject a fake). */
   fetcher?: Fetcher;
+  /** Scan tuning. Production reads DISCOVERY_MAX_INVALID_PCT; tests set it directly. */
+  discovery?: { maxInvalidRatio?: number };
+  /** AI wiring (model client, tender document source, environment). Tests inject fakes; production uses the defaults. */
+  ai?: EngineAiOptions;
+  /** Tender document fetching (the fetcher and Storage). Tests inject fakes; production uses the defaults. */
+  documents?: EngineDocumentOptions;
 }
 
 /**
@@ -34,7 +40,14 @@ export class Worker {
     private readonly pool: Pool,
     private readonly opts: WorkerOptions,
   ) {
-    this.engine = new WorkflowEngine(pool, { simulationStepMs: opts.simulationStepMs, logger: opts.logger, fetcher: opts.fetcher });
+    this.engine = new WorkflowEngine(pool, {
+      simulationStepMs: opts.simulationStepMs,
+      logger: opts.logger,
+      fetcher: opts.fetcher,
+      discovery: opts.discovery,
+      ai: opts.ai,
+      documents: opts.documents,
+    });
   }
 
   async start(): Promise<void> {
@@ -176,7 +189,14 @@ export class Worker {
     if (outcome.status === "dead") {
       await this.engine.onJobDead(job, outcome.error).catch((err) => log.error("dead-letter handling failed", { error: (err as Error).message }));
     }
-    await this.finish(job, outcome);
+    try {
+      await this.finish(job, outcome);
+    } catch (err) {
+      // A database blip here must not take the worker down. The job stays
+      // locked and is reclaimed when its lock expires, like a crashed worker's.
+      log.error("could not record job outcome", { error: (err as Error).message, outcome: outcome.status });
+      return;
+    }
     this.processed++;
     log.debug("job finished", { outcome: outcome.status });
   }

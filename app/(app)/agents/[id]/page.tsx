@@ -13,7 +13,7 @@ import { TaskRetryButton } from "@/features/agents/task-retry-button";
 import { HandoffList } from "@/features/operations/handoff-list";
 import { LiveRefresh } from "@/features/realtime/live-refresh";
 import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
-import { getRecentEvents, getTenderTitles } from "@/lib/data/queries";
+import { getRecentEvents, getTenderTitles, rowOrThrow, rowsOrThrow } from "@/lib/data/queries";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { formatDateTime, formatUsd, humanize, relativeTime } from "@/lib/format";
 import { configuredModels, selectModel } from "@/agents/runtime/model-routing";
@@ -26,34 +26,41 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const ctx = await requireContext();
   const supabase = await getServerSupabase();
-  const { data: agent } = await supabase.from("agents").select("*, departments(name, accent)").eq("id", id).maybeSingle();
+  const { data: agent, error: agentError } = await supabase.from("agents").select("*, departments(name, accent)").eq("id", id).maybeSingle();
+  if (agentError) throw new Error(`Could not load the agent: ${agentError.message}`);
   if (!agent) notFound();
 
-  const [tasks, perms, transitions, handoffs, costs, events, allAgents, currentTask] = await Promise.all([
+  const [tasks, perms, transitions, handoffs, usage, events, allAgents, currentTask] = await Promise.all([
     supabase.from("tasks").select("*").eq("agent_id", id).order("created_at", { ascending: false }).limit(25),
     supabase.from("agent_permissions").select("data_category,access").eq("agent_id", id),
     supabase.from("agent_status_transitions").select("*").eq("agent_id", id).order("created_at", { ascending: false }).limit(20),
     supabase.from("handoffs").select("*").or(`from_agent_id.eq.${id},to_agent_id.eq.${id}`).order("created_at", { ascending: false }).limit(20),
-    supabase.from("cost_usage").select("cost_usd,input_tokens,output_tokens,is_simulated").eq("agent_id", id),
+    // Summed by the database: fetching the rows stopped at the API's 1000 and under-reported spend and tokens.
+    supabase.rpc("agent_usage_totals", { p_agent_id: id }),
     getRecentEvents(ctx.organisation.id, { agentId: id, limit: 40 }),
     supabase.from("agents").select("id,display_name").eq("organisation_id", ctx.organisation.id),
-    agent.current_task_id ? supabase.from("tasks").select("*").eq("id", agent.current_task_id).maybeSingle() : Promise.resolve({ data: null }),
+    agent.current_task_id ? supabase.from("tasks").select("*").eq("id", agent.current_task_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
   ]);
+  if (usage.error) throw new Error(`Could not load the agent's usage: ${usage.error.message}`);
 
   const dep = agent.departments as { name: string; accent: string } | null;
   const def = getAgentDefinition(agent.slug);
-  const taskRows = tasks.data ?? [];
+  const taskRows = rowsOrThrow(tasks, "the agent's tasks");
+  const permRows = rowsOrThrow(perms, "the agent's permissions");
+  const transitionRows = rowsOrThrow(transitions, "the agent's status history");
+  const handoffRows = rowsOrThrow(handoffs, "the agent's handoffs");
+  const agentRows = rowsOrThrow(allAgents, "agents");
   const completed = taskRows.filter((t) => t.status === "COMPLETED");
   const failed = taskRows.filter((t) => t.status === "FAILED");
   const durations = completed.filter((t) => t.started_at && t.completed_at).map((t) => new Date(t.completed_at!).getTime() - new Date(t.started_at!).getTime());
   const avg = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length / 1000) : null;
-  const costRows = costs.data ?? [];
-  const spend = costRows.reduce((s, c) => s + Number(c.cost_usd), 0);
-  const tokens = costRows.reduce((s, c) => s + c.input_tokens + c.output_tokens, 0);
+  const totals = usage.data as { calls: number; cost_usd: number; input_tokens: number; output_tokens: number; all_simulated: boolean };
+  const spend = Number(totals.cost_usd);
+  const tokens = Number(totals.input_tokens) + Number(totals.output_tokens);
   const model = selectModel({ agentTier: agent.model_tier, override: agent.model_override }, configuredModels());
-  const agentNames = Object.fromEntries((allAgents.data ?? []).map((a) => [a.id, a.display_name]));
+  const agentNames = Object.fromEntries(agentRows.map((a) => [a.id, a.display_name]));
   const tenderTitles = await getTenderTitles([...taskRows.map((t) => t.tender_id), agent.current_tender_id]);
-  const cur = currentTask.data;
+  const cur = rowOrThrow(currentTask, "the current task");
 
   return (
     <>
@@ -203,7 +210,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
               </dl>
               <p className="mt-3 text-[11px] text-muted-foreground">
                 Model: {model.model ?? "not configured (simulation mode makes no AI calls)"}
-                {costRows.length > 0 && costRows.every((c) => c.is_simulated) && " · all recorded usage is simulated"}
+                {totals.calls > 0 && totals.all_simulated && " · all recorded usage is simulated"}
               </p>
             </CardContent>
           </Card>
@@ -228,7 +235,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
               <div>
                 <p className="mb-1.5 text-[11px] text-muted-foreground">Data categories (read)</p>
                 <div className="flex flex-wrap gap-1">
-                  {(perms.data ?? []).map((p) => (
+                  {permRows.map((p) => (
                     <Badge key={p.data_category} variant="secondary">
                       {humanize(p.data_category)}
                     </Badge>
@@ -256,7 +263,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
               <CardTitle>Recent handoffs</CardTitle>
             </CardHeader>
             <CardContent>
-              <HandoffList initial={handoffs.data ?? []} agentNames={agentNames} tenderTitles={tenderTitles} />
+              <HandoffList initial={handoffRows} agentNames={agentNames} tenderTitles={tenderTitles} />
             </CardContent>
           </Card>
           <Card>
@@ -265,7 +272,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
             </CardHeader>
             <CardContent>
               <ol className="grid gap-1 text-[12px]">
-                {(transitions.data ?? []).map((t) => (
+                {transitionRows.map((t) => (
                   <li key={t.id} className="flex flex-wrap gap-x-2">
                     <span className="text-muted-foreground">{relativeTime(t.created_at)}</span>
                     <span>

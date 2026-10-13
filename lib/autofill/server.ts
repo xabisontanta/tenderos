@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdminSupabase } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/log";
 import type { Database } from "@/types/database";
+import { buildApplyPlan, type ApplyPlan } from "./apply-plan";
 import {
   AUTOFILL_PROFILE_FIELDS,
   bearerToken,
@@ -85,6 +86,17 @@ function must<T>(result: { data: T | null; error: { message: string } | null }, 
   return result.data as T;
 }
 
+/** The completed submission step that belongs to a submission record: the one for its approval, else the run's latest. */
+function pickSubmissionTask<T extends { workflow_run_id: string | null; input: unknown }>(
+  tasks: T[],
+  sub: { workflow_run_id: string | null; approval_id: string },
+): T | undefined {
+  return (
+    tasks.find((k) => k.workflow_run_id === sub.workflow_run_id && (k.input as Record<string, unknown> | null)?.approval_id === sub.approval_id) ??
+    tasks.find((k) => k.workflow_run_id === sub.workflow_run_id)
+  );
+}
+
 /**
  * What the helper may fill for this member: the company profile, the
  * documents their role may attach, and approved real bids waiting for a
@@ -149,9 +161,7 @@ export async function loadAutofillPayload(admin: Admin, caller: AutofillCaller, 
     bids = subs.flatMap((s): AutofillBid[] => {
       const t = tenders.get(s.tender_id);
       if (!t || !approved.has(s.approval_id) || new Date(t.closing_at).getTime() <= now.getTime()) return [];
-      const task =
-        tasks.find((k) => k.workflow_run_id === s.workflow_run_id && (k.input as Record<string, unknown> | null)?.approval_id === s.approval_id) ??
-        tasks.find((k) => k.workflow_run_id === s.workflow_run_id);
+      const task = pickSubmissionTask(tasks, s);
       return [
         {
           submission_id: s.id,
@@ -179,4 +189,99 @@ export async function loadAutofillPayload(admin: Admin, caller: AutofillCaller, 
     bids,
     generated_at: now.toISOString(),
   };
+}
+
+export type ApplyPlanLookup =
+  | { kind: "ok"; plan: ApplyPlan }
+  | { kind: "not_found" }
+  /** The tender exists but has no approved real bid waiting for delivery (or it closed). */
+  | { kind: "not_ready"; message: string }
+  /** The tender is not delivered through a portal address the helper can open. */
+  | { kind: "no_portal"; message: string };
+
+const NO_PORTAL_MESSAGE = {
+  not_portal: "This tender is not delivered through a web portal, so there is nothing for the helper to open. Use the delivery options on the tender page.",
+  no_portal_url: "TenderOS does not hold a usable web address for this tender's portal. Open the portal yourself and use the helper's Fill this page button.",
+} as const;
+
+/**
+ * Everything the helper needs to prepare one tender's portal form: the portal
+ * address, the company facts, and the documents of the approved bid pack the
+ * member's role may attach. Scoped to the pairing code's organisation. Only
+ * an approved real bid that still awaits delivery qualifies.
+ */
+export async function loadApplyPlan(
+  admin: Admin,
+  caller: AutofillCaller,
+  tenderId: string,
+  includeSensitive: boolean,
+  now = new Date(),
+): Promise<ApplyPlanLookup> {
+  const org = caller.organisationId;
+  const tenderRes = await admin
+    .from("tenders")
+    .select("id, title, reference_number, issuing_organisation, closing_at, submission_method, submission_destination, source_url")
+    .eq("organisation_id", org)
+    .eq("id", tenderId)
+    .maybeSingle();
+  const tender = must(tenderRes, "tender");
+  if (!tender) return { kind: "not_found" };
+
+  const subRes = await admin
+    .from("submission_records")
+    .select("id, workflow_run_id, approval_id")
+    .eq("organisation_id", org)
+    .eq("tender_id", tenderId)
+    .eq("status", "ACTION_REQUIRED")
+    .eq("is_simulation", false)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const sub = must(subRes, "submission");
+  const notReady = { kind: "not_ready", message: "This tender has no approved bid waiting for delivery." } as const;
+  if (!sub) return notReady;
+  if (new Date(tender.closing_at).getTime() <= now.getTime()) return { kind: "not_ready", message: "This tender has closed." };
+
+  const [approvalRes, tasksRes, orgRes, profileRes, docsRes] = await Promise.all([
+    admin.from("approvals").select("status").eq("organisation_id", org).eq("id", sub.approval_id).maybeSingle(),
+    sub.workflow_run_id
+      ? admin
+          .from("tasks")
+          .select("workflow_run_id, input, output, completed_at")
+          .eq("organisation_id", org)
+          .eq("type", "submission.execute")
+          .eq("status", "COMPLETED")
+          .eq("workflow_run_id", sub.workflow_run_id)
+          .order("completed_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+    admin.from("organisations").select("name").eq("id", org).single(),
+    admin.from("company_profiles").select(AUTOFILL_PROFILE_FIELDS.join(",")).eq("organisation_id", org).maybeSingle(),
+    admin.rpc("autofill_documents", { p_token_id: caller.tokenId }),
+  ]);
+  if (must(approvalRes, "approval")?.status !== "APPROVED") return notReady;
+  const task = pickSubmissionTask(must(tasksRes, "submission tasks") ?? [], sub);
+  const allowedDocuments: AutofillDocument[] = (must(docsRes, "documents") ?? []).map((d) => ({
+    id: d.id,
+    doc_type: d.doc_type,
+    title: d.title,
+    file_name: d.file_name,
+    mime_type: d.mime_type ?? null,
+    size_bytes: d.size_bytes ?? null,
+    expires_at: d.expires_at ?? null,
+  }));
+
+  const built = buildApplyPlan({
+    tender,
+    submissionId: sub.id,
+    organisationName: must(orgRes, "organisation").name,
+    role: caller.role,
+    profile: toAutofillProfile(must(profileRes, "company profile") as unknown as Record<string, unknown> | null),
+    attachments: bidPackAttachments(task?.output),
+    allowedDocuments,
+    includeSensitive,
+    allowLocalhost: process.env.NODE_ENV !== "production",
+    now,
+  });
+  if (!built.ok) return { kind: "no_portal", message: NO_PORTAL_MESSAGE[built.reason] };
+  return { kind: "ok", plan: built.plan };
 }

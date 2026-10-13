@@ -1,10 +1,33 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import pg from "pg";
+
+const windows = process.platform === "win32";
+
+/**
+ * Sign-up is limited to five an hour per address (docs/auth.md) and `next start` always reports the browser's address,
+ * so a few runs in an hour would refuse every sign-up. Clearing the counters of the local database keeps the suite repeatable.
+ */
+async function clearAuthRateLimits(url: string) {
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query(`delete from private.rate_limits where key like 'auth\\_%'`);
+  } finally {
+    await client.end();
+  }
+}
 
 /** Starts a real job worker for the duration of the run and stops it afterwards. */
 export default async function globalSetup() {
   const url = process.env.DATABASE_URL ?? "";
   if (url && !/127\.0\.0\.1|localhost/.test(url)) throw new Error("E2E tests only run against a local database");
-  const worker = spawn("npx", ["tsx", "scripts/worker.ts"], { stdio: ["ignore", "pipe", "inherit"], env: process.env, detached: true });
+  if (url) await clearAuthRateLimits(url);
+  // On Windows `npx` is npx.cmd, which Node only starts through a shell; elsewhere the worker
+  // gets its own process group so the whole tree can be signalled at the end.
+  const options = { stdio: ["ignore", "pipe", "inherit"] as ["ignore", "pipe", "inherit"], env: process.env, windowsHide: true };
+  const worker = windows
+    ? spawn("npx tsx scripts/worker.ts", { ...options, shell: true })
+    : spawn("npx", ["tsx", "scripts/worker.ts"], { ...options, detached: true });
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("worker did not start")), 30_000);
     worker.stdout!.on("data", (b: Buffer) => {
@@ -16,9 +39,10 @@ export default async function globalSetup() {
     worker.on("exit", (code) => reject(new Error(`worker exited with ${code}`)));
   });
   return async () => {
-    // npx -> tsx -> node: signal the whole process group so no worker is orphaned.
+    // npx -> tsx -> node: stop the whole tree so no worker is orphaned.
     try {
-      process.kill(-worker.pid!, "SIGTERM");
+      if (windows) spawnSync("taskkill", ["/pid", String(worker.pid), "/T", "/F"], { stdio: "ignore" });
+      else process.kill(-worker.pid!, "SIGTERM");
     } catch {
       // already exited
     }

@@ -1,9 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { MFA_PATH, mfaRedirectPath, needsSecondFactor, type AalState } from "@/lib/auth/mfa";
 import type { Database } from "@/types/database";
 
 // /api/autofill authenticates the browser helper with its own pairing code.
-const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth", "/api/autofill"];
+// /terms and /privacy are linked from the sign-up form, so they must open signed out.
+// /invite is where an invitation email lands: the visitor has no account or session yet.
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth", "/api/autofill", "/terms", "/privacy", "/invite"];
 
 /**
  * Refreshes the Supabase session cookie on every request and redirects
@@ -45,5 +48,24 @@ export async function updateSession(request: NextRequest, requestHeaders: Header
     url.search = "";
     return NextResponse.redirect(url);
   }
+  // A session that has proved only a password, for someone who has set up an authenticator, must pass the
+  // challenge before it reaches anything else. (Whether the organisation *requires* an authenticator is the
+  // database's decision, migration 063; this is for people who have chosen one.)
+  if (user && !isPublic && path !== MFA_PATH && (await mustChallenge(supabase))) {
+    const url = request.nextUrl.clone();
+    url.pathname = MFA_PATH;
+    url.search = mfaRedirectPath(`${path}${request.nextUrl.search}`).slice(MFA_PATH.length);
+    return NextResponse.redirect(url);
+  }
   return response;
+}
+
+/** Asks Supabase Auth for the session's assurance level. A failed lookup is not a lock-out: the page loads. */
+async function mustChallenge(supabase: { auth: { mfa: { getAuthenticatorAssuranceLevel: () => Promise<{ data: AalState | null }> } } }): Promise<boolean> {
+  try {
+    const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    return needsSecondFactor(data);
+  } catch {
+    return false;
+  }
 }

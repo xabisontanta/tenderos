@@ -1,15 +1,18 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { CircleAlert, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/command-centre/page-header";
 import { TenderStatusBadge } from "@/components/command-centre/status-badge";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProvinceScanner } from "@/features/discovery/province-scanner";
 import { DELIVERY_METHODS } from "@/features/discovery/provinces";
 import { LiveRefresh } from "@/features/realtime/live-refresh";
 import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
 import { getServerSupabase } from "@/lib/supabase/server";
+import { pageCount, pageFromParam, pageRange } from "@/lib/pagination";
 import { formatDateTime, provinceLabel, relativeTime } from "@/lib/format";
 import type { TenderStatus } from "@/lib/domain/tender-state";
 
@@ -17,11 +20,15 @@ export const metadata: Metadata = { title: "Discover" };
 
 const RUN_VARIANT = { QUEUED: "secondary", RUNNING: "warning", COMPLETED: "success", FAILED: "danger" } as const;
 
-export default async function DiscoverPage({ searchParams }: { searchParams: Promise<{ province?: string; method?: string }> }) {
+const PAGE_SIZE = 50;
+
+export default async function DiscoverPage({ searchParams }: { searchParams: Promise<{ province?: string; method?: string; page?: string }> }) {
   const ctx = await requireContext();
   const sp = await searchParams;
   const supabase = await getServerSupabase();
   const s = ctx.settings;
+  const page = pageFromParam(sp.page);
+  const [from, to] = pageRange(page, PAGE_SIZE);
 
   let tendersQuery = supabase
     .from("tenders")
@@ -32,24 +39,28 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
     .not("source_ref", "is", null)
     .gt("closing_at", new Date().toISOString())
     .order("created_at", { ascending: false })
-    .limit(100);
+    .order("id") // a tie-break, so a tender never appears on two pages or none while the list changes
+    .range(from, to);
   if (sp.province) tendersQuery = tendersQuery.eq("province", sp.province);
   const method = DELIVERY_METHODS.find((m) => m.value === sp.method)?.value;
   tendersQuery = method
     ? tendersQuery.eq("submission_method", method)
     : tendersQuery.in("submission_method", s.watched_methods as (typeof DELIVERY_METHODS)[number]["value"][]);
-  const filterHref = (next: { province?: string | null; method?: string | null }) => {
+  // Filters reset the page; the page links keep the filters.
+  const href = (next: { province?: string | null; method?: string | null; page?: number }) => {
     const q = new URLSearchParams();
     const pv = next.province === undefined ? sp.province : next.province;
     const mv = next.method === undefined ? method : next.method;
     if (pv) q.set("province", pv);
     if (mv) q.set("method", mv);
+    if (next.page && next.page > 1) q.set("page", String(next.page));
     const qs = q.toString();
     return qs ? `/discover?${qs}` : "/discover";
   };
+  const filterHref = (next: { province?: string | null; method?: string | null }) => href(next);
   const methodLabel = (v: string) => DELIVERY_METHODS.find((m) => m.value === v)?.label ?? v;
 
-  const [{ data: runs }, { data: tenders, count }, { data: profile }] = await Promise.all([
+  const [runsRes, tendersRes, profileRes] = await Promise.all([
     supabase.from("discovery_runs").select("*").eq("organisation_id", ctx.organisation.id).order("created_at", { ascending: false }).limit(8),
     tendersQuery,
     supabase
@@ -58,6 +69,15 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
       .eq("organisation_id", ctx.organisation.id)
       .maybeSingle(),
   ]);
+  // A page past the end (a stale link, or the list shrank) is not an error: go back to the first page.
+  if (tendersRes.error?.code === "PGRST103" && page > 1) redirect(href({}));
+  if (tendersRes.error) throw new Error(`Could not load the tenders: ${tendersRes.error.message}`);
+  if (runsRes.error) throw new Error(`Could not load the scans: ${runsRes.error.message}`);
+  if (profileRes.error) throw new Error(`Could not load the company profile: ${profileRes.error.message}`);
+  const { data: runs } = runsRes;
+  const { data: tenders, count } = tendersRes;
+  const { data: profile } = profileRes;
+  const pages = pageCount(count, PAGE_SIZE);
   const scanning = (runs ?? []).some((r) => r.status === "QUEUED" || r.status === "RUNNING");
   const profileReady = Boolean(profile?.csd_number && profile?.tax_pin && profile?.registration_number && profile?.authorised_signatory);
 
@@ -120,7 +140,7 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {r.status === "COMPLETED"
-                    ? `${r.matched} open in scope · ${r.created_tenders} new · ${r.started_workflows} sent to agents`
+                    ? `${r.matched} open in scope · ${r.created_tenders} new · ${r.started_workflows} sent to agents${r.rows_skipped > 0 ? ` · ${r.rows_skipped} of ${r.rows_seen} rows could not be used` : ""}`
                     : r.status === "FAILED"
                       ? r.error
                       : r.status === "RUNNING"
@@ -246,6 +266,23 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
               </tbody>
             </table>
           </div>
+        )}
+        {pages > 1 && (
+          <nav aria-label="Pagination" className="mt-3 flex items-center justify-end gap-2 text-xs">
+            {page > 1 && (
+              <Button asChild size="sm" variant="outline">
+                <Link href={href({ page: page - 1 })}>Previous</Link>
+              </Button>
+            )}
+            <span className="text-muted-foreground">
+              Page {page} of {pages}
+            </span>
+            {page < pages && (
+              <Button asChild size="sm" variant="outline">
+                <Link href={href({ page: page + 1 })}>Next</Link>
+              </Button>
+            )}
+          </nav>
         )}
       </section>
     </>

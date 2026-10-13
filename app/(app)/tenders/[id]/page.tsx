@@ -9,7 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HandoffList } from "@/features/operations/handoff-list";
 import { LiveRefresh } from "@/features/realtime/live-refresh";
+import { DeliveryDetails } from "@/features/tenders/delivery-details";
 import { TenderActions } from "@/features/tenders/tender-actions";
+import { TenderDocuments, type TenderDocumentRow } from "@/features/tenders/tender-documents";
+import { PricingEditor, type PriceLineView } from "@/features/bid/pricing-editor";
+import { ProposalEditor, type SectionView } from "@/features/bid/proposal-editor";
+import { analysisOutputSchema } from "@/agents/analysis/schema";
+import { bidEditState } from "@/lib/domain/bid-content";
 import { WorkflowTimeline } from "@/features/tenders/workflow-timeline";
 import {
   CompliancePanel,
@@ -23,10 +29,15 @@ import {
 } from "@/features/tenders/output-panels";
 import { canAdminister, canOperate, requireContext } from "@/lib/data/context";
 import { BidDelivery, type DeliveryDocument } from "@/features/email/bid-delivery";
+import { ApplyWithTenderOS } from "@/features/autofill/apply-with-tenderos";
+import { isSensitiveDocType, resolvePortalUrl } from "@/lib/autofill/apply-plan";
+import { parsePreparedEvent, type PreparedSummary } from "@/lib/autofill/prepared";
+import type { AppContext } from "@/lib/data/context";
 import { getRecentEvents, type TaskSummary } from "@/lib/data/queries";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { formatDateTime, formatZar, humanize, provinceLabel, relativeTime } from "@/lib/format";
-import type { TenderStatus } from "@/lib/domain/tender-state";
+import { DELIVERY_WITHDRAWABLE_STATUSES, isDeliveryLocked } from "@/lib/domain/delivery-lock";
+import { TERMINAL_TENDER_STATUSES, type TenderStatus } from "@/lib/domain/tender-state";
 
 export const metadata: Metadata = { title: "Tender" };
 
@@ -39,7 +50,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   const { data: tender } = await supabase.from("tenders").select("*").eq("id", id).maybeSingle();
   if (!tender) notFound();
 
-  const [runs, history, approvals, handoffs, agents, submissions, events, costs] = await Promise.all([
+  const [runs, history, approvals, handoffs, agents, submissions, events, costs, tenderDocuments, bid] = await Promise.all([
     supabase.from("workflow_runs").select("*").eq("tender_id", id).order("created_at", { ascending: false }),
     supabase.from("tender_status_history").select("*").eq("tender_id", id).order("created_at"),
     supabase.from("approvals").select("*").eq("tender_id", id).order("requested_at", { ascending: false }),
@@ -48,7 +59,15 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
     supabase.from("submission_records").select("*").eq("tender_id", id).order("created_at", { ascending: false }),
     getRecentEvents(ctx.organisation.id, { tenderId: id, limit: 100 }),
     supabase.from("cost_usage").select("cost_usd,is_simulated").eq("tender_id", id),
+    supabase
+      .from("tender_documents")
+      .select("id,file_name,status,error,size_bytes,page_count,fetched_at")
+      .eq("tender_id", id)
+      .order("created_at")
+      .order("file_name"),
+    bidContent(supabase, ctx.organisation.id, id),
   ]);
+  const listedDocuments = Array.isArray(tender.documents) ? tender.documents.length : 0;
 
   const latestRun = runs.data?.[0] ?? null;
   const activeRun = (runs.data ?? []).find((r) => ["PENDING", "RUNNING", "WAITING_APPROVAL", "BLOCKED"].includes(r.status)) ?? null;
@@ -63,6 +82,12 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   const documentLinks = await bidPackLinks(supabase, output("compliance"));
   const awaitingDelivery = submission?.status === "ACTION_REQUIRED" && !submission.is_simulation && canAdminister(ctx.role);
   const delivery = awaitingDelivery ? await deliveryData(supabase, ctx.organisation.id, ctx.userId, tender, output("submission")) : null;
+  const apply = await applyData(supabase, ctx, tender, submission, output("submission"));
+  // Delivery details are locked while the bid waits for approval or delivery; only owners and admins can change them then.
+  const status = tender.status as TenderStatus;
+  const deliveryLocked = isDeliveryLocked(status, approvals.data ?? []);
+  const canChangeDelivery =
+    canAdminister(ctx.role) && (deliveryLocked ? DELIVERY_WITHDRAWABLE_STATUSES.includes(status) : !TERMINAL_TENDER_STATUSES.includes(status));
 
   return (
     <>
@@ -108,11 +133,15 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
 
       <div className="grid gap-4 xl:grid-cols-3 [&>*]:min-w-0">
         <div className="grid grid-cols-1 content-start gap-4 xl:col-span-2">
+          {apply && (
+            <ApplyWithTenderOS tenderId={tender.id} portalHost={apply.portalHost} sensitiveAvailable={apply.sensitiveAvailable} prepared={apply.prepared} />
+          )}
           <Tabs defaultValue="overview">
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="qualification">Qualification</TabsTrigger>
               <TabsTrigger value="requirements">Requirements</TabsTrigger>
+              <TabsTrigger value="documents">Documents</TabsTrigger>
               <TabsTrigger value="compliance">Compliance</TabsTrigger>
               <TabsTrigger value="proposal">Proposal</TabsTrigger>
               <TabsTrigger value="pricing">Pricing</TabsTrigger>
@@ -169,6 +198,18 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
                     </div>
                   </dl>
                   {tender.description && <p className="mt-4 whitespace-pre-wrap text-[13px] text-muted-foreground">{tender.description}</p>}
+                  <DeliveryDetails
+                    key={tender.updated_at}
+                    tenderId={tender.id}
+                    details={{
+                      submission_destination: tender.submission_destination,
+                      submission_method: tender.submission_method,
+                      closing_at: tender.closing_at,
+                      source_url: tender.source_url,
+                    }}
+                    locked={deliveryLocked}
+                    canChange={canChangeDelivery}
+                  />
                 </TabsContent>
                 <TabsContent value="qualification" className="mt-0">
                   <QualificationPanel output={output("qualification")} />
@@ -176,14 +217,63 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
                 <TabsContent value="requirements" className="mt-0">
                   <RequirementsPanel output={output("analysis")} />
                 </TabsContent>
+                <TabsContent value="documents" className="mt-0">
+                  {tenderDocuments.error ? (
+                    <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+                      The documents could not be loaded. Try again in a moment.
+                    </p>
+                  ) : (
+                    <TenderDocuments
+                      tenderId={tender.id}
+                      rows={(tenderDocuments.data ?? []) as TenderDocumentRow[]}
+                      listed={listedDocuments}
+                      canFetch={canOperate(ctx.role)}
+                      isSimulation={tender.is_simulation}
+                      aiEnabled={ctx.settings.ai_enabled}
+                    />
+                  )}
+                </TabsContent>
                 <TabsContent value="compliance" className="mt-0">
                   <CompliancePanel output={output("compliance")} links={documentLinks} />
                 </TabsContent>
                 <TabsContent value="proposal" className="mt-0">
-                  <ProposalPanel output={output("proposal")} />
+                  {bid.error ? (
+                    <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+                      The proposal could not be loaded. Try again in a moment.
+                    </p>
+                  ) : bid.sections.length > 0 && !tender.is_simulation ? (
+                    <ProposalEditor
+                      tenderId={tender.id}
+                      sections={bid.sections}
+                      history={bid.history}
+                      requirements={requirementTexts(output("analysis"))}
+                      people={bid.people}
+                      editState={bidEditState(status)}
+                      canEdit={canOperate(ctx.role)}
+                    />
+                  ) : (
+                    <ProposalPanel output={output("proposal")} />
+                  )}
                 </TabsContent>
                 <TabsContent value="pricing" className="mt-0">
-                  <PricingPanel output={output("pricing")} />
+                  {bid.error ? (
+                    <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+                      The pricing schedule could not be loaded. Try again in a moment.
+                    </p>
+                  ) : bid.pricing && !tender.is_simulation ? (
+                    <PricingEditor
+                      tenderId={tender.id}
+                      lines={bid.pricing.lines}
+                      totals={bid.pricing.totals}
+                      vat={bid.pricing.vat}
+                      confirmed={bid.pricing.confirmed}
+                      people={bid.people}
+                      editState={bidEditState(status)}
+                      canEdit={canOperate(ctx.role)}
+                    />
+                  ) : (
+                    <PricingPanel output={output("pricing")} />
+                  )}
                 </TabsContent>
                 <TabsContent value="qa" className="mt-0">
                   <QaPanel output={output("qa")} />
@@ -317,6 +407,93 @@ function Item({ k, v }: { k: string; v: string }) {
   );
 }
 
+/** Requirement id to its text, from the analysis step, so the proposal can show what each section answers. */
+function requirementTexts(analysis: unknown): Record<string, string> {
+  const parsed = analysisOutputSchema.safeParse(analysis);
+  return parsed.success ? Object.fromEntries(parsed.data.requirements.map((r) => [r.id, r.text])) : {};
+}
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+/**
+ * What the proposal and pricing screens show: the sections and schedule lines a person reviews and enters, the bid's totals as
+ * the database computed them, the history of changes, and the team's names for "edited by" and "reviewed by". Errors are
+ * returned, not hidden: a screen that cannot load says so.
+ */
+async function bidContent(supabase: Awaited<ReturnType<typeof getServerSupabase>>, orgId: string, tenderId: string) {
+  const [sections, pricing, lines, totals, history, members] = await Promise.all([
+    supabase.from("bid_proposal_sections").select("*").eq("tender_id", tenderId).order("position"),
+    supabase.from("bid_pricing").select("*").eq("tender_id", tenderId).maybeSingle(),
+    supabase.from("bid_pricing_lines").select("*").eq("tender_id", tenderId).order("position"),
+    supabase.rpc("bid_pricing_totals", { p_tender_id: tenderId }),
+    supabase.from("bid_content_history").select("kind,ref,version,change,changed_by,changed_at").eq("tender_id", tenderId).order("id").limit(500),
+    supabase.rpc("list_members", { p_org: orgId }),
+  ]);
+  const failed = [sections, pricing, lines, totals, history].find((r) => r.error);
+  const t = (totals.data ?? [])[0];
+  const lineViews: PriceLineView[] = (lines.data ?? []).map((l) => ({
+    id: l.id,
+    version: l.version,
+    source: l.source as PriceLineView["source"],
+    description: l.description,
+    item_ref: l.item_ref,
+    quantity: l.quantity === null ? null : Number(l.quantity),
+    quantity_printed: l.quantity_printed,
+    unit: l.unit,
+    unit_price_cents: l.unit_price_cents === null ? null : Number(l.unit_price_cents),
+    supplier_quote_ref: l.supplier_quote_ref,
+    supplier_quote_likely: l.supplier_quote_likely,
+    quote: l.quote,
+    page: l.page,
+    warning: l.warning,
+    amount_cents: l.amount_cents === null ? null : Number(l.amount_cents),
+    vat_cents: l.vat_cents === null ? null : Number(l.vat_cents),
+  }));
+  return {
+    error: Boolean(failed),
+    people: Object.fromEntries((members.data ?? []).map((m) => [m.user_id, m.full_name || m.email || "a team member"])) as Record<string, string>,
+    sections: (sections.data ?? []).map((s): SectionView => ({
+      section_key: s.section_key,
+      title: s.title,
+      version: s.version,
+      content: s.content,
+      status: s.status as SectionView["status"],
+      ai_generated: s.ai_generated,
+      needs: strings(s.needs),
+      warnings: strings(s.warnings),
+      fact_ids: strings(s.fact_ids),
+      requirement_ids: strings(s.requirement_ids),
+      edited_by: s.edited_by,
+      edited_at: s.edited_at,
+      reviewed_by: s.reviewed_by,
+      reviewed_at: s.reviewed_at,
+    })),
+    history: (history.data ?? [])
+      .filter((h) => h.kind === "PROPOSAL_SECTION")
+      .map((h) => ({ ref: h.ref, version: h.version, change: h.change, changed_by: h.changed_by, changed_at: h.changed_at })),
+    pricing:
+      pricing.data || lineViews.length > 0
+        ? {
+            lines: lineViews,
+            totals: {
+              lines: t?.lines ?? 0,
+              priced: t?.priced ?? 0,
+              subtotal_cents: Number(t?.subtotal_cents ?? 0),
+              vat_cents: Number(t?.vat_cents ?? 0),
+              total_cents: Number(t?.total_cents ?? 0),
+              complete: Boolean(t?.complete),
+            },
+            vat: {
+              treatment: (pricing.data?.vat_treatment ?? "NOT_STATED") as "EXCLUSIVE" | "INCLUSIVE" | "NOT_STATED",
+              stated: pricing.data?.vat_status === "STATED",
+              notes: strings(pricing.data?.notes),
+            },
+            confirmed: pricing.data?.confirmed_at ? { by: pricing.data.confirmed_by, at: pricing.data.confirmed_at } : null,
+          }
+        : null,
+  };
+}
+
 /** The uploaded documents the compliance check relied on; download links are signed on click. */
 async function bidPackLinks(supabase: Awaited<ReturnType<typeof getServerSupabase>>, compliance: unknown): Promise<DocumentLinks> {
   const items = (compliance as { items?: Array<{ document_id?: string | null }> } | null)?.items ?? [];
@@ -327,6 +504,46 @@ async function bidPackLinks(supabase: Awaited<ReturnType<typeof getServerSupabas
 }
 
 type Tender = { title: string; reference_number: string | null; issuing_organisation: string; closing_at: string; id: string };
+
+/**
+ * What "Apply with TenderOS" needs: shown only for an approved real bid that
+ * is delivered through a portal, before it closes, to members who may use the
+ * browser helper. The portal host is the one TenderOS will open; the last
+ * report from the helper ("Prepared by TenderOS at ...") comes from the tender's
+ * events.
+ */
+async function applyData(
+  supabase: Awaited<ReturnType<typeof getServerSupabase>>,
+  ctx: AppContext,
+  tender: Tender & { submission_method: string; submission_destination: string | null; source_url: string | null },
+  submission: { status: string; is_simulation: boolean } | null,
+  submissionOutput: unknown,
+): Promise<{ portalHost: string | null; sensitiveAvailable: boolean; prepared: PreparedSummary | null } | null> {
+  if (!submission || submission.status !== "ACTION_REQUIRED" || submission.is_simulation) return null;
+  if (tender.submission_method !== "ELECTRONIC_PORTAL" || !canOperate(ctx.role)) return null;
+  if (new Date(tender.closing_at).getTime() <= Date.now()) return null;
+
+  const portal = resolvePortalUrl(tender, { allowLocalhost: process.env.NODE_ENV !== "production" });
+  const attachmentIds = ((submissionOutput as { attachments?: Array<{ document_id: string }> } | null)?.attachments ?? []).map((a) => a.document_id);
+  const [{ data: event }, { data: docs }] = await Promise.all([
+    supabase
+      .from("agent_events")
+      .select("created_at,event_type,payload")
+      .eq("tender_id", tender.id)
+      .eq("event_type", "BID_FORM_PREPARED")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    canAdminister(ctx.role) && attachmentIds.length
+      ? supabase.from("company_documents").select("doc_type").in("id", attachmentIds).is("archived_at", null)
+      : Promise.resolve({ data: [] as Array<{ doc_type: string }> }),
+  ]);
+  return {
+    portalHost: portal.ok ? portal.host : null,
+    sensitiveAvailable: (docs ?? []).some((d) => isSensitiveDocType(d.doc_type)),
+    prepared: parsePreparedEvent(event),
+  };
+}
 
 /** Everything the delivery panel needs; the covering message uses only facts on file and leaves out what is missing. */
 async function deliveryData(supabase: Awaited<ReturnType<typeof getServerSupabase>>, orgId: string, userId: string, tender: Tender, submissionOutput: unknown) {

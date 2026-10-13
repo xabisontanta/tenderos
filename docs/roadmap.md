@@ -40,11 +40,22 @@ existing zod schemas, token and cost tracking into `cost_usage`, budget
 enforcement (monthly and per tender), prompt and response logging with
 redaction. Simulation mode stays available and remains the default.
 
+Status: the execution layer is built (Anthropic client, structured output with
+one repair, real cost into `cost_usage` and the daily gate, redacted call logs,
+guardrails, `allowedTools` enforcement, five AI executors, an evaluation
+harness). Still to do: the `ai_enabled` column and settings screen, monthly and
+per-tender budgets, and ZAR cost display. See `docs/ai-agents.md`.
+
 ## Phase 4: tender ingestion
 
 Upload tender packs (PDF, DOCX), text extraction, requirement extraction with
 page references, amendments and briefing notes. Tender Analyst and
 Qualification Agent run on real documents.
+
+Status: the Tender Analyst already extracts requirements with verified quotes
+and page or section from any `DocumentSource` (`agents/runtime/ai/documents.ts`).
+What is missing is the source itself: downloading the pack, text extraction and
+the ingestion screens.
 
 ## Phase 5: discovery connectors
 

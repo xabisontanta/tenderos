@@ -1,0 +1,15 @@
+# One line-ending convention on every platform. Migrations in particular are
+# patched by text replacement in later migrations (014, 016), so CRLF on a
+# Windows checkout changes what they do. Keep everything LF in the working tree.
+* text=auto eol=lf
+
+# Binary assets: never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.zip binary

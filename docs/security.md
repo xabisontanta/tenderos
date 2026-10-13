@@ -16,27 +16,60 @@ append-only record of every consequential action.
 
 ## Authorisation
 
-| Action                                                 | owner | admin | operator | viewer |
-| ------------------------------------------------------ | ----- | ----- | -------- | ------ |
-| View everything in the organisation                    | ✓     | ✓     | ✓        | ✓      |
-| Create tenders, start or cancel workflows, retry tasks | ✓     | ✓     | ✓        |        |
-| Decide approvals                                       | ✓     | ✓     |          |        |
-| Pause, resume, disable or enable agents                | ✓     | ✓     |          |        |
-| Engage or release the kill switch                      | ✓     | ✓     |          |        |
-| Upload company documents                               | ✓     | ✓     | ✓        |        |
-| Verify or remove documents                             | ✓     | ✓     |          |        |
-| Open director IDs, bank letters, proof of address      | ✓     | ✓     |          |        |
-| Connect a sending mailbox, email or record a bid       | ✓     | ✓     |          |        |
+| Action                                                                              | owner | admin | operator | viewer |
+| ----------------------------------------------------------------------------------- | ----- | ----- | -------- | ------ |
+| View everything in the organisation                                                 | ✓     | ✓     | ✓        | ✓      |
+| Create tenders, start or cancel workflows, retry tasks                              | ✓     | ✓     | ✓        |        |
+| Decide approvals                                                                    | ✓     | ✓     |          |        |
+| Pause, resume, disable or enable agents                                             | ✓     | ✓     |          |        |
+| Engage or release the kill switch                                                   | ✓     | ✓     |          |        |
+| Upload company documents                                                            | ✓     | ✓     | ✓        |        |
+| Verify or remove documents                                                          | ✓     | ✓     |          |        |
+| Open director IDs, bank letters, proof of address                                   | ✓     | ✓     |          |        |
+| Connect a sending mailbox, email or record a bid                                    | ✓     | ✓     |          |        |
+| Change a bid's delivery details after it went for approval (withdraws the approval) | ✓     | ✓     |          |        |
+| Change operators' and viewers' roles, remove operators and viewers                  | ✓     | ✓     |          |        |
+| Make someone an owner or an admin, change or remove an owner or an admin            | ✓     |       |          |        |
+| Leave the organisation (never the last owner)                                       | ✓     | ✓     | ✓        | ✓      |
+| Invite operators and viewers, resend or withdraw their invitations                  | ✓     | ✓     |          |        |
+| Invite admins, resend or withdraw their invitations                                 | ✓     |       |          |        |
 
 The UI hides controls a role cannot use, but the RPC is the enforcement point.
 Integration tests cover role refusals and cross-tenant isolation.
+
+### Team management
+
+`change_member_role`, `remove_member` and `list_members` (migration 060) are the only ways to change
+membership from a browser; `organisation_members` has no write grant. Both writers are rate limited and audited
+(`member.role_changed`, `member.removed`). An admin can step another admin down or remove one, but only an owner
+can make anyone an owner or an admin, and nobody but an owner touches an owner. An organisation always keeps an
+owner: the functions check it under an advisory lock and a lock on the owners' rows, so two owners demoting each
+other at once cannot leave none, and a trigger (`organisation_members_keep_owner`) refuses every other path
+(direct SQL, a user deletion) unless the organisation row is already gone or the POPIA erasure functions are
+running (`app.erasure`). Ownership is transferred by making the new person an owner and then stepping down.
+Removing a member revokes their browser pairing codes and disconnects their mailboxes (the credential in
+Vault goes with the mailbox row); dropping from admin to operator or viewer disconnects the mailboxes too, since
+only owners and admins connect one. Email addresses come from `auth.users` through `list_members` and are sent
+to owners and admins only.
+
+Invitations (migration 061, flow in `docs/auth.md`): the token is random (256 bits), stored only as a SHA-256 hash that
+browsers cannot select, shown to the inviter once, valid for 7 days and bound to one address. Accepting needs the
+confirmed sign-in address to equal the invited one, so a leaked link is useless to anyone else. Only owners invite admins;
+nobody invites an owner. The token travels in an httpOnly SameSite=Lax cookie and never in logs. Limits are inside the RPCs:
+20 invitations an hour per person, 50 pending per organisation, 5 a day to any one address.
 
 ## Agents
 
 - Data-category grants per agent, checked before every step
   (`authoriseExecutor`). Sensitive categories (director personal data,
   banking, proof of address) are granted only to the Document Manager.
-- Tool allow-lists per agent.
+- Tool allow-lists per agent, enforced in the runtime (`ctx.tools`): a tool
+  that is not on the stored list is never run and is logged as a `TOOL_REFUSED`
+  WARNING.
+- Model prompts: built only through a data-category policy that refuses
+  director personal data, bank details, proof of address and ID numbers;
+  third-party text is wrapped as data; secrets and document text are never
+  logged (`docs/ai-agents.md`).
 - Agents write only through the worker, never through the browser.
 - Kill switch, per-agent pause and disable, loop guard, daily budget.
 - No automatic submission: a human approval is required by the workflow and
@@ -60,6 +93,43 @@ Integration tests cover role refusals and cross-tenant isolation.
   decrypts, for the member who connected the mailbox. SMTP hosts must resolve
   to public addresses and connections require TLS 1.2 or later.
 
+## Tender documents (outbound fetching)
+
+The worker downloads the files a tender portal lists, so it makes requests to addresses it did not choose. What
+limits that (`lib/tender-documents`, `tests/unit/tender-document-fetcher.test.ts`):
+
+- Links come only from discovery (`tenders.documents` cannot be written from a browser), and are re-checked at fetch
+  time: https, a named host that is the tender's own source host or in `TENDER_DOCUMENT_HOSTS` (default
+  `www.etenders.gov.za`), no credentials, no explicit port, no address literal.
+- The name is resolved by the worker and every address must be public (`lib/security/public-address.ts`: private,
+  loopback, link-local and cloud-metadata, shared, documentation, multicast and reserved ranges, IPv4 inside IPv6
+  included). The TLS connection is pinned to the checked address and the connected peer is checked again, so a name
+  that changes its answer cannot move the request inside the network. Redirects are followed by hand, same host over
+  https only, with every check repeated; at most three.
+- No cookies, credentials or compression are sent; one 30 s deadline covers the whole download; the body stops at
+  25 MB whatever the headers claim.
+- The bytes decide the file type, not the name (`sniff.ts`). Only PDFs are stored. Stored under
+  `<organisation_id>/<tender_id>/<sha256>.pdf` in the private `tender-documents` bucket: members of the organisation
+  read (a function checks that a downloaded row exists), nobody writes from a browser, the service role writes.
+- Neither the link, nor its query, nor the server's words reach a log line, an event or a stored error.
+- Not covered: the fetcher trusts the portal's own TLS certificate chain like any browser would, and a hostile
+  document is handled as untrusted data by the AI layer, not scanned for malware (files are stored, never opened or
+  executed by TenderOS, and only PDFs are sent on).
+
+## Bid content (proposal text and prices)
+
+- Browsers read their organisation's rows through RLS and write only through six role-checked functions (`save_proposal_section`,
+  `set_proposal_section_review`, `save_pricing_line`, `add_pricing_line`, `remove_pricing_line`, `set_pricing_confirmed`):
+  owners, admins and operators, rate limited, `private.require_aal2`, a version check against lost updates, an audit row per
+  change (section key, lengths and amounts, never the text), and an append-only history (`bid_content_history`: no write
+  privilege for any API role).
+- Money is whole cents. The browser never sends a float: the server action parses what was typed, the database checks the
+  range (R10 000 000 000 a line, three decimals of quantity) and computes amounts and VAT in generated columns. A quantity
+  the tender prints cannot be changed.
+- Editing is gated by the tender's status (`private.prepare_bid_edit`): not for a simulated tender, not once the bid is
+  approved or closed, and an edit while it waits for approval withdraws the approval. `edited_by`, `reviewed_by`,
+  `confirmed_by` and `changed_by` are `on delete set null`, so erasing a person leaves the content and drops the link.
+
 ## Web hardening
 
 - Content-Security-Policy with a per-request nonce and `strict-dynamic`;
@@ -72,10 +142,27 @@ Integration tests cover role refusals and cross-tenant isolation.
 - Rate limits (fixed window, stored in Postgres) inside every
   state-changing RPC and on tender inserts, so calling the API directly is
   limited the same as using the app. An integration test fails if an RPC
-  loses its limit. Sign-in and sign-up rely on Supabase Auth's built-in rate
-  limits.
+  loses its limit.
+- Sign-in, sign-up and password reset are unauthenticated, so the app limits
+  them itself, per visitor address and per email, and can require a
+  Cloudflare Turnstile CAPTCHA. Subjects are HMACs, never raw addresses or
+  emails; the limiter fails closed. Supabase Auth's own limits stay on as a
+  second layer but see one address for every visitor, because the calls come
+  from the server. Details and the hosted-project checklist: `docs/auth.md`.
+- Auth emails link to `APP_URL`, never to a request header.
+- New accounts must confirm their email address (a registered address looks
+  like a new one at sign-up) and accept the terms and privacy notice; the
+  acceptance (document version, time, keyed hash of the network address) is a
+  database record that browsers cannot write. The texts are drafts until an
+  attorney reviews them.
 - Open-redirect protection on the `next` parameter (`lib/safe-redirect.ts`):
   only same-origin paths, no `//`, backslashes or control characters.
+- Multi-factor authentication: anyone can add an authenticator app (TOTP); a password-only session of someone who has one is
+  sent to `/mfa` before any other page. An owner can **require** one for the whole organisation: while that is on, approving, sending,
+  changing settings, managing the team, connecting mailboxes, pairing the browser helper and working with documents all need a
+  session that passed the challenge (`aal2`), enforced in the database (`private.require_aal2`, SQLSTATE P0403, no-op for the worker)
+  and again in the server actions that run as the service role. Directors' IDs, bank letters and proof of address also need it
+  to be read. A lost authenticator is reset by support, never by the app (`docs/auth.md`, "Lost device").
 - Passwords: at least 12 characters with letters and digits, checked in the
   app and by Supabase Auth. Hosted projects must also require email
   confirmation and secure password change (Authentication settings).
@@ -95,13 +182,16 @@ Integration tests cover role refusals and cross-tenant isolation.
 ## Audit
 
 `audit_logs` records actor type (user, agent, system), actor id, action,
-resource, correlation id and metadata. It is append-only by trigger.
-Retention is configurable (minimum 365 days, default about seven years).
+resource, correlation id and metadata. It is append-only by trigger (no
+update, delete or truncate), except that erasing a person clears the actor and
+what they typed, and the retention job deletes rows past their period.
+Retention is configurable (minimum 365 days, default about seven years). Erasing
+a person or an organisation, exporting their data and handling a breach are in
+`docs/popia-operations.md`.
 
 ## Not yet built (tracked in the roadmap)
 
 - Malware scanning of uploaded documents.
 - Removing unregistered uploads (files uploaded but never recorded).
-- MFA for owners and admins, invitations and member management.
 - Sentry error reporting (`SENTRY_DSN`) and alerting.
 - Signed webhooks using `WORKFLOW_SECRET`.

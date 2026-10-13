@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { canAdminister, requireContext } from "@/lib/data/context";
+import { requireAal2 } from "@/lib/auth/require-aal2";
 import { serverEnv } from "@/lib/env";
 import { exchangeGoogleCode, googleConfig, OAUTH_COOKIE } from "@/lib/email/gmail";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -21,6 +22,8 @@ export async function GET(req: NextRequest) {
     return res;
   };
   const ctx = await requireContext();
+  // The session may have lost its second factor since the start of the flow (or the requirement came on in between).
+  if (await requireAal2(ctx)) return done("verify");
   const cfg = googleConfig();
   let saved: { state?: string; verifier?: string; org?: string; user?: string } = {};
   try {

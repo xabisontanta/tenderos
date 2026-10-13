@@ -61,6 +61,15 @@ export const USER_SETTABLE_STATUSES: readonly TenderStatus[] = ["CANCELLED", "AR
 /** Coarse pipeline stage used for dashboard grouping. */
 export type PipelineStage = "new" | "qualifying" | "preparing" | "approval" | "submitted" | "won" | "lost" | "closed";
 
+export const PIPELINE_STAGES: readonly PipelineStage[] = ["new", "qualifying", "preparing", "approval", "submitted", "won", "lost", "closed"];
+
+/** Tender counts per pipeline stage from counts per status (the database's own totals). Statuses it does not know are ignored. */
+export function stageCounts(byStatus: Record<string, number>): Record<PipelineStage, number> {
+  const out = Object.fromEntries(PIPELINE_STAGES.map((s) => [s, 0])) as Record<PipelineStage, number>;
+  for (const status of ALL_TENDER_STATUSES) out[pipelineStage(status)] += Number(byStatus[status] ?? 0);
+  return out;
+}
+
 export function pipelineStage(status: TenderStatus): PipelineStage {
   switch (status) {
     case "DISCOVERED":
