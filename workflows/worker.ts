@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Pool, PoolClient } from "@/lib/db/pool";
 import type { Logger } from "@/lib/log";
 import { backoffMs } from "./retry";
-import { WorkflowEngine, type EngineAiOptions, type Job, type JobOutcome } from "./engine";
+import { WorkflowEngine, type EngineAiOptions, type EngineDocumentOptions, type Job, type JobOutcome } from "./engine";
 import type { Fetcher } from "@/agents/discovery/etenders";
 
 export interface WorkerOptions {
@@ -17,6 +17,8 @@ export interface WorkerOptions {
   discovery?: { maxInvalidRatio?: number };
   /** AI wiring (model client, tender document source, environment). Tests inject fakes; production uses the defaults. */
   ai?: EngineAiOptions;
+  /** Tender document fetching (the fetcher and Storage). Tests inject fakes; production uses the defaults. */
+  documents?: EngineDocumentOptions;
 }
 
 /**
@@ -44,6 +46,7 @@ export class Worker {
       fetcher: opts.fetcher,
       discovery: opts.discovery,
       ai: opts.ai,
+      documents: opts.documents,
     });
   }
 

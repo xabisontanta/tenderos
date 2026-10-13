@@ -93,21 +93,26 @@ export function withTaskCostCeiling(config: AiConfig, usd: number): AiConfig {
 }
 
 /**
- * Whether AI execution is switched on for an organisation. The settings column
- * `ai_enabled` decides when it exists; until it does, the deployment flag
- * AI_ENABLED=true does. Off unless explicitly on.
+ * Whether AI execution is switched on for an organisation. Two switches must both be on:
+ *   - the deployment's kill switch, `AI_ENABLED=true` in the environment of whatever runs the worker, and
+ *   - the organisation's own `system_settings.ai_enabled`, which an owner or admin sets in Settings after reading
+ *     what is sent to Anthropic (set_ai_settings).
+ * Either one off, or missing, means the rules-only executors run. There is no fallback to the old behaviour of the
+ * environment flag deciding alone.
  */
 export function resolveAiEnabled(settings: object | null | undefined, env: Env = process.env): boolean {
-  const column = (settings as Record<string, unknown> | null | undefined)?.ai_enabled;
-  if (typeof column === "boolean") return column;
-  return env.AI_ENABLED?.trim().toLowerCase() === "true";
+  if (env.AI_ENABLED?.trim().toLowerCase() !== "true") return false;
+  return (settings as Record<string, unknown> | null | undefined)?.ai_enabled === true;
 }
 
-/** Whether Anthropic web search may run for an organisation: its flag when the column exists, else the deployment flag. */
+/**
+ * Whether Anthropic web search may run for an organisation: AI is on (above), the organisation switched web research on
+ * (`ai_web_research_enabled`), and the deployment has not vetoed it with `AI_WEB_RESEARCH_ENABLED=false`.
+ */
 export function resolveWebResearchEnabled(settings: object | null | undefined, env: Env = process.env): boolean {
-  const column = (settings as Record<string, unknown> | null | undefined)?.ai_web_research_enabled;
-  if (typeof column === "boolean") return column;
-  return env.AI_WEB_RESEARCH_ENABLED?.trim().toLowerCase() === "true";
+  if (!resolveAiEnabled(settings, env)) return false;
+  if (env.AI_WEB_RESEARCH_ENABLED?.trim().toLowerCase() === "false") return false;
+  return (settings as Record<string, unknown> | null | undefined)?.ai_web_research_enabled === true;
 }
 
 export interface ResolvedModel {

@@ -12,10 +12,14 @@ explains how they are met. The provider is Anthropic.
 | Rules only (default) | A real tender, AI off                     | `simulated.ts` rules                         | $0, provider `rules`                      |
 | AI                   | A real tender, AI on for the organisation | `real.ts` for five steps, rules for the rest | Real tokens and USD, provider `anthropic` |
 
-AI is opt-in. The engine turns it on when `system_settings.ai_enabled` is true
-for the organisation, if that column exists, and otherwise when the deployment
-sets `AI_ENABLED=true`. The settings column and screen are a later task.
-Simulation runs never reach a model. Compliance, the Director and the
+AI is opt-in, with two switches that must both be on. `AI_ENABLED=true` in the
+worker's environment is the deployment's kill switch. `system_settings.ai_enabled`
+is the organisation's own switch: an owner or admin sets it in Settings, AI
+assistance (`set_ai_settings`), after ticking that they have read what is sent to
+Anthropic and that it is processed outside South Africa. The database refuses to
+switch it on while the daily AI budget is zero (the engine reads zero as no
+limit), asks for a second factor when the organisation requires one, rate limits
+the change and audits it. Simulation runs never reach a model. Compliance, the Director and the
 Submission Officer stay rule-based in every mode.
 
 `getExecutor(taskType, { simulation, aiEnabled })` in `agents/index.ts` picks
@@ -53,7 +57,7 @@ secrets (`supabase secrets set ANTHROPIC_API_KEY=...`).
 | Variable                                            | Meaning                                                                                                         |
 | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `ANTHROPIC_API_KEY`                                 | Required for AI. Held in a non-enumerable property so it cannot reach a log line or JSON.                       |
-| `AI_ENABLED`                                        | Deployment-wide switch until the settings column exists.                                                        |
+| `AI_ENABLED`                                        | The deployment's kill switch: AI runs only when this is `true` and the organisation's own switch is on.         |
 | `AI_MODEL_LOW` / `MID` / `HIGH`                     | The model for each cost tier. No model name is in the code.                                                     |
 | `AI_PRICE_LOW` / `MID` / `HIGH`                     | USD per million tokens, `input/output[/cacheRead[/cacheWrite]]`. Required: it is how cost is computed.          |
 | `AI_PRICE_OVERRIDE`                                 | Price for an agent's `model_override`.                                                                          |
@@ -63,7 +67,7 @@ secrets (`supabase secrets set ANTHROPIC_API_KEY=...`).
 | `AI_MAX_OUTPUT_TOKENS`, `AI_CHUNK_CHARS`            | Output ceiling per call and the size of a document part.                                                        |
 | `AI_MAX_TASK_COST_USD`                              | A task that has spent this starts no further call (default 2).                                                  |
 | `AI_HIGH_VALUE_ZAR`                                 | Tenders at or above this value move up one tier.                                                                |
-| `AI_WEB_RESEARCH_ENABLED`, `AI_WEB_SEARCH_COST_USD` | Web research switch and the per-search cost.                                                                    |
+| `AI_WEB_RESEARCH_ENABLED`, `AI_WEB_SEARCH_COST_USD` | `false` vetoes web research for the whole deployment; the per-search cost.                                      |
 
 Models confirmed against the `claude-api` skill and Anthropic's pricing page
 on 2026-10-12: LOW `claude-haiku-5-5` ($0.10 / $0.50 per million tokens, for
@@ -102,10 +106,12 @@ How the API is called, and why:
 **Job.** Read the tender documents and list what a bidder must do and provide.
 
 **Input.** The tender record and the documents from a `DocumentSource` (text per
-page, plain text, or a PDF). Real downloading and text extraction come with
-document ingestion; until then the engine uses a source with no documents and
-the analyst reports that gap. Large documents are split into parts that each
-fit one request, and the tier moves up for big packs or high-value tenders.
+page, plain text, or a PDF). In production the source is the tender's fetched
+PDFs (see "Tender documents" below), each sent as a PDF document block; the
+source also hands over one gap sentence per document it knew of but did not
+give (a file that failed, a Word file, a document left out of a large pack).
+Large documents are split into parts that each fit one request, and the tier
+moves up for big packs or high-value tenders.
 
 **Output.** `requirements` (category, text, mandatory, status, and for document
 items the `quote`, `page` or `section`, `quote_verified`, optional `date_iso`
@@ -120,8 +126,10 @@ including each bill-of-quantities line. The tender-record requirements stay.
   given and it has a page or section. Otherwise it is kept as
   `REQUIRES_CONFIRMATION` with the reason, counted in a gap, and reported in an
   `AI_CITATIONS_DOWNGRADED` event. A wrong page is corrected to the real one.
-- A PDF with no text layer is read, but every item from it is
-  `REQUIRES_CONFIRMATION`, because there is no text to check a quote against.
+- A PDF is read as a document block, with no extracted text, so every item from
+  it is `REQUIRES_CONFIRMATION`: there is no text to check a quote against.
+  Fetched tender documents are all in this position until text extraction is
+  added (it needs a PDF library, which this release does not have).
 - Dates are compared with the tender record and with each other. A conflict is
   reported and every involved item (and the record's own requirement) goes to
   `REQUIRES_CONFIRMATION`; the analyst never picks a date.
@@ -131,9 +139,51 @@ including each bill-of-quantities line. The tender-record requirements stay.
   line is never trusted.
 
 **Failure.** A refusal, an output that fails validation after one repair, a
-budget stop or a refused tool fails the task without a retry. A part that is
-too large is reported as a gap and the rest is analysed; if nothing can be read
-the task fails.
+budget stop before anything was read or a refused tool fails the task without a
+retry. A part that is too large, a PDF the service rejects (too many pages,
+damaged) and a document that would take the task past its cost ceiling are
+reported as gaps and the rest is analysed; if nothing can be read the task
+fails.
+
+### Tender documents (`lib/tender-documents/`)
+
+The eTenders feed lists each tender's documents (`tenders.documents`). A worker job
+`tender.documents.fetch` downloads them into the private `tender-documents` bucket
+(`<organisation_id>/<tender_id>/<sha256>.pdf`) and records each on
+`tender_documents` with a status: `PENDING`, `DOWNLOADED`, `FAILED`,
+`UNSUPPORTED` (Word, Excel, zip and other types, password-protected PDFs, a copy
+of a file already held), `TOO_LARGE`. The tender page has a Documents tab with
+the status of each and Fetch / Retry.
+
+- **When.** Discovery queues the job when it stores or refreshes a tender that
+  has document links, only for organisations that have AI assistance on (a scan
+  can store hundreds of tenders and the files are of no use without AI). A
+  person with the operator role or above can always press **Fetch documents**
+  (`fetch_tender_documents`: rate limited, audited, second factor when required).
+  The Tender Analyst also makes sure its tender's documents are fetched before it
+  reads them, once per tender at a time (an advisory lock), so a bid that starts
+  right after a scan does not read an empty pack.
+- **The fetcher** (`fetcher.ts`, `policy.ts`, `transport.ts`) takes https links
+  only, to the tender's own host or `TENDER_DOCUMENT_HOSTS` (default
+  `www.etenders.gov.za`); no credentials, ports or address literals; resolves the
+  name itself and refuses any private, loopback, link-local, metadata or
+  reserved address (`lib/security/public-address.ts`, shared with the SMTP
+  host check); connects to the checked address; follows redirects by hand, same
+  host and https only, checking again on every hop; sends no cookies and refuses
+  compression; one 30 s deadline; stops at 25 MB. Only discovery writes
+  `tenders.documents`, so a member cannot make the worker fetch an arbitrary URL.
+- **Content** is decided by the bytes, not the name (`sniff.ts`): a file named
+  `.pdf` that is an HTML error page is `FAILED`, not stored. Only PDFs are stored
+  and read. Document text and links never reach the log or an event; the stored
+  error is a sentence that does not repeat the URL.
+- **What the Analyst gets** (`source.ts`, `select.ts`): the tender's `DOWNLOADED`
+  PDFs as PDF blocks, up to 8 documents and 40 MB per tender, in a fixed order
+  (invitation and bid documents, then scope and price schedules, then the rest,
+  then drawings and photos; ties by file name, then id). A PDF over 18 MB or
+  with more than 100 pages is not sent. Every document not read, whatever the
+  reason, is a gap in the analysis.
+- **Erasure.** Erasing an organisation removes its folder in both buckets before
+  the rows go (`lib/privacy/erasure.ts`).
 
 ### Qualification Agent
 
@@ -217,6 +267,41 @@ cites nothing for, or cites incomplete content for, is an open issue. The model
 cannot produce a `FAIL` and cannot remove an issue. No analysed requirements is
 itself an open issue.
 
+### Bid content: where a person takes over (`lib/domain/bid-content.ts`, `features/bid/`)
+
+The Proposal Writer's and Pricing Analyst's outputs are drafts. On a real tender the worker seeds them into editable tables
+when each step completes (`workflows/bid-content.ts`, migration 072), and from then on the person's work is the bid.
+
+- **Proposal tab.** Each section shows its status (`DRAFT`, `MISSING_INFORMATION`, `REVIEWED`), an "AI-generated draft" flag
+  while the text is the AI's and nobody has changed it, the company facts and tender requirements the draft cites, what is
+  still needed, any warning, who last edited and who reviewed it and when, and the history of versions. Saving text makes it
+  the person's (flag off, review cleared). **Mark as reviewed** is the person's statement that the section is right and
+  complete; it needs text. Only a reviewed section counts as complete (`DRAFTED`) when QA and the Submission Officer read the
+  proposal; an unreviewed draft, however the AI labelled it, is `REQUIRES_CONFIRMATION`.
+- **Pricing tab.** Lines come from the analysed price schedule (description, unit and the quantity as printed, the tender's own
+  line and page); a person can add lines of their own and remove only those. A person types the unit price (excluding VAT, in
+  rands, stored as whole cents) and, where they have one, the supplier's quote reference; where the tender prints no quantity
+  they enter one, but a printed quantity cannot be changed. The database computes each line's amount (quantity times unit
+  price, rounded half up to a cent) and VAT at 15 percent (rounded half up per line), and `bid_pricing_totals` sums the lines
+  in integer cents, so the totals always equal the lines shown; nothing is computed in the browser and
+  `lib/domain/bid-money.ts` (BigInt) is tested against the database on the same cases. A banner says figures are never
+  produced by AI. A person confirms the schedule when every line has a quantity and a price (R0.00 is allowed); changing any
+  figure afterwards takes the confirmation away. A confirmed, complete schedule is `READY_FOR_APPROVAL` to QA; anything else is
+  `REQUIRES_CONFIRMATION`.
+- **Writes** go through `save_proposal_section`, `set_proposal_section_review`, `save_pricing_line`, `add_pricing_line`,
+  `remove_pricing_line` and `set_pricing_confirmed`: owners, admins and operators; rate limited; behind the second factor when
+  required; every change audited (lengths and amounts, not the text) and kept as a version with who and when; a version
+  check refuses an edit made from an out-of-date screen.
+- **What an edit does to the bid.** Editing while the bid waits for approval withdraws the approval and sends the tender back to
+  `PREPARING_BID` (as changing the delivery details does); the person then presses **Prepare bid again**, QA runs on the
+  new content and the approver sees it afresh. An approved, delivered or closed bid cannot be edited. A re-run of the
+  Proposal Writer or Pricing Analyst never overwrites a section a person edited or reviewed, or a figure a person entered.
+- **How QA reads it.** The engine overlays the person's content on the step outputs a task receives
+  (`overlayBidContent`), so the rule checks, the coverage evidence (`section:` and `pricing:` ids, complete only when reviewed
+  or confirmed) and the Submission Officer's package hash all see what the person wrote. Simulated tenders are unchanged.
+- **Not built:** attaching quote documents to a line, per-line VAT treatment, a diff between versions, and editing the
+  outline (the six sections are fixed).
+
 ### Web research (Scout and Intelligence Analyst)
 
 `researchWeb` (`agents/runtime/ai/web-research.ts`) uses Anthropic's
@@ -236,7 +321,9 @@ LOW-tier agent is moved to MID for it. No workflow step calls it yet.
   markers, no tools that change anything, a person approving every submission)
   carry the weight.
 - Figure grounding catches invented numbers, not invented words.
-- A PDF without a text layer cannot be verified until ingestion extracts text.
+- A PDF cannot be verified until text is extracted from it, so every requirement
+  taken from a fetched tender document is `REQUIRES_CONFIRMATION` and QA counts
+  it as an open issue until a person has confirmed it.
 
 ## Failure behaviour
 
@@ -338,7 +425,10 @@ quotes from the same constants (so they cannot drift), and add it to
 - The Edge worker loads the SDK through `npm:@anthropic-ai/sdk` (pinned to the
   installed version by `scripts/build-edge-worker.mjs`). Rebuild with
   `npm run build:edge-worker` after changing the SDK version.
-- Not built yet: document download and text extraction, the `ai_enabled` and
-  `ai_web_research_enabled` columns and settings screen, proposal and pricing
-  editing screens, ZAR cost display, monthly and per-tender budgets, and a
-  workflow step that calls web research.
+- Not built yet: text extraction from PDFs (so quotes can be verified), reading
+  Word, Excel and zip files, a way for a person to confirm an unverified
+  requirement, ZAR cost display, monthly and per-tender budgets, and a workflow step that calls web
+  research.
+- A document the portal lists but TenderOS could not fetch shows on the tender's
+  Documents tab with the reason; the job's own failures show in the worker log
+  (`tender document not fetched`, with the reason and no link).

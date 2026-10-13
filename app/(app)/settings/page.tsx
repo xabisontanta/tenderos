@@ -15,6 +15,8 @@ import { SecuritySettings, type FactorRow } from "@/features/security/security-s
 import { RequireMfaSwitch } from "@/features/security/require-mfa-switch";
 import { InvitationsPanel, type InvitationRow } from "@/features/team/invitations-panel";
 import { configuredModels } from "@/agents/runtime/model-routing";
+import { describeAiDeployment } from "@/agents/runtime/ai/deployment";
+import { AiAssistance } from "@/features/settings/ai-assistance";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -55,6 +57,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         .order("created_at", { ascending: false })
     : { data: [] };
   const models = configuredModels();
+  // Summed in the database. If it cannot be read the card says so instead of showing zero.
+  const { data: spendRows, error: spendError } = await supabase.rpc("ai_spend", { p_org: ctx.organisation.id });
+  const spendRow = spendError ? null : (spendRows ?? [])[0];
+  const spend = spendRow ? { today: Number(spendRow.today_usd), month: Number(spendRow.month_usd) } : null;
+  const deployment = describeAiDeployment();
 
   return (
     <>
@@ -142,19 +149,35 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Row k="Default retries per task" v={String(s.default_max_retries)} />
             <Row k="Audit retention" v={`${s.audit_retention_days} days`} />
             <p className="text-[11px] text-muted-foreground">
-              Real AI execution and live submission are not enabled in this release, so simulation mode cannot be turned off yet.
+              Simulated tenders never call AI. Whether real tenders use AI is set under AI assistance. TenderOS never submits a bid itself.
             </p>
+          </CardContent>
+        </Card>
+        <Card id="ai" className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>AI assistance</CardTitle>
+            <CardDescription>
+              Off until an owner or admin switches it on. Simulated tenders never use AI. A person reads everything the AI drafts, and a person approves every
+              submission.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AiAssistance
+              enabled={s.ai_enabled}
+              webResearch={s.ai_web_research_enabled}
+              dailyBudgetUsd={Number(s.daily_ai_budget_usd)}
+              canChange={canAdminister(ctx.role)}
+              spend={spend}
+              deployment={deployment}
+            />
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>AI budgets</CardTitle>
-            <CardDescription>
-              Real AI work stops and the run is blocked once the daily budget is spent. Monthly and per-tender limits are stored but not yet enforced.
-            </CardDescription>
+            <CardTitle>Other AI limits</CardTitle>
+            <CardDescription>Monthly and per-tender limits are stored but not yet enforced. The daily budget above is.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2 text-[13px]">
-            <Row k="Daily" v={formatUsd(Number(s.daily_ai_budget_usd))} />
             <Row k="Monthly" v={formatUsd(Number(s.monthly_ai_budget_usd))} />
             <Row k="Per tender" v={formatUsd(Number(s.per_tender_budget_usd))} />
             <Row k="Warn at" v={`${s.budget_warning_pct}%`} />

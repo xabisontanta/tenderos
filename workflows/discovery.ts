@@ -346,6 +346,7 @@ async function storeOne(
     ],
   );
   if (!rows[0]) return "unchanged";
+  await queueDocuments(c, rows[0].id);
   if (announce) {
     await db.emitEvent(c, {
       organisationId: run.organisation_id,
@@ -358,6 +359,15 @@ async function storeOne(
     });
   }
   return "created";
+}
+
+/**
+ * A tender that gained document links gets them listed and a fetch queued (private.queue_tender_documents). Only for
+ * organisations that have AI assistance on: the files are of no use without it, and a scan can store hundreds of tenders.
+ * A person can always press "Fetch documents" on the tender.
+ */
+async function queueDocuments(c: Tx, tenderId: string): Promise<void> {
+  await c.query("select private.queue_tender_documents($1)", [tenderId]);
 }
 
 async function autoStartWorkflows(pool: Pool, run: RunRow, log: Logger): Promise<number> {
@@ -483,6 +493,7 @@ async function refreshTender(c: Tx, prev: { id: string; closing_at: string }, po
     ],
   );
   if (!rows[0]) return false;
+  await queueDocuments(c, prev.id);
   if (new Date(prev.closing_at).getTime() !== new Date(t.closing_at).getTime()) {
     await c.query(`update public.approvals set expires_at = $2 where tender_id = $1 and status = 'PENDING'`, [prev.id, t.closing_at]);
     await db.emitEvent(c, {

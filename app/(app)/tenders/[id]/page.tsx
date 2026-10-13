@@ -11,6 +11,11 @@ import { HandoffList } from "@/features/operations/handoff-list";
 import { LiveRefresh } from "@/features/realtime/live-refresh";
 import { DeliveryDetails } from "@/features/tenders/delivery-details";
 import { TenderActions } from "@/features/tenders/tender-actions";
+import { TenderDocuments, type TenderDocumentRow } from "@/features/tenders/tender-documents";
+import { PricingEditor, type PriceLineView } from "@/features/bid/pricing-editor";
+import { ProposalEditor, type SectionView } from "@/features/bid/proposal-editor";
+import { analysisOutputSchema } from "@/agents/analysis/schema";
+import { bidEditState } from "@/lib/domain/bid-content";
 import { WorkflowTimeline } from "@/features/tenders/workflow-timeline";
 import {
   CompliancePanel,
@@ -45,7 +50,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   const { data: tender } = await supabase.from("tenders").select("*").eq("id", id).maybeSingle();
   if (!tender) notFound();
 
-  const [runs, history, approvals, handoffs, agents, submissions, events, costs] = await Promise.all([
+  const [runs, history, approvals, handoffs, agents, submissions, events, costs, tenderDocuments, bid] = await Promise.all([
     supabase.from("workflow_runs").select("*").eq("tender_id", id).order("created_at", { ascending: false }),
     supabase.from("tender_status_history").select("*").eq("tender_id", id).order("created_at"),
     supabase.from("approvals").select("*").eq("tender_id", id).order("requested_at", { ascending: false }),
@@ -54,7 +59,15 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
     supabase.from("submission_records").select("*").eq("tender_id", id).order("created_at", { ascending: false }),
     getRecentEvents(ctx.organisation.id, { tenderId: id, limit: 100 }),
     supabase.from("cost_usage").select("cost_usd,is_simulated").eq("tender_id", id),
+    supabase
+      .from("tender_documents")
+      .select("id,file_name,status,error,size_bytes,page_count,fetched_at")
+      .eq("tender_id", id)
+      .order("created_at")
+      .order("file_name"),
+    bidContent(supabase, ctx.organisation.id, id),
   ]);
+  const listedDocuments = Array.isArray(tender.documents) ? tender.documents.length : 0;
 
   const latestRun = runs.data?.[0] ?? null;
   const activeRun = (runs.data ?? []).find((r) => ["PENDING", "RUNNING", "WAITING_APPROVAL", "BLOCKED"].includes(r.status)) ?? null;
@@ -128,6 +141,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="qualification">Qualification</TabsTrigger>
               <TabsTrigger value="requirements">Requirements</TabsTrigger>
+              <TabsTrigger value="documents">Documents</TabsTrigger>
               <TabsTrigger value="compliance">Compliance</TabsTrigger>
               <TabsTrigger value="proposal">Proposal</TabsTrigger>
               <TabsTrigger value="pricing">Pricing</TabsTrigger>
@@ -203,14 +217,63 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
                 <TabsContent value="requirements" className="mt-0">
                   <RequirementsPanel output={output("analysis")} />
                 </TabsContent>
+                <TabsContent value="documents" className="mt-0">
+                  {tenderDocuments.error ? (
+                    <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+                      The documents could not be loaded. Try again in a moment.
+                    </p>
+                  ) : (
+                    <TenderDocuments
+                      tenderId={tender.id}
+                      rows={(tenderDocuments.data ?? []) as TenderDocumentRow[]}
+                      listed={listedDocuments}
+                      canFetch={canOperate(ctx.role)}
+                      isSimulation={tender.is_simulation}
+                      aiEnabled={ctx.settings.ai_enabled}
+                    />
+                  )}
+                </TabsContent>
                 <TabsContent value="compliance" className="mt-0">
                   <CompliancePanel output={output("compliance")} links={documentLinks} />
                 </TabsContent>
                 <TabsContent value="proposal" className="mt-0">
-                  <ProposalPanel output={output("proposal")} />
+                  {bid.error ? (
+                    <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+                      The proposal could not be loaded. Try again in a moment.
+                    </p>
+                  ) : bid.sections.length > 0 && !tender.is_simulation ? (
+                    <ProposalEditor
+                      tenderId={tender.id}
+                      sections={bid.sections}
+                      history={bid.history}
+                      requirements={requirementTexts(output("analysis"))}
+                      people={bid.people}
+                      editState={bidEditState(status)}
+                      canEdit={canOperate(ctx.role)}
+                    />
+                  ) : (
+                    <ProposalPanel output={output("proposal")} />
+                  )}
                 </TabsContent>
                 <TabsContent value="pricing" className="mt-0">
-                  <PricingPanel output={output("pricing")} />
+                  {bid.error ? (
+                    <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+                      The pricing schedule could not be loaded. Try again in a moment.
+                    </p>
+                  ) : bid.pricing && !tender.is_simulation ? (
+                    <PricingEditor
+                      tenderId={tender.id}
+                      lines={bid.pricing.lines}
+                      totals={bid.pricing.totals}
+                      vat={bid.pricing.vat}
+                      confirmed={bid.pricing.confirmed}
+                      people={bid.people}
+                      editState={bidEditState(status)}
+                      canEdit={canOperate(ctx.role)}
+                    />
+                  ) : (
+                    <PricingPanel output={output("pricing")} />
+                  )}
                 </TabsContent>
                 <TabsContent value="qa" className="mt-0">
                   <QaPanel output={output("qa")} />
@@ -342,6 +405,93 @@ function Item({ k, v }: { k: string; v: string }) {
       <dd>{v}</dd>
     </div>
   );
+}
+
+/** Requirement id to its text, from the analysis step, so the proposal can show what each section answers. */
+function requirementTexts(analysis: unknown): Record<string, string> {
+  const parsed = analysisOutputSchema.safeParse(analysis);
+  return parsed.success ? Object.fromEntries(parsed.data.requirements.map((r) => [r.id, r.text])) : {};
+}
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+/**
+ * What the proposal and pricing screens show: the sections and schedule lines a person reviews and enters, the bid's totals as
+ * the database computed them, the history of changes, and the team's names for "edited by" and "reviewed by". Errors are
+ * returned, not hidden: a screen that cannot load says so.
+ */
+async function bidContent(supabase: Awaited<ReturnType<typeof getServerSupabase>>, orgId: string, tenderId: string) {
+  const [sections, pricing, lines, totals, history, members] = await Promise.all([
+    supabase.from("bid_proposal_sections").select("*").eq("tender_id", tenderId).order("position"),
+    supabase.from("bid_pricing").select("*").eq("tender_id", tenderId).maybeSingle(),
+    supabase.from("bid_pricing_lines").select("*").eq("tender_id", tenderId).order("position"),
+    supabase.rpc("bid_pricing_totals", { p_tender_id: tenderId }),
+    supabase.from("bid_content_history").select("kind,ref,version,change,changed_by,changed_at").eq("tender_id", tenderId).order("id").limit(500),
+    supabase.rpc("list_members", { p_org: orgId }),
+  ]);
+  const failed = [sections, pricing, lines, totals, history].find((r) => r.error);
+  const t = (totals.data ?? [])[0];
+  const lineViews: PriceLineView[] = (lines.data ?? []).map((l) => ({
+    id: l.id,
+    version: l.version,
+    source: l.source as PriceLineView["source"],
+    description: l.description,
+    item_ref: l.item_ref,
+    quantity: l.quantity === null ? null : Number(l.quantity),
+    quantity_printed: l.quantity_printed,
+    unit: l.unit,
+    unit_price_cents: l.unit_price_cents === null ? null : Number(l.unit_price_cents),
+    supplier_quote_ref: l.supplier_quote_ref,
+    supplier_quote_likely: l.supplier_quote_likely,
+    quote: l.quote,
+    page: l.page,
+    warning: l.warning,
+    amount_cents: l.amount_cents === null ? null : Number(l.amount_cents),
+    vat_cents: l.vat_cents === null ? null : Number(l.vat_cents),
+  }));
+  return {
+    error: Boolean(failed),
+    people: Object.fromEntries((members.data ?? []).map((m) => [m.user_id, m.full_name || m.email || "a team member"])) as Record<string, string>,
+    sections: (sections.data ?? []).map((s): SectionView => ({
+      section_key: s.section_key,
+      title: s.title,
+      version: s.version,
+      content: s.content,
+      status: s.status as SectionView["status"],
+      ai_generated: s.ai_generated,
+      needs: strings(s.needs),
+      warnings: strings(s.warnings),
+      fact_ids: strings(s.fact_ids),
+      requirement_ids: strings(s.requirement_ids),
+      edited_by: s.edited_by,
+      edited_at: s.edited_at,
+      reviewed_by: s.reviewed_by,
+      reviewed_at: s.reviewed_at,
+    })),
+    history: (history.data ?? [])
+      .filter((h) => h.kind === "PROPOSAL_SECTION")
+      .map((h) => ({ ref: h.ref, version: h.version, change: h.change, changed_by: h.changed_by, changed_at: h.changed_at })),
+    pricing:
+      pricing.data || lineViews.length > 0
+        ? {
+            lines: lineViews,
+            totals: {
+              lines: t?.lines ?? 0,
+              priced: t?.priced ?? 0,
+              subtotal_cents: Number(t?.subtotal_cents ?? 0),
+              vat_cents: Number(t?.vat_cents ?? 0),
+              total_cents: Number(t?.total_cents ?? 0),
+              complete: Boolean(t?.complete),
+            },
+            vat: {
+              treatment: (pricing.data?.vat_treatment ?? "NOT_STATED") as "EXCLUSIVE" | "INCLUSIVE" | "NOT_STATED",
+              stated: pricing.data?.vat_status === "STATED",
+              notes: strings(pricing.data?.notes),
+            },
+            confirmed: pricing.data?.confirmed_at ? { by: pricing.data.confirmed_by, at: pricing.data.confirmed_at } : null,
+          }
+        : null,
+  };
 }
 
 /** The uploaded documents the compliance check relied on; download links are signed on click. */

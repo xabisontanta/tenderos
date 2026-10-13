@@ -263,6 +263,16 @@ describe("every privileged function, with the requirement on", () => {
     });
     expect(mailbox.error).toBeNull();
     const tender = await createTender(f.owner.client, f.orgId, { reference_number: `MX-${Date.now()}` });
+    // Bid content for the calls on it (the tender is a simulation, so they stop at their own checks once past the authenticator).
+    await pool.query(
+      `insert into public.bid_proposal_sections (organisation_id, tender_id, section_key, title, status) values ($1, $2, 'methodology', 'Methodology', 'MISSING_INFORMATION')`,
+      [f.orgId, tender.id],
+    );
+    const { rows: lineRows } = await pool.query(
+      `insert into public.bid_pricing_lines (organisation_id, tender_id, source, description) values ($1, $2, 'PERSON', 'A line') returning id`,
+      [f.orgId, tender.id],
+    );
+    const lineId = lineRows[0].id as string;
     const { data: runId } = await f.owner.client.rpc("start_tender_workflow", { p_tender_id: tender.id });
     await drainOrg(worker, pool, f.orgId);
     const { data: approval } = await f.owner.client.from("approvals").select("id").eq("workflow_run_id", runId!).single();
@@ -301,6 +311,15 @@ describe("every privileged function, with the requirement on", () => {
       ["create_invitation", o, `select * from public.create_invitation($1, 'someone-else@tenderos.test', 'viewer')`, [f.orgId]],
       ["resend_invitation", o, `select * from public.resend_invitation($1)`, [invitationId]],
       ["revoke_invitation", o, `select public.revoke_invitation($1)`, [invitationId]],
+      ["set_ai_settings", a, `select public.set_ai_settings($1, true, false)`, [f.orgId]],
+      ["set_ai_budget", a, `select public.set_ai_budget($1, 6)`, [f.orgId]],
+      ["fetch_tender_documents", p, `select public.fetch_tender_documents($1)`, [tender.id]],
+      ["save_proposal_section", p, `select public.save_proposal_section($1, 'methodology', 'x', 1)`, [tender.id]],
+      ["set_proposal_section_review", p, `select public.set_proposal_section_review($1, 'methodology', true, 1)`, [tender.id]],
+      ["save_pricing_line", p, `select public.save_pricing_line($1, 100, 1, null, 1)`, [lineId]],
+      ["add_pricing_line", p, `select public.add_pricing_line($1, 'Another line', 'each', 1)`, [tender.id]],
+      ["remove_pricing_line", p, `select public.remove_pricing_line($1)`, [lineId]],
+      ["set_pricing_confirmed", p, `select public.set_pricing_confirmed($1, true)`, [tender.id]],
     ];
 
     await requireMfa(f.orgId, true);

@@ -15,6 +15,12 @@ export interface TenderDocument {
 
 export interface DocumentSource {
   listTenderDocuments(tenderId: string, opts: { signal: AbortSignal }): Promise<TenderDocument[]>;
+  /**
+   * The documents together with one plain sentence for each document the source knows of but did not hand over (a file that
+   * failed, is not a PDF, or was left out of a large pack), so the analysis reports them as gaps. A source without it is
+   * read with listTenderDocuments alone.
+   */
+  readTenderDocuments?(tenderId: string, opts: { signal: AbortSignal }): Promise<{ documents: TenderDocument[]; gaps: string[] }>;
 }
 
 /** The source used until ingestion lands: a tender has no documents. */

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { analysisOutputSchema, type AnalysisOutput, type ExtractionItem } from "@/agents/analysis/schema";
 import { tenderAnalysisReal } from "@/agents/analysis/real";
-import { AiInputTooLargeError, PromptPolicyError } from "@/agents/runtime/ai/errors";
-import type { TenderDocument } from "@/agents/runtime/ai/documents";
+import { AiBudgetError, AiInputTooLargeError, AiRequestError, PromptPolicyError } from "@/agents/runtime/ai/errors";
+import type { DocumentSource, TenderDocument } from "@/agents/runtime/ai/documents";
 import { ToolNotPermittedError, type ToolRefusal } from "@/agents/runtime/tool-access";
 import { FakeAiClient, type FakeReply } from "../support/fake-ai";
 import { FakeDocumentSource } from "../support/documents";
@@ -387,6 +387,84 @@ describe("Tender Analyst (real)", () => {
     });
     await result();
     expect(client.requests[0].model).toBe("model-high");
+  });
+
+  describe("a document source that says what it did not hand over", () => {
+    const withGaps = (docs: TenderDocument[], gaps: string[]): DocumentSource => ({
+      async listTenderDocuments() {
+        return docs;
+      },
+      async readTenderDocuments() {
+        return { documents: docs, gaps };
+      },
+    });
+    const runWith = (source: DocumentSource, replies: ConstructorParameters<typeof FakeAiClient>[0], env?: Record<string, string | undefined>) => {
+      const client = new FakeAiClient(replies);
+      const ctx = makeCtx({ agent: "tender_analyst", taskType: "analysis.extract", stepKey: "analysis", ai: makeAi(client, { documents: source, env }) });
+      return { client, result: () => tenderAnalysisReal.run(ctx) };
+    };
+    const SECOND: TenderDocument = {
+      id: "doc-2",
+      title: "Specification",
+      pages: [{ page: 1, text: "The contractor shall supply and lay 500 m of 110 mm pipe." }],
+    };
+    const PIPE = item({
+      category: "SCOPE",
+      text: "Supply and lay 500 m of 110 mm pipe",
+      document_id: "doc-2",
+      page: 1,
+      quote: "The contractor shall supply and lay 500 m of 110 mm pipe.",
+    });
+    const REFUSED = () => ({ throws: new AiRequestError("Anthropic rejected the request (HTTP 400)", 400, null) });
+
+    it("reports each as a gap next to the ones the analysis finds itself", async () => {
+      const gap = '"Bill of quantities.pdf" has 240 pages and the AI reads at most 100 pages of one document, so it was not read';
+      const { result } = runWith(withGaps([INVITATION], [gap]), [reply([CIDB])]);
+      const res = await result();
+      expect(res.output.gaps).toContain(gap);
+      expect(res.output.documents_analysed).toBe(1);
+    });
+
+    it("still reports them when nothing could be read, and makes no model call", async () => {
+      const { client, result } = runWith(withGaps([], ['"Invitation.pdf" could not be fetched: The portal no longer has this file']), []);
+      const res = await result();
+      expect(client.requests).toHaveLength(0);
+      expect(res.output.documents_analysed).toBe(0);
+      expect(res.output.gaps.join("\n")).toContain("could not be fetched");
+      expect(res.output.gaps.join("\n")).toMatch(/No tender documents were available/);
+    });
+
+    it("keeps what it has read when a later document would pass the task cost ceiling, and says what was left", async () => {
+      const { result } = runWith(withGaps([INVITATION, SECOND], []), [reply([CIDB])], { ...AI_ENV, AI_MAX_TASK_COST_USD: "0.0161" });
+      const res = await result();
+      expect(docReqs(res.output)).toHaveLength(1);
+      expect(res.output.documents_analysed).toBe(1);
+      expect(res.output.gaps.join("\n")).toMatch(/"Specification" was not analysed because this task reached its AI cost ceiling/);
+    });
+
+    it("fails with the budget error when the very first call would pass the ceiling", async () => {
+      const { result } = runWith(withGaps([INVITATION], []), [reply([CIDB])], { ...AI_ENV, AI_MAX_TASK_COST_USD: "0.000001" });
+      await expect(result()).rejects.toBeInstanceOf(AiBudgetError);
+    });
+
+    it("goes on after the service refuses one PDF (too many pages, damaged) and says which", async () => {
+      const damaged: TenderDocument = { id: "pdf-1", title: "Damaged tender", pdfBase64: "JVBERi0xLjQ=" };
+      const { result } = runWith(withGaps([damaged, SECOND], []), [REFUSED(), reply([PIPE])]);
+      const res = await result();
+      expect(docReqs(res.output)).toHaveLength(1);
+      expect(res.output.gaps.join("\n")).toMatch(/"Damaged tender" was rejected by the AI service/);
+    });
+
+    it("does not hide the refusal when every document is refused", async () => {
+      const damaged: TenderDocument = { id: "pdf-1", title: "Damaged tender", pdfBase64: "JVBERi0xLjQ=" };
+      const { result } = runWith(withGaps([damaged], []), [REFUSED()]);
+      await expect(result()).rejects.toBeInstanceOf(AiRequestError);
+    });
+
+    it("does not treat a refused text request as a refused PDF", async () => {
+      const { result } = runWith(withGaps([INVITATION], []), [REFUSED()]);
+      await expect(result()).rejects.toBeInstanceOf(AiRequestError);
+    });
   });
 
   it("fails when the AI runtime was not provided", async () => {

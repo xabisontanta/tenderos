@@ -59,6 +59,9 @@ async function realRun(orgId: string) {
   return { tender, runId: runId as string };
 }
 
+/** The organisation's own switch (set_ai_settings does this in the app). The deployment's AI_ENABLED is the other half. */
+const enableAi = (orgId: string) => pool.query(`update public.system_settings set ai_enabled = true where organisation_id = $1`, [orgId]);
+
 const costRows = async (runId: string) =>
   (
     await pool.query(
@@ -72,6 +75,7 @@ describe("AI execution on real tenders", () => {
     // One organisation per user is enforced in the database, so every test gets its own owner.
     owner = await createUser("ai-owner");
     const orgId = await bootstrapOrg(owner);
+    await enableAi(orgId);
     await pool.query(
       `insert into public.company_profiles (organisation_id, legal_name, cidb_grade, sectors, provinces) values ($1, 'Umzansi Civils (Pty) Ltd', '6CE', '{Construction}', '{LIMPOPO}')`,
       [orgId],
@@ -100,21 +104,53 @@ describe("AI execution on real tenders", () => {
     expect(analysis.output.requirements.some((r: { source: { kind: string } }) => r.source.kind === "TENDER_DOCUMENT")).toBe(true);
   });
 
-  it("stays rules-only, at no cost, when AI is not switched on", async () => {
+  it("stays rules-only, at no cost, when the organisation has not switched AI on, even though the deployment allows it", async () => {
     // One organisation per user is enforced in the database, so every test gets its own owner.
     owner = await createUser("ai-owner");
     const orgId = await bootstrapOrg(owner);
+    expect((await pool.query(`select ai_enabled from public.system_settings where organisation_id = $1`, [orgId])).rows[0].ai_enabled).toBe(false);
     const { runId } = await realRun(orgId);
-    await drainOrg(aiWorker({ ...AI_ENV, AI_ENABLED: "false" }), pool, orgId);
+    await drainOrg(aiWorker(AI_ENV), pool, orgId);
     const rows = await costRows(runId);
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((r) => r.provider === "rules" && r.cost_usd === 0)).toBe(true);
+  });
+
+  it("stays rules-only, at no cost, when the deployment has not allowed AI, even though the organisation switched it on", async () => {
+    owner = await createUser("ai-owner");
+    const orgId = await bootstrapOrg(owner);
+    await enableAi(orgId);
+    for (const env of [
+      { ...AI_ENV, AI_ENABLED: "false" },
+      { ...AI_ENV, AI_ENABLED: undefined },
+    ]) {
+      const { runId } = await realRun(orgId);
+      await drainOrg(aiWorker(env), pool, orgId);
+      const rows = await costRows(runId);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((r) => r.provider === "rules" && r.cost_usd === 0)).toBe(true);
+    }
+  });
+
+  it("uses the organisation's switch as it is set through set_ai_settings, and stops when it is switched off", async () => {
+    owner = await createUser("ai-owner");
+    const orgId = await bootstrapOrg(owner);
+    expect((await owner.client.rpc("set_ai_settings", { p_org: orgId, p_enabled: true, p_web_research: false })).error).toBeNull();
+    const first = await realRun(orgId);
+    await drainOrg(aiWorker(AI_ENV), pool, orgId);
+    expect((await costRows(first.runId)).some((r) => r.provider === "anthropic")).toBe(true);
+
+    expect((await owner.client.rpc("set_ai_settings", { p_org: orgId, p_enabled: false, p_web_research: false })).error).toBeNull();
+    const second = await realRun(orgId);
+    await drainOrg(aiWorker(AI_ENV), pool, orgId);
+    expect((await costRows(second.runId)).every((r) => r.provider === "rules")).toBe(true);
   });
 
   it("refuses to run AI steps when the key is missing instead of falling back to rules", async () => {
     // One organisation per user is enforced in the database, so every test gets its own owner.
     owner = await createUser("ai-owner");
     const orgId = await bootstrapOrg(owner);
+    await enableAi(orgId);
     const { runId } = await realRun(orgId);
     await drainOrg(aiWorker({ ...AI_ENV, ANTHROPIC_API_KEY: "" }), pool, orgId);
     const { rows } = await pool.query(`select status, error from public.tasks where workflow_run_id = $1 and step_key = 'analysis'`, [runId]);
@@ -130,6 +166,7 @@ describe("AI execution on real tenders", () => {
     // One organisation per user is enforced in the database, so every test gets its own owner.
     owner = await createUser("ai-owner");
     const orgId = await bootstrapOrg(owner);
+    await enableAi(orgId);
     await pool.query(`update public.system_settings set daily_ai_budget_usd = 0.005 where organisation_id = $1`, [orgId]);
     const { runId } = await realRun(orgId);
     await drainOrg(aiWorker(AI_ENV), pool, orgId);
@@ -146,6 +183,7 @@ describe("AI execution on real tenders", () => {
     // One organisation per user is enforced in the database, so every test gets its own owner.
     owner = await createUser("ai-owner");
     const orgId = await bootstrapOrg(owner);
+    await enableAi(orgId);
     await pool.query(`update public.agents set allowed_tools = '{}' where organisation_id = $1 and slug = 'tender_analyst'`, [orgId]);
     const { runId } = await realRun(orgId);
     await drainOrg(aiWorker(AI_ENV), pool, orgId);

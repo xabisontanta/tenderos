@@ -223,6 +223,104 @@ isOneToOne: false
       referencedColumns: ["organisation_id","user_id"]
     }
                   ]
+                },"bid_content_history": {
+                  Row: {
+                    "change": string,"changed_at": string,"changed_by": string | null,"id": number,"kind": string,"organisation_id": string,"ref": string,"snapshot": NonNullable<Json>,"tender_id": string,"version": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "change": string,"changed_at"?: string,"changed_by"?: string | null,"id"?: never,"kind": string,"organisation_id": string,"ref": string,"snapshot": NonNullable<Json>,"tender_id": string,"version": number
+                  }
+                  Update: {
+                    "change"?: string,"changed_at"?: string,"changed_by"?: string | null,"id"?: never,"kind"?: string,"organisation_id"?: string,"ref"?: string,"snapshot"?: NonNullable<Json>,"tender_id"?: string,"version"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "bid_content_history_organisation_id_tender_id_fkey"
+      columns: ["organisation_id","tender_id"]
+isOneToOne: false
+      referencedRelation: "tenders"
+      referencedColumns: ["organisation_id","id"]
+    }
+                  ]
+                },"bid_pricing": {
+                  Row: {
+                    "ai_generated": boolean,"confirmed_at": string | null,"confirmed_by": string | null,"created_at": string,"notes": NonNullable<Json>,"organisation_id": string,"source_task_id": string | null,"tender_id": string,"updated_at": string,"vat_requirement_id": string | null,"vat_status": string,"vat_treatment": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "ai_generated"?: boolean,"confirmed_at"?: string | null,"confirmed_by"?: string | null,"created_at"?: string,"notes"?: NonNullable<Json>,"organisation_id": string,"source_task_id"?: string | null,"tender_id": string,"updated_at"?: string,"vat_requirement_id"?: string | null,"vat_status"?: string,"vat_treatment"?: string
+                  }
+                  Update: {
+                    "ai_generated"?: boolean,"confirmed_at"?: string | null,"confirmed_by"?: string | null,"created_at"?: string,"notes"?: NonNullable<Json>,"organisation_id"?: string,"source_task_id"?: string | null,"tender_id"?: string,"updated_at"?: string,"vat_requirement_id"?: string | null,"vat_status"?: string,"vat_treatment"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "bid_pricing_organisation_id_tender_id_fkey"
+      columns: ["organisation_id","tender_id"]
+isOneToOne: false
+      referencedRelation: "tenders"
+      referencedColumns: ["organisation_id","id"]
+    },{
+      foreignKeyName: "bid_pricing_source_task_id_fkey"
+      columns: ["source_task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"bid_pricing_lines": {
+                  Row: {
+                    "amount_cents": number | null,"created_at": string,"description": string,"edited_at": string | null,"edited_by": string | null,"id": string,"item_ref": string | null,"organisation_id": string,"page": number | null,"position": number,"quantity": number | null,"quantity_printed": boolean,"quote": string | null,"requirement_id": string | null,"source": string,"source_task_id": string | null,"supplier_quote_likely": boolean,"supplier_quote_ref": string | null,"tender_id": string,"unit": string | null,"unit_price_cents": number | null,"updated_at": string,"vat_cents": number | null,"version": number,"warning": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount_cents"?: never,"created_at"?: string,"description": string,"edited_at"?: string | null,"edited_by"?: string | null,"id"?: string,"item_ref"?: string | null,"organisation_id": string,"page"?: number | null,"position"?: number,"quantity"?: number | null,"quantity_printed"?: boolean,"quote"?: string | null,"requirement_id"?: string | null,"source": string,"source_task_id"?: string | null,"supplier_quote_likely"?: boolean,"supplier_quote_ref"?: string | null,"tender_id": string,"unit"?: string | null,"unit_price_cents"?: number | null,"updated_at"?: string,"vat_cents"?: never,"version"?: number,"warning"?: string | null
+                  }
+                  Update: {
+                    "amount_cents"?: never,"created_at"?: string,"description"?: string,"edited_at"?: string | null,"edited_by"?: string | null,"id"?: string,"item_ref"?: string | null,"organisation_id"?: string,"page"?: number | null,"position"?: number,"quantity"?: number | null,"quantity_printed"?: boolean,"quote"?: string | null,"requirement_id"?: string | null,"source"?: string,"source_task_id"?: string | null,"supplier_quote_likely"?: boolean,"supplier_quote_ref"?: string | null,"tender_id"?: string,"unit"?: string | null,"unit_price_cents"?: number | null,"updated_at"?: string,"vat_cents"?: never,"version"?: number,"warning"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "bid_pricing_lines_organisation_id_tender_id_fkey"
+      columns: ["organisation_id","tender_id"]
+isOneToOne: false
+      referencedRelation: "tenders"
+      referencedColumns: ["organisation_id","id"]
+    },{
+      foreignKeyName: "bid_pricing_lines_source_task_id_fkey"
+      columns: ["source_task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"bid_proposal_sections": {
+                  Row: {
+                    "ai_generated": boolean,"content": string | null,"created_at": string,"edited_at": string | null,"edited_by": string | null,"fact_ids": NonNullable<Json>,"id": string,"needs": NonNullable<Json>,"organisation_id": string,"position": number,"requirement_ids": NonNullable<Json>,"reviewed_at": string | null,"reviewed_by": string | null,"section_key": string,"source_task_id": string | null,"status": string,"tender_id": string,"title": string,"updated_at": string,"version": number,"warnings": NonNullable<Json>
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "ai_generated"?: boolean,"content"?: string | null,"created_at"?: string,"edited_at"?: string | null,"edited_by"?: string | null,"fact_ids"?: NonNullable<Json>,"id"?: string,"needs"?: NonNullable<Json>,"organisation_id": string,"position"?: number,"requirement_ids"?: NonNullable<Json>,"reviewed_at"?: string | null,"reviewed_by"?: string | null,"section_key": string,"source_task_id"?: string | null,"status": string,"tender_id": string,"title": string,"updated_at"?: string,"version"?: number,"warnings"?: NonNullable<Json>
+                  }
+                  Update: {
+                    "ai_generated"?: boolean,"content"?: string | null,"created_at"?: string,"edited_at"?: string | null,"edited_by"?: string | null,"fact_ids"?: NonNullable<Json>,"id"?: string,"needs"?: NonNullable<Json>,"organisation_id"?: string,"position"?: number,"requirement_ids"?: NonNullable<Json>,"reviewed_at"?: string | null,"reviewed_by"?: string | null,"section_key"?: string,"source_task_id"?: string | null,"status"?: string,"tender_id"?: string,"title"?: string,"updated_at"?: string,"version"?: number,"warnings"?: NonNullable<Json>
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "bid_proposal_sections_organisation_id_tender_id_fkey"
+      columns: ["organisation_id","tender_id"]
+isOneToOne: false
+      referencedRelation: "tenders"
+      referencedColumns: ["organisation_id","id"]
+    },{
+      foreignKeyName: "bid_proposal_sections_source_task_id_fkey"
+      columns: ["source_task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"company_documents": {
                   Row: {
                     "archived_at": string | null,"created_at": string,"data_category": Database["public"]['Enums']["data_category"],"doc_type": string,"expires_at": string | null,"file_name": string,"id": string,"mime_type": string | null,"organisation_id": string,"size_bytes": number | null,"storage_path": string,"title": string,"uploaded_by": string | null,"verified": boolean,"verified_at": string | null,"verified_by": string | null
@@ -643,14 +741,14 @@ isOneToOne: false
                   ]
                 },"system_settings": {
                   Row: {
-                    "audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"onboarding_completed_at": string | null,"organisation_id": string,"per_tender_budget_usd": number,"require_mfa": boolean,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_methods": (string)[],"watched_provinces": (string)[]
+                    "ai_enabled": boolean,"ai_web_research_enabled": boolean,"audit_retention_days": number,"auto_run_workflows": boolean,"budget_warning_pct": number,"daily_ai_budget_usd": number,"default_max_retries": number,"kill_switch": boolean,"last_discovery_at": string | null,"max_auto_workflows_per_scan": number,"max_tasks_per_workflow": number,"monthly_ai_budget_usd": number,"onboarding_completed_at": string | null,"organisation_id": string,"per_tender_budget_usd": number,"require_mfa": boolean,"simulation_mode": boolean,"updated_at": string,"updated_by": string | null,"watched_methods": (string)[],"watched_provinces": (string)[]
                   }
                   ComputedFields: never
                   Insert: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id": string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
+                    "ai_enabled"?: boolean,"ai_web_research_enabled"?: boolean,"audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id": string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Update: {
-                    "audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id"?: string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
+                    "ai_enabled"?: boolean,"ai_web_research_enabled"?: boolean,"audit_retention_days"?: number,"auto_run_workflows"?: boolean,"budget_warning_pct"?: number,"daily_ai_budget_usd"?: number,"default_max_retries"?: number,"kill_switch"?: boolean,"last_discovery_at"?: string | null,"max_auto_workflows_per_scan"?: number,"max_tasks_per_workflow"?: number,"monthly_ai_budget_usd"?: number,"onboarding_completed_at"?: string | null,"organisation_id"?: string,"per_tender_budget_usd"?: number,"require_mfa"?: boolean,"simulation_mode"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"watched_methods"?: (string)[],"watched_provinces"?: (string)[]
                   }
                   Relationships: [
                     {
@@ -741,6 +839,26 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "workflow_runs"
       referencedColumns: ["id"]
+    }
+                  ]
+                },"tender_documents": {
+                  Row: {
+                    "attempts": number,"created_at": string,"error": string | null,"fetched_at": string | null,"file_name": string,"id": string,"mime_type": string | null,"organisation_id": string,"page_count": number | null,"sha256": string | null,"size_bytes": number | null,"source_url": string,"status": string,"storage_path": string | null,"tender_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attempts"?: number,"created_at"?: string,"error"?: string | null,"fetched_at"?: string | null,"file_name": string,"id"?: string,"mime_type"?: string | null,"organisation_id": string,"page_count"?: number | null,"sha256"?: string | null,"size_bytes"?: number | null,"source_url": string,"status"?: string,"storage_path"?: string | null,"tender_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "attempts"?: number,"created_at"?: string,"error"?: string | null,"fetched_at"?: string | null,"file_name"?: string,"id"?: string,"mime_type"?: string | null,"organisation_id"?: string,"page_count"?: number | null,"sha256"?: string | null,"size_bytes"?: number | null,"source_url"?: string,"status"?: string,"storage_path"?: string | null,"tender_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tender_documents_organisation_id_tender_id_fkey"
+      columns: ["organisation_id","tender_id"]
+isOneToOne: false
+      referencedRelation: "tenders"
+      referencedColumns: ["organisation_id","id"]
     }
                   ]
                 },"tender_sources": {
@@ -867,8 +985,16 @@ isOneToOne: false
 "accept_legal":
 { Args: { "p_ip_hmac"?: string,"p_privacy_version": string,"p_terms_version": string }; Returns: undefined
                            },
+"add_pricing_line":
+{ Args: { "p_description": string,"p_quantity": number,"p_tender_id": string,"p_unit": string }; Returns: string
+                           },
 "agent_usage_totals":
 { Args: { "p_agent_id": string }; Returns: Json
+                           },
+"ai_spend":
+{ Args: { "p_org": string }; Returns: {
+              "month_usd": number,"today_usd": number
+            }[]
                            },
 "archive_company_document":
 { Args: { "p_id": string }; Returns: undefined
@@ -885,6 +1011,11 @@ isOneToOne: false
                            },
 "autofill_record_prepared":
 { Args: { "p_confirmed_host": boolean,"p_documents": number,"p_fields": number,"p_host": string,"p_left": number,"p_sensitive": boolean,"p_tender_id": string,"p_token_id": string }; Returns: undefined
+                           },
+"bid_pricing_totals":
+{ Args: { "p_tender_id": string }; Returns: {
+              "complete": boolean,"lines": number,"priced": number,"subtotal_cents": number,"total_cents": number,"vat_cents": number
+            }[]
                            },
 "bootstrap_organisation":
 { Args: { "p_agents": Json,"p_departments": Json,"p_name": string,"p_slug": string,"p_user_id": string }; Returns: string
@@ -943,6 +1074,9 @@ isOneToOne: false
 "export_user_data":
 { Args: { "p_actor"?: string,"p_user_id": string }; Returns: Json
                            },
+"fetch_tender_documents":
+{ Args: { "p_document_id"?: string,"p_tender_id": string }; Returns: number
+                           },
 "hit_rate_limit":
 { Args: { "p_action": string,"p_max"?: number,"p_window_seconds"?: number }; Returns: undefined
                            },
@@ -976,6 +1110,9 @@ isOneToOne: false
 "remove_member":
 { Args: { "p_org": string,"p_user": string }; Returns: undefined
                            },
+"remove_pricing_line":
+{ Args: { "p_line_id": string }; Returns: undefined
+                           },
 "rerun_bid":
 { Args: { "p_tender_id": string }; Returns: string
                            },
@@ -1001,11 +1138,29 @@ isOneToOne: false
 "revoke_invitation":
 { Args: { "p_id": string }; Returns: undefined
                            },
+"save_pricing_line":
+{ Args: { "p_expected_version": number,"p_line_id": string,"p_quantity": number,"p_supplier_ref": string,"p_unit_price_cents": number }; Returns: number
+                           },
+"save_proposal_section":
+{ Args: { "p_content": string,"p_expected_version": number,"p_key": string,"p_tender_id": string }; Returns: number
+                           },
 "set_agent_control":
 { Args: { "p_action": string,"p_agent_id": string,"p_reason"?: string }; Returns: Database["public"]['Enums']["agent_status"]
                            },
+"set_ai_budget":
+{ Args: { "p_daily_usd": number,"p_org": string }; Returns: undefined
+                           },
+"set_ai_settings":
+{ Args: { "p_enabled": boolean,"p_org": string,"p_web_research": boolean }; Returns: undefined
+                           },
 "set_kill_switch":
 { Args: { "p_engaged": boolean,"p_org": string,"p_reason": string }; Returns: undefined
+                           },
+"set_pricing_confirmed":
+{ Args: { "p_confirmed": boolean,"p_tender_id": string }; Returns: undefined
+                           },
+"set_proposal_section_review":
+{ Args: { "p_expected_version": number,"p_key": string,"p_reviewed": boolean,"p_tender_id": string }; Returns: number
                            },
 "set_require_mfa":
 { Args: { "p_on": boolean,"p_org": string }; Returns: undefined

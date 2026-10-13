@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AiNotConfiguredError, loadAiConfig, resolveAiEnabled, resolveModel, withTaskCostCeiling } from "@/agents/runtime/ai/config";
+import { AiNotConfiguredError, loadAiConfig, resolveModel, withTaskCostCeiling } from "@/agents/runtime/ai/config";
 import { computeCostUsd, parsePrice, ZERO_USAGE, addUsage } from "@/agents/runtime/ai/pricing";
 import { NonRetryableError } from "@/agents/runtime/types";
 
@@ -123,21 +123,3 @@ describe("withTaskCostCeiling", () => {
   });
 });
 
-describe("resolveAiEnabled", () => {
-  it("is off by default", () => {
-    expect(resolveAiEnabled(null, {})).toBe(false);
-    expect(resolveAiEnabled({}, {})).toBe(false);
-  });
-  it("reads the env flag when the settings column does not exist yet", () => {
-    expect(resolveAiEnabled({}, { AI_ENABLED: "true" })).toBe(true);
-    expect(resolveAiEnabled({}, { AI_ENABLED: "TRUE" })).toBe(true);
-    expect(resolveAiEnabled({}, { AI_ENABLED: "1" })).toBe(false);
-  });
-  it("uses the settings column when it exists, even against the env flag", () => {
-    expect(resolveAiEnabled({ ai_enabled: false }, { AI_ENABLED: "true" })).toBe(false);
-    expect(resolveAiEnabled({ ai_enabled: true }, {})).toBe(true);
-  });
-  it("ignores a non-boolean column value", () => {
-    expect(resolveAiEnabled({ ai_enabled: "yes" }, {})).toBe(false);
-  });
-});
